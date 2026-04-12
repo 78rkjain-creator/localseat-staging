@@ -1,0 +1,357 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  candidate
+  campaign_manager
+  field_organizer
+  canvasser
+  volunteer_coordinator
+  finance_lead
+}
+
+enum SupportLevel {
+  strong_support
+  lean_support
+  undecided
+  lean_against
+  strong_against
+  unknown
+}
+
+enum CanvassOutcome {
+  contacted
+  not_home
+  refused
+  moved
+  unavailable
+  deceased
+}
+
+enum OutreachMethod {
+  door
+  phone
+  email
+  text
+  event
+  other
+}
+
+// ─── Campaign ─────────────────────────────────────────────────────────────────
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ward        String?
+  city        String
+  province    String   @default("ON")
+  year        Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships   CampaignMembership[]
+  people        Person[]
+  households    Household[]
+  addresses     Address[]
+  canvassLists  CanvassList[]
+  outreachLogs  OutreachLog[]
+  donorRecords  DonorRecord[]
+  auditLogs     AuditLog[]
+  tasks         Task[]
+
+  @@map("campaigns")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships        CampaignMembership[]
+  canvassAssignments CanvassAssignment[]
+  notes              Note[]
+  tasksAssigned      Task[]
+  outreachLogs       OutreachLog[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+// ─── Campaign Membership ──────────────────────────────────────────────────────
+
+model CampaignMembership {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String
+  role       Role
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@unique([userId, campaignId])
+  @@map("campaign_memberships")
+}
+
+// ─── Address ─────────────────────────────────────────────────────────────────
+
+model Address {
+  id           String    @id @default(cuid())
+  campaignId   String
+  streetNumber String
+  streetName   String
+  unitNumber   String?
+  city         String
+  province     String    @default("ON")
+  postalCode   String
+  lat          Float?
+  lng          Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  campaign   Campaign    @relation(fields: [campaignId], references: [id])
+  households Household[]
+
+  @@map("addresses")
+}
+
+// ─── Household ───────────────────────────────────────────────────────────────
+
+model Household {
+  id         String    @id @default(cuid())
+  campaignId String
+  addressId  String
+  name       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  address  Address  @relation(fields: [addressId], references: [id])
+  people   Person[]
+
+  @@map("households")
+}
+
+// ─── Person ──────────────────────────────────────────────────────────────────
+
+model Person {
+  id          String    @id @default(cuid())
+  campaignId  String
+  householdId String?
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  birthYear   Int?
+  gender      String?
+  // Tracks data import source / quality notes for deduplication
+  sourceNotes String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  campaign         Campaign          @relation(fields: [campaignId], references: [id])
+  household        Household?        @relation(fields: [householdId], references: [id])
+  tags             PersonTag[]
+  notes            Note[]
+  canvassResponses CanvassResponse[]
+  outreachLogs     OutreachLog[]
+  donorRecords     DonorRecord[]
+  tasks            Task[]
+
+  @@map("people")
+}
+
+// ─── Tag ─────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  color String?
+
+  personTags PersonTag[]
+
+  @@map("tags")
+}
+
+model PersonTag {
+  personId String
+  tagId    String
+
+  person Person @relation(fields: [personId], references: [id])
+  tag    Tag    @relation(fields: [tagId], references: [id])
+
+  @@id([personId, tagId])
+  @@map("person_tags")
+}
+
+// ─── Note ────────────────────────────────────────────────────────────────────
+
+model Note {
+  id        String   @id @default(cuid())
+  personId  String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  person Person @relation(fields: [personId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@map("notes")
+}
+
+// ─── Task ────────────────────────────────────────────────────────────────────
+
+model Task {
+  id          String    @id @default(cuid())
+  campaignId  String
+  personId    String?
+  assignedTo  String?
+  title       String
+  notes       String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  person   Person?  @relation(fields: [personId], references: [id])
+  assignee User?    @relation(fields: [assignedTo], references: [id])
+
+  @@map("tasks")
+}
+
+// ─── Canvass List ─────────────────────────────────────────────────────────────
+
+model CanvassList {
+  id          String    @id @default(cuid())
+  campaignId  String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  campaign    Campaign            @relation(fields: [campaignId], references: [id])
+  assignments CanvassAssignment[]
+
+  @@map("canvass_lists")
+}
+
+// ─── Canvass Assignment ───────────────────────────────────────────────────────
+
+model CanvassAssignment {
+  id            String   @id @default(cuid())
+  canvassListId String
+  canvasserId   String
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  canvassList CanvassList       @relation(fields: [canvassListId], references: [id])
+  canvasser   User              @relation(fields: [canvasserId], references: [id])
+  responses   CanvassResponse[]
+
+  @@map("canvass_assignments")
+}
+
+// ─── Canvass Response ─────────────────────────────────────────────────────────
+
+model CanvassResponse {
+  id                String         @id @default(cuid())
+  assignmentId      String
+  personId          String
+  outcome           CanvassOutcome
+  supportLevel      SupportLevel?
+  signRequest       Boolean        @default(false)
+  volunteerInterest Boolean        @default(false)
+  donorInterest     Boolean        @default(false)
+  notes             String?
+  needsFollowUp     Boolean        @default(false)
+  respondedAt       DateTime       @default(now())
+  createdAt         DateTime       @default(now())
+
+  assignment CanvassAssignment @relation(fields: [assignmentId], references: [id])
+  person     Person            @relation(fields: [personId], references: [id])
+
+  @@map("canvass_responses")
+}
+
+// ─── Outreach Log ─────────────────────────────────────────────────────────────
+
+model OutreachLog {
+  id         String         @id @default(cuid())
+  campaignId String
+  personId   String
+  userId     String
+  method     OutreachMethod
+  notes      String?
+  createdAt  DateTime       @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  person   Person   @relation(fields: [personId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@map("outreach_logs")
+}
+
+// ─── Donor Record ─────────────────────────────────────────────────────────────
+
+// V1: prospect tracking only — no payment processing
+model DonorRecord {
+  id           String    @id @default(cuid())
+  campaignId   String
+  personId     String
+  prospectOnly Boolean   @default(true)
+  notes        String?
+  flaggedById  String?
+  flaggedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  person   Person   @relation(fields: [personId], references: [id])
+
+  @@map("donor_records")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  campaignId String?
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
