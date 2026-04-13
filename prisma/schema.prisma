@@ -85,12 +85,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships        CampaignMembership[]
-  canvassAssignments CanvassAssignment[]
-  notes              Note[]
-  tasksAssigned      Task[]
-  outreachLogs       OutreachLog[]
-  auditLogs          AuditLog[]
+  memberships          CampaignMembership[]
+  canvassAssignments   CanvassAssignment[]
+  canvassListEntries   CanvassListEntry[]
+  notes                Note[]
+  tasksAssigned        Task[]
+  outreachLogs         OutreachLog[]
+  auditLogs            AuditLog[]
 
   @@map("users")
 }
@@ -170,14 +171,15 @@ model Person {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  campaign         Campaign          @relation(fields: [campaignId], references: [id])
-  household        Household?        @relation(fields: [householdId], references: [id])
-  tags             PersonTag[]
-  notes            Note[]
-  canvassResponses CanvassResponse[]
-  outreachLogs     OutreachLog[]
-  donorRecords     DonorRecord[]
-  tasks            Task[]
+  campaign           Campaign           @relation(fields: [campaignId], references: [id])
+  household          Household?         @relation(fields: [householdId], references: [id])
+  tags               PersonTag[]
+  notes              Note[]
+  canvassResponses   CanvassResponse[]
+  canvassListEntries CanvassListEntry[]
+  outreachLogs       OutreachLog[]
+  donorRecords       DonorRecord[]
+  tasks              Task[]
 
   @@map("people")
 }
@@ -256,8 +258,28 @@ model CanvassList {
 
   campaign    Campaign            @relation(fields: [campaignId], references: [id])
   assignments CanvassAssignment[]
+  entries     CanvassListEntry[]
 
   @@map("canvass_lists")
+}
+
+// ─── Canvass List Entry ───────────────────────────────────────────────────────
+// Represents a person planned to be contacted on a walk list.
+// Distinct from CanvassResponse, which records what happened at the door.
+
+model CanvassListEntry {
+  id            String   @id @default(cuid())
+  canvassListId String
+  personId      String
+  addedById     String
+  createdAt     DateTime @default(now())
+
+  canvassList CanvassList @relation(fields: [canvassListId], references: [id])
+  person      Person      @relation(fields: [personId], references: [id])
+  addedBy     User        @relation(fields: [addedById], references: [id])
+
+  @@unique([canvassListId, personId])
+  @@map("canvass_list_entries")
 }
 
 // ─── Canvass Assignment ───────────────────────────────────────────────────────

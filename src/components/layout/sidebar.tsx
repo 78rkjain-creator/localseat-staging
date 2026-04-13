@@ -71,7 +71,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
           },
         ]
       : []),
-    ...(role && canManageWalkLists(role)
+    ...(role && (canManageWalkLists(role) || role === "candidate")
       ? [
           {
             href: "/canvassing",
