@@ -19,12 +19,12 @@ enum Role {
 }
 
 enum SupportLevel {
-  strong_support
-  lean_support
+  strong_yes
+  soft_yes
   undecided
-  lean_against
-  strong_against
-  unknown
+  soft_no
+  strong_no
+  not_home
 }
 
 enum CanvassOutcome {

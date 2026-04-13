@@ -14,7 +14,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -356,8 +356,8 @@ async function main() {
     // 14 Elm — Patricia Wallace
     {
       personId: people[0].id,
-      outcome: "contacted" as const,
-      supportLevel: "strong_support" as const,
+      outcome: CanvassOutcome.contacted,
+      supportLevel: SupportLevel.strong_yes,
       signRequest: true,
       volunteerInterest: false,
       donorInterest: true,
@@ -367,8 +367,8 @@ async function main() {
     // 14 Elm — Robert Wallace
     {
       personId: people[1].id,
-      outcome: "contacted" as const,
-      supportLevel: "lean_support" as const,
+      outcome: CanvassOutcome.contacted,
+      supportLevel: SupportLevel.soft_yes,
       signRequest: false,
       volunteerInterest: false,
       donorInterest: false,
@@ -377,8 +377,8 @@ async function main() {
     // 16 Elm — Yusuf Ibrahim
     {
       personId: people[2].id,
-      outcome: "contacted" as const,
-      supportLevel: "strong_support" as const,
+      outcome: CanvassOutcome.contacted,
+      supportLevel: SupportLevel.strong_yes,
       signRequest: false,
       volunteerInterest: true,
       donorInterest: false,
@@ -388,14 +388,14 @@ async function main() {
     // 18 Elm — Susan Tran (not home)
     {
       personId: people[4].id,
-      outcome: "not_home" as const,
+      outcome: CanvassOutcome.not_home,
       needsFollowUp: true,
     },
     // 20 Elm — David Kowalski
     {
       personId: people[5].id,
-      outcome: "contacted" as const,
-      supportLevel: "undecided" as const,
+      outcome: CanvassOutcome.contacted,
+      supportLevel: SupportLevel.undecided,
       signRequest: false,
       volunteerInterest: false,
       donorInterest: false,
@@ -404,8 +404,8 @@ async function main() {
     // 22 Elm — Marcus Dupont
     {
       personId: people[7].id,
-      outcome: "contacted" as const,
-      supportLevel: "lean_against" as const,
+      outcome: CanvassOutcome.contacted,
+      supportLevel: SupportLevel.soft_no,
       notes: "Not interested — prefers another candidate.",
     },
   ];

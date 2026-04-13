@@ -74,7 +74,10 @@ function DuplicatePairCard({
   onMerge: (winnerId: string, loserId: string) => Promise<void>;
   onDismiss: () => void;
 }) {
-  const [left, right] = pair;
+  // Sort so the older record is always "original" (left) and the newer is "new" (right)
+  const [left, right] = [...pair].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  ) as [typeof pair[0], typeof pair[1]];
   const [isPending, startTransition] = useTransition();
   const [mergingWith, setMergingWith] = useState<string | null>(null);
 
@@ -107,8 +110,8 @@ function DuplicatePairCard({
 
       {/* Side-by-side cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-        <PersonCard person={left} />
-        <PersonCard person={right} />
+        <PersonCard person={left} label="Original record" />
+        <PersonCard person={right} label="New record" />
       </div>
 
       {/* Merge actions */}
@@ -128,7 +131,7 @@ function DuplicatePairCard({
               isPending ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
           >
-            {isPending && mergingWith === left.id ? "Merging…" : `Keep ${left.firstName}`}
+            {isPending && mergingWith === left.id ? "Merging…" : "Keep original record"}
           </button>
           <button
             onClick={() => handleMerge(right.id, left.id)}
@@ -141,7 +144,7 @@ function DuplicatePairCard({
               isPending ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
           >
-            {isPending && mergingWith === right.id ? "Merging…" : `Keep ${right.firstName}`}
+            {isPending && mergingWith === right.id ? "Merging…" : "Keep new record"}
           </button>
         </div>
       </div>
@@ -151,7 +154,7 @@ function DuplicatePairCard({
 
 // ── Person detail card ─────────────────────────────────────────────────────
 
-function PersonCard({ person }: { person: PersonRow }) {
+function PersonCard({ person, label }: { person: PersonRow; label: string }) {
   const addr = person.household?.address;
   const addressLine = addr
     ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
@@ -160,6 +163,7 @@ function PersonCard({ person }: { person: PersonRow }) {
 
   return (
     <div className="px-5 py-4">
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">{label}</p>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <Link

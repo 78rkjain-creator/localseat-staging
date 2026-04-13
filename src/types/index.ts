@@ -10,12 +10,12 @@ export type Role =
   | "finance_lead";
 
 export type SupportLevel =
-  | "strong_support"
-  | "lean_support"
+  | "strong_yes"
+  | "soft_yes"
   | "undecided"
-  | "lean_against"
-  | "strong_against"
-  | "unknown";
+  | "soft_no"
+  | "strong_no"
+  | "not_home";
 
 export type CanvassOutcome =
   | "contacted"
@@ -62,12 +62,12 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {
-  strong_support: "Strong Support",
-  lean_support: "Lean Support",
-  undecided: "Undecided",
-  lean_against: "Lean Against",
-  strong_against: "Strong Against",
-  unknown: "Unknown",
+  strong_yes: "Strong Yes",
+  soft_yes:   "Soft Yes",
+  undecided:  "Undecided",
+  soft_no:    "Soft No",
+  strong_no:  "Strong No",
+  not_home:   "Not Home",
 };
 
 export const CANVASS_OUTCOME_LABELS: Record<CanvassOutcome, string> = {

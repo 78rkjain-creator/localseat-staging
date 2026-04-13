@@ -2,12 +2,12 @@ import type { SupportLevel, CanvassOutcome } from "@/types";
 import { SUPPORT_LEVEL_LABELS, CANVASS_OUTCOME_LABELS } from "@/types";
 
 const supportLevelStyles: Record<SupportLevel, string> = {
-  strong_support: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  lean_support: "bg-teal-50 text-teal-700 border-teal-200",
-  undecided: "bg-amber-50 text-amber-700 border-amber-200",
-  lean_against: "bg-orange-50 text-orange-700 border-orange-200",
-  strong_against: "bg-red-50 text-red-700 border-red-200",
-  unknown: "bg-slate-100 text-slate-500 border-slate-200",
+  strong_yes: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  soft_yes:   "bg-teal-50 text-teal-700 border-teal-200",
+  undecided:  "bg-amber-50 text-amber-700 border-amber-200",
+  soft_no:    "bg-orange-50 text-orange-700 border-orange-200",
+  strong_no:  "bg-red-50 text-red-700 border-red-200",
+  not_home:   "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 const outcomeStyles: Record<CanvassOutcome, string> = {
