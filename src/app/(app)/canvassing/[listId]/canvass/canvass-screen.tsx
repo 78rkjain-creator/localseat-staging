@@ -13,8 +13,8 @@ type LocalEntry = CanvassingQueue["entries"][number] & {
 };
 
 interface ResponseDraft {
-  supportLevel: SupportLevel | null;    // null = nothing selected
-  otherOutcome: CanvassOutcome | null;  // refused / moved / unavailable / deceased
+  supportLevel: SupportLevel | null;
+  otherOutcome: CanvassOutcome | null;
   signRequest: boolean;
   volunteerInterest: boolean;
   donorInterest: boolean;
@@ -34,7 +34,8 @@ function emptyDraft(): ResponseDraft {
   };
 }
 
-// ── Support level config (5 primary options — not_home handled separately) ─
+// ── Support level config ───────────────────────────────────────────────────
+// 5 primary options. Not Home is handled separately as a one-tap button.
 
 const SUPPORT_LEVELS: {
   value: SupportLevel;
@@ -45,32 +46,32 @@ const SUPPORT_LEVELS: {
   {
     value: "strong_yes",
     label: "Strong Yes",
-    style: "border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50",
-    activeStyle: "border-emerald-500 bg-emerald-500 text-white",
+    style: "border-emerald-200 text-emerald-800 bg-white hover:bg-emerald-50 active:bg-emerald-100",
+    activeStyle: "border-emerald-600 bg-emerald-500 text-white",
   },
   {
     value: "soft_yes",
     label: "Soft Yes",
-    style: "border-teal-200 text-teal-700 bg-white hover:bg-teal-50",
-    activeStyle: "border-teal-500 bg-teal-500 text-white",
+    style: "border-teal-200 text-teal-800 bg-white hover:bg-teal-50 active:bg-teal-100",
+    activeStyle: "border-teal-600 bg-teal-500 text-white",
   },
   {
     value: "undecided",
     label: "Undecided",
-    style: "border-amber-200 text-amber-700 bg-white hover:bg-amber-50",
-    activeStyle: "border-amber-500 bg-amber-500 text-white",
+    style: "border-amber-200 text-amber-800 bg-white hover:bg-amber-50 active:bg-amber-100",
+    activeStyle: "border-amber-600 bg-amber-500 text-white",
   },
   {
     value: "soft_no",
     label: "Soft No",
-    style: "border-orange-200 text-orange-700 bg-white hover:bg-orange-50",
-    activeStyle: "border-orange-500 bg-orange-500 text-white",
+    style: "border-orange-200 text-orange-800 bg-white hover:bg-orange-50 active:bg-orange-100",
+    activeStyle: "border-orange-600 bg-orange-500 text-white",
   },
   {
     value: "strong_no",
     label: "Strong No",
-    style: "border-red-200 text-red-700 bg-white hover:bg-red-50",
-    activeStyle: "border-red-500 bg-red-500 text-white",
+    style: "border-red-200 text-red-800 bg-white hover:bg-red-50 active:bg-red-100",
+    activeStyle: "border-red-600 bg-red-500 text-white",
   },
 ];
 
@@ -96,7 +97,6 @@ export function CanvassScreen({
   assignmentId,
   entries: initialEntries,
 }: CanvassScreenProps) {
-  // Local entries allow adding new people at door without a page reload
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
   );
@@ -113,14 +113,17 @@ export function CanvassScreen({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(firstPending < 0 && entries.length > 0);
 
-  // Add person at door state
+  // "More options" section (Refused / Moved / Unavailable / Deceased + add person)
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+
+  // Add person at door
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [addFirst, setAddFirst] = useState("");
   const [addLast, setAddLast] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [isAddingPerson, startAddTransition] = useTransition();
 
-  // Refs so async callbacks always see the latest values
+  // Refs so async transitions always see current values
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const savedSetRef = useRef(savedSet);
@@ -144,6 +147,7 @@ export function CanvassScreen({
         setCurrentIndex(i);
         setDraft(emptyDraft());
         setError(null);
+        setShowMoreOptions(false);
         return;
       }
     }
@@ -157,13 +161,13 @@ export function CanvassScreen({
       if (!savedSetRef.current.has(currentEntries[i].person.id)) {
         setCurrentIndex(i);
         setDraft(emptyDraft());
+        setShowMoreOptions(false);
         return;
       }
     }
     setDone(true);
   }
 
-  // One-tap Not Home — saves immediately, no Save & Next needed
   function handleNotHome() {
     if (isPending) return;
     setError(null);
@@ -182,10 +186,7 @@ export function CanvassScreen({
         notes: "",
         needsFollowUp: false,
       });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
+      if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedPersonId, capturedIndex);
     });
   }
@@ -198,7 +199,7 @@ export function CanvassScreen({
 
     const outcome: CanvassOutcome = otherOutcome
       ? otherOutcome
-      : (supportLevel === "not_home" ? "not_home" : "contacted");
+      : supportLevel === "not_home" ? "not_home" : "contacted";
 
     const capturedIndex = currentIndex;
     const capturedPersonId = current.person.id;
@@ -215,10 +216,7 @@ export function CanvassScreen({
         notes: draft.notes,
         needsFollowUp: draft.needsFollowUp,
       });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
+      if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedPersonId, capturedIndex);
     });
   }
@@ -226,26 +224,14 @@ export function CanvassScreen({
   function handleAddPerson() {
     const firstName = addFirst.trim();
     const lastName = addLast.trim();
-    if (!firstName || !lastName) {
-      setAddError("First and last name are required.");
-      return;
-    }
+    if (!firstName || !lastName) { setAddError("First and last name are required."); return; }
     setAddError(null);
 
     startAddTransition(async () => {
-      const result = await addPersonAtDoor({
-        listId,
-        assignmentId,
-        firstName,
-        lastName,
-      });
-      if (result.error) {
-        setAddError(result.error);
-        return;
-      }
+      const result = await addPersonAtDoor({ listId, assignmentId, firstName, lastName });
+      if (result.error) { setAddError(result.error); return; }
       if (!result.person) return;
 
-      // Build a minimal entry for the new person, inheriting the current address
       const newEntry: LocalEntry = {
         entryId: result.person.entryId,
         person: {
@@ -263,23 +249,24 @@ export function CanvassScreen({
       next.splice(currentIndex + 1, 0, newEntry);
       setEntries(next);
       setShowAddPerson(false);
+      setShowMoreOptions(false);
       setAddFirst("");
       setAddLast("");
     });
   }
 
-  // ── Derived UI state ──────────────────────────────────────────────────────
+  // ── Derived state ─────────────────────────────────────────────────────────
 
   const isContactedLevel =
     draft.supportLevel !== null && draft.supportLevel !== "not_home";
-  const hasSelection = draft.supportLevel !== null || draft.otherOutcome !== null;
-  const canSave = hasSelection && !isPending;
+  const showDetails = isContactedLevel || !!draft.otherOutcome;
+  const canSave = (!!draft.supportLevel || !!draft.otherOutcome) && !isPending;
 
   // ── Done screen ───────────────────────────────────────────────────────────
 
   if (done || entries.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 py-12 text-center">
+      <div className="h-screen bg-slate-50 flex flex-col items-center justify-center px-6 text-center">
         <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mb-6">
           <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -296,7 +283,7 @@ export function CanvassScreen({
             <p className="text-slate-500 text-sm mb-2">
               You recorded responses for{" "}
               <span className="font-semibold text-slate-700">{doneCount}</span> of{" "}
-              <span className="font-semibold text-slate-700">{totalCount}</span> people on this list.
+              <span className="font-semibold text-slate-700">{totalCount}</span> people.
             </p>
             <p className="text-slate-400 text-xs mb-8">Great work today.</p>
           </>
@@ -316,29 +303,31 @@ export function CanvassScreen({
     ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
     : "Unknown address";
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
-
   const coResidents = current.person.coResidents ?? [];
 
   // ── Active canvassing screen ──────────────────────────────────────────────
+  // h-screen + flex-col: header / main / details / footer fill the viewport.
+  // No element is position:fixed — everything is in normal document flow.
+  // This guarantees zero scroll for the default view on any phone.
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
 
-      {/* ── Sticky header ── */}
-      <header className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
+      {/* ── Header ── compact, ~52px ── */}
+      <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[52px]">
         <Link
           href="/canvassing"
-          className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+          className="h-11 w-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors flex-shrink-0"
           aria-label="Exit canvassing"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </Link>
 
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-slate-500 truncate">{listName}</p>
-          <div className="mt-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <p className="text-[11px] text-slate-500 truncate leading-none mb-1">{listName}</p>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-brand-500 rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%` }}
@@ -346,253 +335,232 @@ export function CanvassScreen({
           </div>
         </div>
 
-        <span className="text-sm font-medium text-slate-500 flex-shrink-0 tabular-nums">
+        <span className="text-sm font-semibold text-slate-600 flex-shrink-0 tabular-nums">
           {doneCount}/{totalCount}
         </span>
       </header>
 
       {/* ── Main scrollable content ── */}
-      <main className="flex-1 overflow-y-auto pb-36">
-        <div className="px-4 pt-5 pb-4 max-w-lg mx-auto space-y-4">
+      {/* In the default state this content is ~370px, well under the ~460px+ available. */}
+      <main className="flex-1 overflow-y-auto min-h-0">
+        <div className="px-4 pt-3 pb-2 max-w-lg mx-auto">
 
-          {/* Address card */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm px-5 py-4">
-            <p className="text-xl font-bold text-slate-900 leading-tight">{addressLine}</p>
-            {cityLine && <p className="text-sm text-slate-500 mt-0.5">{cityLine}</p>}
-            {coResidents.length > 0 && (
-              <p className="text-xs text-slate-400 mt-2">
-                Also here:{" "}
-                {coResidents.map((r) => `${r.firstName} ${r.lastName}`).join(", ")}
-              </p>
+          {/* Combined address + person card */}
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-3">
+            <p className="text-[13px] text-slate-500 leading-tight truncate">
+              {addressLine}{cityLine ? ` · ${cityLine}` : ""}
+            </p>
+            <p className="text-[22px] font-bold text-slate-900 leading-tight mt-0.5">
+              {current.person.firstName} {current.person.lastName}
+            </p>
+            {(coResidents.length > 0 || current.lastResponse) && (
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                {coResidents.length > 0 && (
+                  <p className="text-[11px] text-slate-400">
+                    Also here: {coResidents.map((r) => `${r.firstName} ${r.lastName}`).join(", ")}
+                  </p>
+                )}
+                {current.lastResponse && (
+                  <span className="text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                    Previously recorded
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Current person */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm px-5 py-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-2xl font-bold text-slate-900">
-                  {current.person.firstName} {current.person.lastName}
-                </p>
-                {current.person.phone && (
-                  <a
-                    href={`tel:${current.person.phone}`}
-                    className="inline-flex items-center gap-1.5 text-sm text-brand-600 mt-1"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                    {current.person.phone}
-                  </a>
-                )}
-              </div>
-              {current.lastResponse && (
-                <span className="flex-shrink-0 text-xs bg-slate-100 text-slate-500 rounded-full px-2.5 py-1">
-                  Previously recorded
-                </span>
-              )}
-            </div>
-          </div>
+          {/* Support level label */}
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 px-0.5">
+            Support level
+          </p>
 
-          {/* ── Support level selector ── */}
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 px-1">
-              Support level
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              {SUPPORT_LEVELS.map((s) => {
-                const isActive = draft.supportLevel === s.value;
-                return (
-                  <button
-                    key={s.value}
-                    type="button"
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...emptyDraft(),
-                        supportLevel: isActive ? null : s.value,
-                      }))
-                    }
-                    className={[
-                      "h-14 rounded-2xl border-2 font-semibold text-sm transition-all",
-                      isActive ? s.activeStyle : s.style,
-                    ].join(" ")}
-                  >
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Not Home — one tap */}
-            <button
-              type="button"
-              onClick={handleNotHome}
-              disabled={isPending}
-              className={[
-                "w-full h-14 rounded-2xl border-2 font-semibold text-sm transition-all",
-                isPending
-                  ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
-                  : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50 active:bg-slate-100",
-              ].join(" ")}
-            >
-              {isPending ? "Saving…" : "Not Home"}
-            </button>
-          </div>
-
-          {/* ── Other outcomes (refused / moved / unavailable / deceased) ── */}
-          <div className="flex flex-wrap gap-2">
-            {OTHER_OUTCOMES.map((o) => {
-              const isActive = draft.otherOutcome === o.value;
+          {/* 5 support level buttons: 2-col grid, Strong No spans full width */}
+          <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+            {SUPPORT_LEVELS.map((s, i) => {
+              const isActive = draft.supportLevel === s.value;
               return (
                 <button
-                  key={o.value}
+                  key={s.value}
                   type="button"
                   onClick={() =>
-                    setDraft((d) => ({
+                    setDraft(() => ({
                       ...emptyDraft(),
-                      otherOutcome: isActive ? null : o.value,
+                      supportLevel: isActive ? null : s.value,
                     }))
                   }
                   className={[
-                    "h-9 px-4 rounded-full border text-xs font-medium transition-all",
-                    isActive
-                      ? "border-slate-500 bg-slate-500 text-white"
-                      : "border-slate-200 text-slate-500 bg-white hover:bg-slate-50",
+                    "h-12 rounded-xl border-2 font-semibold text-sm transition-all",
+                    i === 4 ? "col-span-2" : "",
+                    isActive ? s.activeStyle : s.style,
                   ].join(" ")}
                 >
-                  {o.label}
+                  {s.label}
                 </button>
               );
             })}
           </div>
 
-          {/* ── Contacts-only details (shown when a real support level is selected) ── */}
-          {isContactedLevel && (
-            <div className="flex flex-col gap-4">
-              {/* Sign / volunteer / donor toggles */}
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm divide-y divide-slate-50">
-                <ToggleRow
-                  label="Sign request"
-                  description="They want a lawn sign"
-                  checked={draft.signRequest}
-                  onChange={(v) => setDraft((d) => ({ ...d, signRequest: v }))}
-                />
-                <ToggleRow
-                  label="Volunteer interest"
-                  description="Open to helping the campaign"
-                  checked={draft.volunteerInterest}
-                  onChange={(v) => setDraft((d) => ({ ...d, volunteerInterest: v }))}
-                />
-                <ToggleRow
-                  label="Donor interest"
-                  description="Potential donor"
-                  checked={draft.donorInterest}
-                  onChange={(v) => setDraft((d) => ({ ...d, donorInterest: v }))}
-                />
-              </div>
+          {/* Not Home — one-tap, saves immediately */}
+          <button
+            type="button"
+            onClick={handleNotHome}
+            disabled={isPending}
+            className={[
+              "w-full h-12 rounded-xl border-2 font-semibold text-sm transition-all mb-1",
+              isPending
+                ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100",
+            ].join(" ")}
+          >
+            {isPending ? "Saving…" : "Not Home"}
+          </button>
 
-              {/* Notes */}
-              <textarea
-                value={draft.notes}
-                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-                placeholder="Note from this conversation (optional)…"
-                rows={3}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-            </div>
-          )}
-
-          {/* ── Follow-up (visible whenever something is selected) ── */}
-          {hasSelection && !draft.otherOutcome && (
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm">
-              <ToggleRow
-                label="Needs follow-up"
-                description="Add to follow-up queue"
-                checked={draft.needsFollowUp}
-                onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
-              />
-            </div>
-          )}
-
-          {/* ── Error message ── */}
-          {error && (
-            <p className="text-sm text-red-600 text-center px-2">{error}</p>
-          )}
-
-          {/* ── Add person at door ── */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddPerson((v) => !v);
-                setAddError(null);
-              }}
-              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors"
+          {/* More options — collapsed by default */}
+          <button
+            type="button"
+            onClick={() => setShowMoreOptions((v) => !v)}
+            className="w-full h-11 flex items-center justify-between px-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <span className="text-xs font-medium">
+              {showMoreOptions ? "Fewer options" : "More options"}
+            </span>
+            <svg
+              className={["h-3.5 w-3.5 transition-transform", showMoreOptions ? "rotate-180" : ""].join(" ")}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
             >
-              <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <span className="text-sm font-medium text-slate-600">Add person at door</span>
-              <svg
-                className={["h-4 w-4 text-slate-400 ml-auto transition-transform", showAddPerson ? "rotate-180" : ""].join(" ")}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-            {showAddPerson && (
-              <div className="px-5 pb-5 pt-1 border-t border-slate-50 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="First name"
-                    value={addFirst}
-                    onChange={(e) => setAddFirst(e.target.value)}
-                    className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Last name"
-                    value={addLast}
-                    onChange={(e) => setAddLast(e.target.value)}
-                    className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                  />
-                </div>
-                {addError && (
-                  <p className="text-xs text-red-600">{addError}</p>
-                )}
+          {/* Expanded: refused / moved / unavailable / deceased + add person */}
+          {showMoreOptions && (
+            <div className="space-y-2 pt-1 pb-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                {OTHER_OUTCOMES.map((o) => {
+                  const isActive = draft.otherOutcome === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() =>
+                        setDraft(() => ({
+                          ...emptyDraft(),
+                          otherOutcome: isActive ? null : o.value,
+                        }))
+                      }
+                      className={[
+                        "h-11 rounded-xl border font-medium text-sm transition-all",
+                        isActive
+                          ? "border-slate-600 bg-slate-700 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                      ].join(" ")}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Add person at door */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <button
                   type="button"
-                  onClick={handleAddPerson}
-                  disabled={isAddingPerson || !addFirst.trim() || !addLast.trim()}
-                  className="w-full h-11 rounded-xl bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 active:bg-slate-900 transition-colors disabled:opacity-40"
+                  onClick={() => { setShowAddPerson((v) => !v); setAddError(null); }}
+                  className="w-full h-11 flex items-center gap-3 px-4 text-left hover:bg-slate-50 transition-colors"
                 >
-                  {isAddingPerson ? "Adding…" : "Add to list"}
+                  <svg className="h-4 w-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="text-sm font-medium text-slate-600">Add person at door</span>
                 </button>
-                <p className="text-xs text-slate-400 text-center">
-                  Will be tagged as a field entry and added to this walk list.
-                </p>
+                {showAddPerson && (
+                  <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="First name"
+                        value={addFirst}
+                        onChange={(e) => setAddFirst(e.target.value)}
+                        className="h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Last name"
+                        value={addLast}
+                        onChange={(e) => setAddLast(e.target.value)}
+                        className="h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      />
+                    </div>
+                    {addError && <p className="text-xs text-red-600">{addError}</p>}
+                    <button
+                      type="button"
+                      onClick={handleAddPerson}
+                      disabled={isAddingPerson || !addFirst.trim() || !addLast.trim()}
+                      className="w-full h-11 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 active:bg-slate-900 transition-colors disabled:opacity-40"
+                    >
+                      {isAddingPerson ? "Adding…" : "Add to list"}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
         </div>
       </main>
 
-      {/* ── Sticky footer ── */}
-      <footer className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-slate-100 px-4 py-4 safe-area-bottom">
+      {/* ── Details panel — slides in above footer when a level is selected ── */}
+      {/* flex-none keeps it between main and footer, always fully visible. */}
+      {showDetails && (
+        <div className="flex-none bg-white border-t-2 border-slate-200 divide-y divide-slate-100">
+          {isContactedLevel && (
+            <>
+              <CompactToggle
+                label="Yard sign"
+                checked={draft.signRequest}
+                onChange={(v) => setDraft((d) => ({ ...d, signRequest: v }))}
+              />
+              <CompactToggle
+                label="Volunteer interest"
+                checked={draft.volunteerInterest}
+                onChange={(v) => setDraft((d) => ({ ...d, volunteerInterest: v }))}
+              />
+              <CompactToggle
+                label="Donor interest"
+                checked={draft.donorInterest}
+                onChange={(v) => setDraft((d) => ({ ...d, donorInterest: v }))}
+              />
+            </>
+          )}
+          <CompactToggle
+            label="Needs follow-up"
+            checked={draft.needsFollowUp}
+            onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
+          />
+          <textarea
+            value={draft.notes}
+            onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+            placeholder="Note (optional)…"
+            rows={2}
+            className="w-full px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
+          />
+        </div>
+      )}
+
+      {/* ── Footer — always visible, always at bottom ── */}
+      <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-3 pb-4 safe-area-bottom">
+        {error && (
+          <p className="text-xs text-red-600 text-center mb-2">{error}</p>
+        )}
         <div className="flex gap-3 max-w-lg mx-auto">
           <button
             type="button"
             onClick={handleSkip}
             disabled={isPending}
-            className="h-14 px-5 rounded-2xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            className="h-14 px-5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
           >
             Skip
           </button>
@@ -601,7 +569,7 @@ export function CanvassScreen({
             onClick={handleSave}
             disabled={!canSave}
             className={[
-              "flex-1 h-14 rounded-2xl font-semibold text-base transition-all",
+              "flex-1 h-14 rounded-2xl font-bold text-base transition-all",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
               canSave
                 ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-sm"
@@ -627,16 +595,14 @@ export function CanvassScreen({
   );
 }
 
-// ── Toggle row sub-component ───────────────────────────────────────────────
+// ── Compact toggle — no description, 44px touch target ─────────────────────
 
-function ToggleRow({
+function CompactToggle({
   label,
-  description,
   checked,
   onChange,
 }: {
   label: string;
-  description: string;
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
@@ -644,22 +610,19 @@ function ToggleRow({
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors rounded-3xl"
+      className="w-full h-11 flex items-center justify-between px-4 hover:bg-slate-50 active:bg-slate-100 transition-colors"
     >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800">{label}</p>
-        <p className="text-xs text-slate-400 mt-0.5">{description}</p>
-      </div>
+      <span className="text-sm font-medium text-slate-800">{label}</span>
       <div
         className={[
-          "relative h-7 w-12 rounded-full transition-colors flex-shrink-0",
+          "relative h-6 w-10 rounded-full transition-colors flex-shrink-0",
           checked ? "bg-brand-500" : "bg-slate-200",
         ].join(" ")}
       >
         <div
           className={[
-            "absolute top-1 h-5 w-5 bg-white rounded-full shadow-sm transition-transform",
-            checked ? "translate-x-6" : "translate-x-1",
+            "absolute top-0.5 h-5 w-5 bg-white rounded-full shadow-sm transition-transform",
+            checked ? "translate-x-4" : "translate-x-0.5",
           ].join(" ")}
         />
       </div>

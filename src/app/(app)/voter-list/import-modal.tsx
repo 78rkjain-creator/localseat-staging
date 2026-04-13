@@ -11,7 +11,7 @@ import {
   FIELD_LABELS,
   MANDATORY_FIELDS,
 } from "@/lib/csv-import";
-import type { ReviewRow, RowFields } from "@/lib/csv-import";
+import type { ReviewRow, RowFields, RowStatus } from "@/lib/csv-import";
 
 // ── Local constants ────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
       prev.map((r) => {
         if (r.id !== rowId) return r;
         const missing = getMissingFields(r.fields);
-        return { ...r, status: (missing.length === 0 ? "ready" : "flagged") as const };
+        return { ...r, status: (missing.length === 0 ? "ready" : "flagged") as RowStatus };
       })
     );
   }

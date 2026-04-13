@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { SupportLevel } from "@/types";
 
 // ── Walk list index ────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ export async function previewPeopleFilter({
   const existingIds = existing.map((e) => e.personId);
 
   // Build the where clause
-  const where: Parameters<typeof db.person.findMany>[0]["where"] = {
+  const where: Prisma.PersonWhereInput = {
     campaignId,
     deletedAt: null,
     id: existingIds.length > 0 ? { notIn: existingIds } : undefined,

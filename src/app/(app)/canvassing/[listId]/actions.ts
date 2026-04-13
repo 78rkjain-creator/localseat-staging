@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageWalkLists } from "@/lib/permissions";
 import { previewPeopleFilter } from "@/lib/canvassing";
+import type { Prisma } from "@prisma/client";
 import type { Role, SupportLevel } from "@/types";
 
 // ── Auth + permission guard ────────────────────────────────────────────────
@@ -55,7 +56,7 @@ export async function addFilteredPeople(
   });
   const existingIds = existing.map((e) => e.personId);
 
-  const where: Parameters<typeof db.person.findMany>[0]["where"] = {
+  const where: Prisma.PersonWhereInput = {
     campaignId,
     deletedAt: null,
     id: existingIds.length > 0 ? { notIn: existingIds } : undefined,

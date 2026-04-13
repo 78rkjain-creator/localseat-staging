@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 export interface PeopleListFilters {
   campaignId: string;
@@ -155,7 +156,7 @@ export async function getVoterList({
 }: VoterListFilters) {
   const skip = (page - 1) * VOTER_LIST_PAGE_SIZE;
 
-  const where: Parameters<typeof db.person.findMany>[0]["where"] = {
+  const where: Prisma.PersonWhereInput = {
     campaignId,
     deletedAt: null,
   };
