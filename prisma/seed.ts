@@ -351,6 +351,18 @@ async function main() {
   });
   console.log("  ✓ Canvass assignment");
 
+  // ── Canvass List Entries (Elm Street residents on the list) ───────────────
+  // people[0]–people[15] are the 16 Elm Street residents (14–32 Elm)
+  await db.canvassListEntry.createMany({
+    data: people.slice(0, 16).map((p) => ({
+      canvassListId: walkList.id,
+      personId: p.id,
+      addedById: manager.id,
+    })),
+    skipDuplicates: true,
+  });
+  console.log("  ✓ Canvass list entries: 16");
+
   // ── Canvass Responses (sample — first 6 addresses completed) ─────────────
   const responseData = [
     // 14 Elm — Patricia Wallace

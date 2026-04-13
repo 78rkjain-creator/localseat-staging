@@ -240,10 +240,7 @@ export async function getAssignedLists(canvasserId: string, campaignId: string) 
     },
     include: {
       canvassList: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
+        include: {
           _count: { select: { entries: true } },
         },
       },
@@ -254,7 +251,11 @@ export async function getAssignedLists(canvasserId: string, campaignId: string) 
 
   return assignments.map((a) => ({
     assignmentId: a.id,
-    list: a.canvassList,
+    list: {
+      id: a.canvassList.id,
+      name: a.canvassList.name,
+      description: a.canvassList.description,
+    },
     totalEntries: a.canvassList._count.entries,
     totalResponses: a._count.responses,
   }));
@@ -277,57 +278,68 @@ export async function getCanvassingQueue(
   });
   if (!assignment) return null;
 
-  const entries = await db.canvassListEntry.findMany({
-    where: { canvassListId: listId },
-    orderBy: [
-      { person: { household: { address: { streetName: "asc" } } } },
-      { person: { household: { address: { streetNumber: "asc" } } } },
-      { person: { lastName: "asc" } },
-      { person: { firstName: "asc" } },
-    ],
-    include: {
-      person: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          phone: true,
-          household: {
-            select: {
-              address: {
-                select: {
-                  streetNumber: true,
-                  streetName: true,
-                  unitNumber: true,
-                  city: true,
-                  province: true,
-                  postalCode: true,
+  const [listRecord, entries] = await Promise.all([
+    db.canvassList.findFirst({
+      where: { id: listId, campaignId },
+      select: { name: true },
+    }),
+    db.canvassListEntry.findMany({
+      where: { canvassListId: listId },
+      orderBy: [
+        { person: { household: { address: { streetName: "asc" } } } },
+        { person: { household: { address: { streetNumber: "asc" } } } },
+        { person: { lastName: "asc" } },
+        { person: { firstName: "asc" } },
+      ],
+      include: {
+        person: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            household: {
+              select: {
+                address: {
+                  select: {
+                    streetNumber: true,
+                    streetName: true,
+                    unitNumber: true,
+                    city: true,
+                    province: true,
+                    postalCode: true,
+                  },
+                },
+                people: {
+                  where: { deletedAt: null },
+                  select: { id: true, firstName: true, lastName: true },
                 },
               },
             },
-          },
-          canvassResponses: {
-            where: { assignmentId: assignment.id },
-            orderBy: { respondedAt: "desc" },
-            take: 1,
-            select: {
-              id: true,
-              outcome: true,
-              supportLevel: true,
-              signRequest: true,
-              volunteerInterest: true,
-              donorInterest: true,
-              notes: true,
-              needsFollowUp: true,
+            canvassResponses: {
+              where: { assignmentId: assignment.id },
+              orderBy: { respondedAt: "desc" },
+              take: 1,
+              select: {
+                id: true,
+                outcome: true,
+                supportLevel: true,
+                signRequest: true,
+                volunteerInterest: true,
+                donorInterest: true,
+                notes: true,
+                needsFollowUp: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   return {
     assignmentId: assignment.id,
+    listName: listRecord?.name ?? "",
     entries: entries.map((e) => ({
       entryId: e.id,
       person: {
@@ -336,8 +348,13 @@ export async function getCanvassingQueue(
         lastName: e.person.lastName,
         phone: e.person.phone,
         address: e.person.household?.address ?? null,
+        coResidents: (e.person.household?.people ?? []).filter(
+          (p) => p.id !== e.person.id
+        ),
       },
-      lastResponse: e.person.canvassResponses[0] ?? null,
+      lastResponse: e.person.canvassResponses.length > 0
+        ? e.person.canvassResponses[0]
+        : null,
     })),
   };
 }
