@@ -599,7 +599,3 @@ function StatusBadge({ label, color }: { label: string; color: "green" | "amber"
   );
 }
 
-// helper exported for use in actions (also used in inline logic above)
-function getMissingFields(fields: RowFields): (keyof RowFields)[] {
-  return MANDATORY.filter((f) => !fields[f].trim());
-}

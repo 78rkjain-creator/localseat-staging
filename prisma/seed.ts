@@ -31,6 +31,7 @@ async function main() {
     db.outreachLog.deleteMany(),
     db.canvassResponse.deleteMany(),
     db.canvassAssignment.deleteMany(),
+    db.canvassListEntry.deleteMany(),
     db.canvassList.deleteMany(),
     db.task.deleteMany(),
     db.note.deleteMany(),
