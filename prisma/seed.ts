@@ -151,8 +151,11 @@ async function main() {
       db.tag.create({ data: { name: "Donor Prospect", color: "#ea6c0a" } }),
       db.tag.create({ data: { name: "Yard Sign", color: "#2563eb" } }),
       db.tag.create({ data: { name: "Undecided", color: "#d97706" } }),
+      // System tags — created by automated flows, not manually by users
+      db.tag.create({ data: { name: "field-entry", color: "#475569" } }),
+      db.tag.create({ data: { name: "record-outdated", color: "#dc2626" } }),
     ]);
-  console.log("  ✓ Tags");
+  console.log("  ✓ Tags (including system tags: field-entry, record-outdated)");
 
   // ── Addresses (Elm Street block, Greenfield ON) ───────────────────────────
   const addressData = [

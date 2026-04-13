@@ -3,152 +3,45 @@
 import { useState, useTransition, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { importCsvPeople } from "./actions";
-import type { CsvRow } from "./actions";
+import { importVoterRows } from "./actions";
+import type { VoterCsvRow } from "./actions";
+import {
+  parseCsvToReviewRows,
+  getMissingFields,
+  FIELD_LABELS,
+  MANDATORY_FIELDS,
+} from "@/lib/csv-import";
+import type { ReviewRow, RowFields } from "@/lib/csv-import";
 
-interface CsvImportModalProps {
-  open: boolean;
-  onClose: () => void;
-  listId: string;
-}
+// ── Local constants ────────────────────────────────────────────────────────
+
+// Display order for table columns (base address fields first, then optional)
+const BASE_COLUMNS: (keyof RowFields)[] = [
+  "firstName", "lastName", "streetNumber", "streetName",
+  "unitNumber", "city", "province", "postalCode",
+];
+const EXTRA_COLUMNS: (keyof RowFields)[] = ["phone", "email", "birthYear"];
 
 type Step = "upload" | "review" | "done";
 
-// Mandatory fields — must all be non-empty for a row to be "ready"
-const MANDATORY: (keyof RowFields)[] = [
-  "firstName",
-  "lastName",
-  "streetNumber",
-  "streetName",
-  "city",
-  "province",
-  "postalCode",
-];
+// ── Component ─────────────────────────────────────────────────────────────
 
-const FIELD_LABELS: Record<keyof RowFields, string> = {
-  firstName: "First name",
-  lastName: "Last name",
-  streetNumber: "Street #",
-  streetName: "Street name",
-  unitNumber: "Unit",
-  city: "City",
-  province: "Province",
-  postalCode: "Postal code",
-};
-
-interface RowFields {
-  firstName: string;
-  lastName: string;
-  streetNumber: string;
-  streetName: string;
-  unitNumber: string;
-  city: string;
-  province: string;
-  postalCode: string;
+interface VoterImportModalProps {
+  open: boolean;
+  onClose: () => void;
 }
 
-type RowStatus = "ready" | "flagged" | "approved" | "rejected";
-
-interface ReviewRow {
-  id: number;
-  originalRowNum: number;
-  fields: RowFields;
-  missingOnParse: (keyof RowFields)[];
-  status: RowStatus;
-}
-
-// ── CSV parsing helpers ────────────────────────────────────────────────────
-
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ",") { fields.push(current.trim()); current = ""; }
-      else { current += ch; }
-    }
-  }
-  fields.push(current.trim());
-  return fields;
-}
-
-function normaliseKey(s: string): string {
-  return s.toLowerCase().replace(/[\s_-]/g, "");
-}
-
-function getField(row: Record<string, string>, ...keys: string[]): string {
-  for (const k of keys) {
-    const v = row[normaliseKey(k)];
-    if (v) return v;
-  }
-  return "";
-}
-
-function parseCsvToReviewRows(text: string): {
-  rows: ReviewRow[];
-  fileError: string | null;
-} {
-  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  if (lines.length < 2) {
-    return { rows: [], fileError: "File must have a header row and at least one data row." };
-  }
-
-  const headers = parseCsvLine(lines[0]).map(normaliseKey);
-  const rows: ReviewRow[] = [];
-  let id = 0;
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const values = parseCsvLine(line);
-    const raw: Record<string, string> = {};
-    headers.forEach((h, idx) => { raw[h] = values[idx] ?? ""; });
-
-    const fields: RowFields = {
-      firstName:    getField(raw, "firstname", "first_name", "first"),
-      lastName:     getField(raw, "lastname", "last_name", "last"),
-      streetNumber: getField(raw, "streetnumber", "street_number", "streetno", "number"),
-      streetName:   getField(raw, "streetname", "street_name", "street"),
-      unitNumber:   getField(raw, "unitnumber", "unit_number", "unit", "apt", "suite"),
-      city:         getField(raw, "city"),
-      province:     getField(raw, "province", "prov"),
-      postalCode:   getField(raw, "postalcode", "postal_code", "postal", "zip"),
-    };
-
-    const missingOnParse = MANDATORY.filter((f) => !fields[f]);
-    const status: RowStatus = missingOnParse.length === 0 ? "ready" : "flagged";
-
-    rows.push({ id: id++, originalRowNum: i + 1, fields, missingOnParse, status });
-  }
-
-  if (rows.length === 0) {
-    return { rows: [], fileError: "No data rows found after the header." };
-  }
-
-  return { rows, fileError: null };
-}
-
-function getMissingFields(fields: RowFields): (keyof RowFields)[] {
-  return MANDATORY.filter((f) => !fields[f].trim());
-}
-
-// ── Main component ─────────────────────────────────────────────────────────
-
-export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
+export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ matched: number; created: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{
+    matched: number;
+    created: number;
+    skipped: number;
+  } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
 
   // ── Reset ──────────────────────────────────────────────────────────────
@@ -175,15 +68,20 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
       setFileError("Please upload a .csv file.");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setFileError("File must be under 5 MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      setFileError("File must be under 10 MB.");
       return;
     }
 
     const text = await file.text();
     const { rows, fileError: err } = parseCsvToReviewRows(text);
-
     if (err) { setFileError(err); return; }
+
+    if (rows.length > 2000) {
+      setFileError("File contains more than 2,000 rows. Split the file and import in batches.");
+      return;
+    }
+
     setReviewRows(rows);
     setStep("review");
   }
@@ -192,34 +90,25 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
 
   function updateField(rowId: number, field: keyof RowFields, value: string) {
     setReviewRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        const updated = { ...r.fields, [field]: value };
-        // Recalculate status: if all mandatory fields now present, can be approved
-        // (don't auto-approve — user still needs to click Approve)
-        return { ...r, fields: updated };
-      })
+      prev.map((r) => r.id !== rowId ? r : { ...r, fields: { ...r.fields, [field]: value } })
     );
   }
 
-  // ── Per-row approve/reject ─────────────────────────────────────────────
+  // ── Per-row status ─────────────────────────────────────────────────────
 
   function approveRow(rowId: number) {
     setReviewRows((prev) =>
       prev.map((r) => {
         if (r.id !== rowId) return r;
-        const missing = getMissingFields(r.fields);
-        if (missing.length > 0) return r; // shouldn't happen if button is disabled
-        return { ...r, status: "approved" };
+        if (getMissingFields(r.fields).length > 0) return r;
+        return { ...r, status: "approved" as const };
       })
     );
   }
 
   function rejectRow(rowId: number) {
     setReviewRows((prev) =>
-      prev.map((r) =>
-        r.id !== rowId ? r : { ...r, status: "rejected" }
-      )
+      prev.map((r) => r.id !== rowId ? r : { ...r, status: "rejected" as const })
     );
   }
 
@@ -228,7 +117,7 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
       prev.map((r) => {
         if (r.id !== rowId) return r;
         const missing = getMissingFields(r.fields);
-        return { ...r, status: missing.length === 0 ? "ready" : "flagged" };
+        return { ...r, status: (missing.length === 0 ? "ready" : "flagged") as const };
       })
     );
   }
@@ -237,7 +126,7 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
 
   function handleConfirm() {
     setSubmitError(null);
-    const toImport: CsvRow[] = reviewRows
+    const toImport: VoterCsvRow[] = reviewRows
       .filter((r) => r.status === "ready" || r.status === "approved")
       .map((r) => ({
         firstName:    r.fields.firstName.trim(),
@@ -248,15 +137,18 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
         city:         r.fields.city.trim(),
         province:     r.fields.province.trim(),
         postalCode:   r.fields.postalCode.trim(),
+        phone:        r.fields.phone.trim(),
+        email:        r.fields.email.trim(),
+        birthYear:    r.fields.birthYear.trim(),
       }));
 
     if (toImport.length === 0) {
-      setSubmitError("No rows to import. Approve at least one flagged row or make sure ready rows are present.");
+      setSubmitError("No rows to import. Approve at least one flagged row, or make sure ready rows are present.");
       return;
     }
 
     startSubmit(async () => {
-      const res = await importCsvPeople(listId, toImport);
+      const res = await importVoterRows(toImport);
       if (res.error) {
         setSubmitError(res.error);
       } else {
@@ -277,7 +169,6 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
   const approvedCount = reviewRows.filter((r) => r.status === "approved").length;
   const rejectedCount = reviewRows.filter((r) => r.status === "rejected").length;
   const importCount   = readyCount + approvedCount;
-  const pendingFlaggedCount = flaggedCount; // still need a decision
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -285,20 +176,33 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
     <Modal
       open={open}
       onClose={handleClose}
-      title="Import CSV"
-      maxWidth={step === "review" ? "max-w-5xl" : "max-w-lg"}
+      title="Import voter list"
+      maxWidth={step === "review" ? "max-w-6xl" : "max-w-lg"}
     >
       {/* ── Step 1: Upload ── */}
       {step === "upload" && (
         <div className="flex flex-col gap-5">
+          {/* Template download */}
           <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-4">
-            <p className="text-sm font-medium text-slate-700 mb-2">Required CSV format</p>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-sm font-medium text-slate-700">CSV format</p>
+              <a
+                href="/api/voter-list/template"
+                download
+                className="text-xs font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1 flex-shrink-0"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+                Download template
+              </a>
+            </div>
             <p className="text-xs text-slate-500 font-mono leading-relaxed break-all">
-              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode
+              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, Phone, Email, BirthYear
             </p>
             <p className="text-xs text-slate-400 mt-2">
-              Header row required. UnitNumber is optional. All other columns are mandatory.
-              Rows with missing fields will be flagged for review before import.
+              Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
+              Rows with missing mandatory fields are flagged for review. Max 2,000 rows per file.
             </p>
           </div>
 
@@ -328,46 +232,36 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
       {/* ── Step 2: Review ── */}
       {step === "review" && (
         <div className="flex flex-col gap-4">
-          {/* Summary bar */}
+          {/* Summary pills */}
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <SummaryPill count={readyCount} label="ready" color="green" />
-            {flaggedCount > 0 && (
-              <SummaryPill count={flaggedCount} label="need review" color="amber" />
-            )}
-            {approvedCount > 0 && (
-              <SummaryPill count={approvedCount} label="approved" color="blue" />
-            )}
-            {rejectedCount > 0 && (
-              <SummaryPill count={rejectedCount} label="rejected" color="slate" />
-            )}
+            <SummaryPill count={readyCount}    label="ready"       color="green" />
+            {flaggedCount  > 0 && <SummaryPill count={flaggedCount}  label="need review" color="amber" />}
+            {approvedCount > 0 && <SummaryPill count={approvedCount} label="approved"    color="blue"  />}
+            {rejectedCount > 0 && <SummaryPill count={rejectedCount} label="rejected"    color="slate" />}
           </div>
 
           {flaggedCount > 0 && (
             <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
               <p className="text-sm text-amber-800">
-                <strong>{flaggedCount}</strong> row{flaggedCount !== 1 ? "s" : ""} have missing
-                mandatory fields. Fill in the highlighted cells, then approve or reject each row.
-                Only approved and ready rows will be imported.
+                <strong>{flaggedCount}</strong> row{flaggedCount !== 1 ? "s" : ""} have missing mandatory fields.
+                Fill in the highlighted cells, then approve or reject each row.
               </p>
             </div>
           )}
 
-          {/* Review table */}
+          {/* Table */}
           <div className="overflow-x-auto -mx-6 sm:-mx-8 border-t border-slate-100">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 text-left border-b border-slate-100">
                   <th className="px-3 py-2.5 text-xs font-medium text-slate-400 w-8">#</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">First name</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Last name</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Street #</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Street name</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Unit</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">City</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Prov</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Postal</th>
+                  {[...BASE_COLUMNS, ...EXTRA_COLUMNS].map((col) => (
+                    <th key={col} className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      {FIELD_LABELS[col]}
+                    </th>
+                  ))}
                   <th className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
-                  <th className="px-3 py-2.5"></th>
+                  <th className="px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -404,9 +298,9 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
               Back
             </Button>
             <div className="flex-1" />
-            {pendingFlaggedCount > 0 && (
+            {flaggedCount > 0 && (
               <p className="text-xs text-amber-600">
-                {pendingFlaggedCount} row{pendingFlaggedCount !== 1 ? "s" : ""} still need review
+                {flaggedCount} row{flaggedCount !== 1 ? "s" : ""} still need review
               </p>
             )}
             <Button
@@ -446,27 +340,31 @@ export function CsvImportModal({ open, onClose, listId }: CsvImportModalProps) {
 
 // ── ReviewRowComponent ─────────────────────────────────────────────────────
 
-interface ReviewRowProps {
+const ALL_COLUMNS: (keyof RowFields)[] = [
+  "firstName", "lastName", "streetNumber", "streetName",
+  "unitNumber", "city", "province", "postalCode",
+  "phone", "email", "birthYear",
+];
+
+function ReviewRowComponent({
+  row,
+  onFieldChange,
+  onApprove,
+  onReject,
+  onUndo,
+}: {
   row: ReviewRow;
   onFieldChange: (field: keyof RowFields, value: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onUndo: () => void;
-}
-
-const EDITABLE_FIELDS: (keyof RowFields)[] = [
-  "firstName", "lastName", "streetNumber", "streetName",
-  "unitNumber", "city", "province", "postalCode",
-];
-
-function ReviewRowComponent({ row, onFieldChange, onApprove, onReject, onUndo }: ReviewRowProps) {
-  const isEditable = row.status === "flagged" || row.status === "approved";
-  const isRejected = row.status === "rejected";
-  const isReady    = row.status === "ready";
-  const isApproved = row.status === "approved";
-
+}) {
+  const isEditable  = row.status === "flagged" || row.status === "approved";
+  const isRejected  = row.status === "rejected";
+  const isApproved  = row.status === "approved";
+  const isReady     = row.status === "ready";
   const currentMissing = getMissingFields(row.fields);
-  const canApprove = row.status === "flagged" && currentMissing.length === 0;
+  const canApprove  = row.status === "flagged" && currentMissing.length === 0;
 
   const rowBg = isRejected
     ? "bg-slate-50 opacity-50"
@@ -476,67 +374,61 @@ function ReviewRowComponent({ row, onFieldChange, onApprove, onReject, onUndo }:
     ? "bg-blue-50/40"
     : "bg-white";
 
-  function CellValue({ field }: { field: keyof RowFields }) {
-    const isMissing = MANDATORY.includes(field) && !row.fields[field].trim();
-
-    if (isEditable) {
-      return (
-        <input
-          type="text"
-          value={row.fields[field]}
-          onChange={(e) => onFieldChange(field, e.target.value)}
-          placeholder={FIELD_LABELS[field]}
-          className={[
-            "w-full text-xs px-2 py-1 rounded-lg border focus:outline-none focus:ring-1 focus:ring-brand-400",
-            isMissing
-              ? "border-amber-300 bg-amber-50 placeholder:text-amber-400"
-              : "border-slate-200 bg-white",
-          ].join(" ")}
-        />
-      );
-    }
-
-    return (
-      <span className={["text-xs", isRejected ? "line-through text-slate-400" : "text-slate-700"].join(" ")}>
-        {row.fields[field] || (field === "unitNumber" ? "" : <span className="text-slate-300">—</span>)}
-      </span>
-    );
-  }
-
   return (
     <tr className={rowBg}>
       <td className="px-3 py-2 text-xs text-slate-400">{row.originalRowNum}</td>
-      <td className="px-3 py-2"><CellValue field="firstName" /></td>
-      <td className="px-3 py-2"><CellValue field="lastName" /></td>
-      <td className="px-3 py-2"><CellValue field="streetNumber" /></td>
-      <td className="px-3 py-2"><CellValue field="streetName" /></td>
-      <td className="px-3 py-2"><CellValue field="unitNumber" /></td>
-      <td className="px-3 py-2"><CellValue field="city" /></td>
-      <td className="px-3 py-2"><CellValue field="province" /></td>
-      <td className="px-3 py-2"><CellValue field="postalCode" /></td>
+      {ALL_COLUMNS.map((field) => {
+        const isMandatory = MANDATORY_FIELDS.includes(field as typeof MANDATORY_FIELDS[number]);
+        const isMissing = isMandatory && !row.fields[field].trim();
 
-      {/* Status badge */}
+        return (
+          <td key={field} className="px-3 py-2">
+            {isEditable ? (
+              <input
+                type="text"
+                value={row.fields[field]}
+                onChange={(e) => onFieldChange(field, e.target.value)}
+                placeholder={FIELD_LABELS[field]}
+                className={[
+                  "w-full text-xs px-2 py-1 rounded-lg border focus:outline-none focus:ring-1 focus:ring-brand-400",
+                  isMissing
+                    ? "border-amber-300 bg-amber-50 placeholder:text-amber-400"
+                    : "border-slate-200 bg-white",
+                ].join(" ")}
+              />
+            ) : (
+              <span className={["text-xs", isRejected ? "line-through text-slate-400" : "text-slate-700"].join(" ")}>
+                {row.fields[field] || (field === "unitNumber" || !isMandatory ? (
+                  <span className="text-slate-300">—</span>
+                ) : (
+                  <span className="text-slate-300">—</span>
+                ))}
+              </span>
+            )}
+          </td>
+        );
+      })}
+
       <td className="px-3 py-2 whitespace-nowrap">
         {isReady    && <StatusBadge label="Ready"    color="green" />}
-        {row.status === "flagged"  && <StatusBadge label="Review"   color="amber" />}
+        {row.status === "flagged" && <StatusBadge label="Review"   color="amber" />}
         {isApproved && <StatusBadge label="Approved" color="blue"  />}
         {isRejected && <StatusBadge label="Rejected" color="slate" />}
       </td>
 
-      {/* Actions */}
       <td className="px-3 py-2 whitespace-nowrap">
         {row.status === "flagged" && (
           <div className="flex items-center gap-1">
             <button
               onClick={onApprove}
               disabled={!canApprove}
+              title={canApprove ? "Approve" : "Fill in all required fields first"}
               className={[
                 "text-xs px-2 py-1 rounded-lg font-medium transition-colors",
                 canApprove
                   ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed",
               ].join(" ")}
-              title={canApprove ? "Approve" : "Fill in all required fields first"}
             >
               Approve
             </button>
@@ -561,17 +453,11 @@ function ReviewRowComponent({ row, onFieldChange, onApprove, onReject, onUndo }:
   );
 }
 
-// ── Small display components ───────────────────────────────────────────────
+// ── Shared small display components ────────────────────────────────────────
 
 function SummaryPill({
-  count,
-  label,
-  color,
-}: {
-  count: number;
-  label: string;
-  color: "green" | "amber" | "blue" | "slate";
-}) {
+  count, label, color,
+}: { count: number; label: string; color: "green" | "amber" | "blue" | "slate" }) {
   const styles = {
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
     amber: "bg-amber-50 text-amber-700 border-amber-200",
@@ -597,9 +483,4 @@ function StatusBadge({ label, color }: { label: string; color: "green" | "amber"
       {label}
     </span>
   );
-}
-
-// helper exported for use in actions (also used in inline logic above)
-function getMissingFields(fields: RowFields): (keyof RowFields)[] {
-  return MANDATORY.filter((f) => !fields[f].trim());
 }

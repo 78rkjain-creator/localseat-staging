@@ -31,7 +31,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole === "canvasser") redirect("/dashboard");
+  if (activeRole === "canvasser") redirect(`/canvassing/${listId}/canvass`);
   if (activeRole && !hasMinimumRole(activeRole as Role, "field_organizer")) {
     redirect("/dashboard");
   }

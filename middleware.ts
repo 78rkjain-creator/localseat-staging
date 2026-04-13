@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequestWithAuth } from "next-auth/middleware";
 
 // Routes that require authentication
-const PROTECTED_PREFIXES = ["/dashboard", "/people", "/canvassing", "/follow-ups", "/outreach", "/donors", "/team", "/settings", "/campaigns"];
+const PROTECTED_PREFIXES = ["/dashboard", "/people", "/voter-list", "/canvassing", "/follow-ups", "/outreach", "/donors", "/team", "/settings", "/campaigns"];
 
 // Routes that are always public
 const PUBLIC_PATHS = ["/login", "/api/auth"];

@@ -134,5 +134,174 @@ export async function getPersonDetail(personId: string, campaignId: string) {
   return person;
 }
 
+// ── Voter list (paginated, management view) ────────────────────────────────
+
+const VOTER_LIST_PAGE_SIZE = 100;
+
+export interface VoterListFilters {
+  campaignId: string;
+  q?: string;
+  street?: string;
+  tagId?: string;
+  page?: number;
+}
+
+export async function getVoterList({
+  campaignId,
+  q,
+  street,
+  tagId,
+  page = 1,
+}: VoterListFilters) {
+  const skip = (page - 1) * VOTER_LIST_PAGE_SIZE;
+
+  const where: Parameters<typeof db.person.findMany>[0]["where"] = {
+    campaignId,
+    deletedAt: null,
+  };
+
+  if (q?.trim()) {
+    const term = q.trim();
+    where.OR = [
+      { firstName: { contains: term, mode: "insensitive" } },
+      { lastName:  { contains: term, mode: "insensitive" } },
+      { email:     { contains: term, mode: "insensitive" } },
+      { phone:     { contains: term, mode: "insensitive" } },
+    ];
+  }
+
+  if (street?.trim()) {
+    where.household = {
+      address: {
+        streetName: { contains: street.trim(), mode: "insensitive" },
+      },
+    };
+  }
+
+  if (tagId) {
+    where.tags = { some: { tagId } };
+  }
+
+  const [people, total] = await Promise.all([
+    db.person.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        birthYear: true,
+        sourceNotes: true,
+        createdAt: true,
+        household: {
+          select: {
+            address: {
+              select: {
+                streetNumber: true,
+                streetName: true,
+                unitNumber: true,
+                city: true,
+                postalCode: true,
+              },
+            },
+          },
+        },
+        tags: {
+          select: { tag: { select: { id: true, name: true, color: true } } },
+        },
+        canvassResponses: {
+          orderBy: { respondedAt: "desc" },
+          take: 1,
+          select: { supportLevel: true, outcome: true },
+        },
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      skip,
+      take: VOTER_LIST_PAGE_SIZE,
+    }),
+    db.person.count({ where }),
+  ]);
+
+  return {
+    people,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / VOTER_LIST_PAGE_SIZE)),
+  };
+}
+
+// ── Duplicate pair detection ───────────────────────────────────────────────
+
+export async function findDuplicatePairs(campaignId: string) {
+  const people = await db.person.findMany({
+    where: { campaignId, deletedAt: null },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      birthYear: true,
+      sourceNotes: true,
+      createdAt: true,
+      tags: {
+        select: { tag: { select: { id: true, name: true, color: true } } },
+      },
+      household: {
+        select: {
+          address: {
+            select: {
+              streetNumber: true,
+              streetName: true,
+              unitNumber: true,
+              city: true,
+              postalCode: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Group by dedup key: firstName|lastName|streetNumber|streetName|postalCode
+  type PersonRow = (typeof people)[number];
+  const groups = new Map<string, PersonRow[]>();
+
+  for (const p of people) {
+    const addr = p.household?.address;
+    if (!addr) continue; // can't match without address
+
+    const key = [
+      p.firstName.toLowerCase().trim(),
+      p.lastName.toLowerCase().trim(),
+      addr.streetNumber.toLowerCase().trim(),
+      addr.streetName.toLowerCase().trim(),
+      addr.postalCode.toLowerCase().replace(/\s/g, ""),
+    ].join("|");
+
+    const group = groups.get(key) ?? [];
+    group.push(p);
+    groups.set(key, group);
+  }
+
+  // Collect pairs from groups with 2+ members
+  const pairs: [PersonRow, PersonRow][] = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Emit sequential pairs: (0,1), (1,2), ...
+    for (let i = 0; i < group.length - 1; i++) {
+      pairs.push([group[i], group[i + 1]]);
+      if (pairs.length >= 50) break;
+    }
+    if (pairs.length >= 50) break;
+  }
+
+  return pairs;
+}
+
+export type VoterListItem = Awaited<ReturnType<typeof getVoterList>>["people"][number];
+export type DuplicatePair = Awaited<ReturnType<typeof findDuplicatePairs>>[number];
+
 export type PersonListItem = Awaited<ReturnType<typeof getPeopleList>>[number];
 export type PersonDetail = NonNullable<Awaited<ReturnType<typeof getPersonDetail>>>;

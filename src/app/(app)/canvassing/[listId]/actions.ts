@@ -121,9 +121,10 @@ export interface CsvRow {
   lastName: string;
   streetNumber: string;
   streetName: string;
-  unitNumber?: string;
+  unitNumber: string;  // empty string when absent
   city: string;
-  postalCode?: string;
+  province: string;
+  postalCode: string;
 }
 
 export interface CsvImportResult {
@@ -152,23 +153,25 @@ export async function importCsvPeople(
   let created = 0;
   let skipped = 0;
 
-  // Process all rows in a transaction
   await db.$transaction(async (tx) => {
     for (const row of rows) {
       const firstName = row.firstName.trim();
       const lastName = row.lastName.trim();
       const streetNumber = row.streetNumber.trim();
       const streetName = row.streetName.trim();
-      const city = row.city.trim() || "Unknown";
+      const city = row.city.trim();
+      const province = row.province.trim();
+      const postalCode = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
       const unitNumber = row.unitNumber?.trim() || null;
-      const postalCode = row.postalCode?.trim() || "";
 
-      if (!firstName || !lastName || !streetNumber || !streetName) {
+      // All mandatory fields must be present — caller is responsible for
+      // only sending approved/ready rows, but guard here for safety.
+      if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
         skipped++;
         continue;
       }
 
-      // 1. Try to find an existing person by name + address in this campaign
+      // 1. Try to match an existing person in this campaign by name + address.
       const existingPerson = await tx.person.findFirst({
         where: {
           campaignId,
@@ -179,6 +182,10 @@ export async function importCsvPeople(
             address: {
               streetNumber: { equals: streetNumber, mode: "insensitive" },
               streetName: { equals: streetName, mode: "insensitive" },
+              unitNumber: unitNumber
+                ? { equals: unitNumber, mode: "insensitive" }
+                : null,
+              postalCode: { equals: postalCode, mode: "insensitive" },
             },
           },
         },
@@ -191,26 +198,39 @@ export async function importCsvPeople(
         personId = existingPerson.id;
         matched++;
       } else {
-        // 2. Find or create address
+        // 2. Find or create address.
+        // Household key: streetNumber + streetName + unitNumber + postalCode.
+        // Each distinct unit is its own address record and its own household.
         let address = await tx.address.findFirst({
           where: {
             campaignId,
+            deletedAt: null,
             streetNumber: { equals: streetNumber, mode: "insensitive" },
             streetName: { equals: streetName, mode: "insensitive" },
-            city: { equals: city, mode: "insensitive" },
-            deletedAt: null,
+            unitNumber: unitNumber
+              ? { equals: unitNumber, mode: "insensitive" }
+              : null,
+            postalCode: { equals: postalCode, mode: "insensitive" },
           },
           select: { id: true },
         });
 
         if (!address) {
           address = await tx.address.create({
-            data: { campaignId, streetNumber, streetName, unitNumber, city, postalCode },
+            data: {
+              campaignId,
+              streetNumber,
+              streetName,
+              unitNumber,
+              city,
+              province,
+              postalCode,
+            },
             select: { id: true },
           });
         }
 
-        // 3. Find or create household at that address
+        // 3. Find or create household at that address.
         let household = await tx.household.findFirst({
           where: { campaignId, addressId: address.id, deletedAt: null },
           select: { id: true },
@@ -223,7 +243,7 @@ export async function importCsvPeople(
           });
         }
 
-        // 4. Create the person
+        // 4. Create the person.
         const newPerson = await tx.person.create({
           data: {
             campaignId,
@@ -239,14 +259,13 @@ export async function importCsvPeople(
         created++;
       }
 
-      // 5. Add to list (skip if already there)
+      // 5. Add to list, skip silently if already present.
       const alreadyInList = await tx.canvassListEntry.findUnique({
         where: { canvassListId_personId: { canvassListId: listId, personId } },
         select: { id: true },
       });
 
       if (alreadyInList) {
-        // Don't double-count as matched/created — it's a true skip
         if (existingPerson) matched--;
         else created--;
         skipped++;
@@ -257,7 +276,7 @@ export async function importCsvPeople(
         data: { canvassListId: listId, personId, addedById: session.user.id },
       });
     }
-  });
+  }, { timeout: 30000 });
 
   revalidatePath(`/canvassing/${listId}`);
   return { matched, created, skipped };

@@ -38,6 +38,10 @@ export function canViewVolunteers(role: Role): boolean {
   ].includes(role);
 }
 
+export function canManageVoterList(role: Role): boolean {
+  return role === "campaign_manager";
+}
+
 export function canExportData(role: Role): boolean {
   return ["campaign_manager", "finance_lead"].includes(role);
 }

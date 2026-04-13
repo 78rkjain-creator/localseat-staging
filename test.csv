@@ -1,2 +1,4 @@
-FirstName,LastName,StreetNumber,StreetName,City,PostalCode
-Jane,Smith,45,Oak Avenue,Greenfield,K1B 2C3
+FirstName,LastName,StreetNumber,StreetName,City,Province,PostalCode
+Jane,Smith,45,Oak Avenue,Greenfield,ON,K1B 2C3
+Patricia,Wallace,14,Elm Street,Greenfield,ON,K1A 0B1
+John,,50,Oak Avenue,Greenfield,ON,K1B 2C3

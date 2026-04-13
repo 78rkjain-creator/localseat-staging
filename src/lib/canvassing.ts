@@ -230,6 +230,123 @@ export function summariseOutcomes(
   return counts;
 }
 
+// ── Canvasser: assigned lists ──────────────────────────────────────────────
+
+export async function getAssignedLists(canvasserId: string, campaignId: string) {
+  const assignments = await db.canvassAssignment.findMany({
+    where: {
+      canvasserId,
+      canvassList: { campaignId, deletedAt: null },
+    },
+    include: {
+      canvassList: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          _count: { select: { entries: true } },
+        },
+      },
+      _count: { select: { responses: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return assignments.map((a) => ({
+    assignmentId: a.id,
+    list: a.canvassList,
+    totalEntries: a.canvassList._count.entries,
+    totalResponses: a._count.responses,
+  }));
+}
+
+// ── Canvassing queue ───────────────────────────────────────────────────────
+
+export async function getCanvassingQueue(
+  listId: string,
+  canvasserId: string,
+  campaignId: string
+) {
+  const assignment = await db.canvassAssignment.findFirst({
+    where: {
+      canvassListId: listId,
+      canvasserId,
+      canvassList: { campaignId },
+    },
+    select: { id: true },
+  });
+  if (!assignment) return null;
+
+  const entries = await db.canvassListEntry.findMany({
+    where: { canvassListId: listId },
+    orderBy: [
+      { person: { household: { address: { streetName: "asc" } } } },
+      { person: { household: { address: { streetNumber: "asc" } } } },
+      { person: { lastName: "asc" } },
+      { person: { firstName: "asc" } },
+    ],
+    include: {
+      person: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          household: {
+            select: {
+              address: {
+                select: {
+                  streetNumber: true,
+                  streetName: true,
+                  unitNumber: true,
+                  city: true,
+                  province: true,
+                  postalCode: true,
+                },
+              },
+            },
+          },
+          canvassResponses: {
+            where: { assignmentId: assignment.id },
+            orderBy: { respondedAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              outcome: true,
+              supportLevel: true,
+              signRequest: true,
+              volunteerInterest: true,
+              donorInterest: true,
+              notes: true,
+              needsFollowUp: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return {
+    assignmentId: assignment.id,
+    entries: entries.map((e) => ({
+      entryId: e.id,
+      person: {
+        id: e.person.id,
+        firstName: e.person.firstName,
+        lastName: e.person.lastName,
+        phone: e.person.phone,
+        address: e.person.household?.address ?? null,
+      },
+      lastResponse: e.person.canvassResponses[0] ?? null,
+    })),
+  };
+}
+
+export type CanvassingQueue = NonNullable<
+  Awaited<ReturnType<typeof getCanvassingQueue>>
+>;
+export type CanvassingEntry = CanvassingQueue["entries"][number];
+
 export type CanvassListSummary = Awaited<
   ReturnType<typeof getCanvassLists>
 >[number];
