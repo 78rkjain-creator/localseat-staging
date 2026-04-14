@@ -12,14 +12,21 @@ CREATE TYPE "OutreachChannel" AS ENUM ('door_knock', 'phone_call', 'email', 'tex
 ALTER TABLE "outreach_logs" DROP CONSTRAINT "outreach_logs_userId_fkey";
 
 -- AlterTable
+-- Add channel as nullable first so the statement succeeds on non-empty tables.
 ALTER TABLE "outreach_logs" DROP COLUMN "method",
-ADD COLUMN     "channel" "OutreachChannel" NOT NULL,
+ADD COLUMN     "channel" "OutreachChannel",
 ADD COLUMN     "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN     "deletedAt" TIMESTAMP(3),
 ADD COLUMN     "outcome" TEXT,
 ADD COLUMN     "phoneType" TEXT,
 ADD COLUMN     "phonedBy" TEXT,
 ALTER COLUMN "userId" DROP NOT NULL;
+
+-- Backfill: default any existing null channel values to 'door_knock'.
+UPDATE "outreach_logs" SET "channel" = 'door_knock' WHERE "channel" IS NULL;
+
+-- Now it is safe to enforce NOT NULL.
+ALTER TABLE "outreach_logs" ALTER COLUMN "channel" SET NOT NULL;
 
 -- DropEnum
 DROP TYPE "OutreachMethod";
