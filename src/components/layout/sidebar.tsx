@@ -150,7 +150,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-60 min-h-screen bg-white border-r border-slate-100 px-3 py-5">
+    <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-3 mb-6">
         <div className="h-8 w-8 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0">
@@ -167,7 +167,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
       </div>
 
       {/* Nav */}
-      <nav className="flex flex-col gap-0.5 flex-1">
+      <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
         {navItems.map((item) => (
           <NavLink
             key={item.href}

@@ -22,14 +22,14 @@ export default async function AppLayout({
   );
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar
         firstName={firstName}
         lastName={lastName}
         role={activeRole}
         campaignName={activeMembership?.campaignName ?? null}
       />
-      <main className="flex-1 min-w-0 bg-slate-50">
+      <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto">
         {children}
       </main>
     </div>
