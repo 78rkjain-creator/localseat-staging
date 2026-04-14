@@ -89,6 +89,32 @@ export async function saveCanvassResponse(
     console.error("[saveCanvassResponse] Failed to auto-log outreach entry:", err);
   }
 
+  // Auto-create donor record when donor interest is flagged (idempotent)
+  if (isContacted && input.donorInterest) {
+    try {
+      const existing = await db.donor.findFirst({
+        where: { campaignId: activeCampaignId, linkedPersonId: input.personId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!existing) {
+        await db.donor.create({
+          data: {
+            campaignId: activeCampaignId,
+            firstName: person.firstName,
+            lastName: person.lastName,
+            linkedPersonId: input.personId,
+            status: "interested",
+            createdById: session.user.id,
+            notes: noteText,
+          },
+        });
+        console.log("[saveCanvassResponse] Donor record created for", person.firstName, person.lastName);
+      }
+    } catch (err) {
+      console.error("[saveCanvassResponse] Failed to create donor record:", err);
+    }
+  }
+
   // Task creation is independent of the canvass response — a task failure
   // must never roll back a canvass response that was successfully saved.
   if (input.needsFollowUp) {

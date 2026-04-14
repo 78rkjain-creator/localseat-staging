@@ -31,6 +31,11 @@ export function canViewAllPeople(role: Role): boolean {
 }
 
 export function canViewDonors(role: Role): boolean {
+  return [...FULL_ACCESS_ROLES, "finance_lead", "field_organizer"].includes(role);
+}
+
+// Only finance roles and full-access roles see amounts and payment details
+export function canViewDonorAmounts(role: Role): boolean {
   return [...FULL_ACCESS_ROLES, "finance_lead"].includes(role);
 }
 

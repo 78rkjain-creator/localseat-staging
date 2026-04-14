@@ -27,7 +27,7 @@ async function main() {
   // ── Clean up existing seed data ──────────────────────────────────────────
   await db.$transaction([
     db.auditLog.deleteMany(),
-    db.donorRecord.deleteMany(),
+    db.donor.deleteMany(),
     db.outreachLog.deleteMany(),
     db.canvassResponse.deleteMany(),
     db.canvassAssignment.deleteMany(),
@@ -453,28 +453,33 @@ async function main() {
   });
   console.log("  ✓ Outreach logs");
 
-  // ── Donor Prospects ───────────────────────────────────────────────────────
-  await db.donorRecord.createMany({
+  // ── Donors ────────────────────────────────────────────────────────────────
+  await db.donor.createMany({
     data: [
       {
         campaignId: campaign.id,
-        personId: people[0].id,
-        prospectOnly: true,
-        flaggedById: canvasser1.id,
-        flaggedAt: new Date(),
+        firstName: people[0].firstName,
+        lastName: people[0].lastName,
+        linkedPersonId: people[0].id,
+        status: "interested",
+        createdById: canvasser1.id,
         notes: "Expressed strong interest at door — mentioned $500.",
       },
       {
         campaignId: campaign.id,
-        personId: people[14].id,
-        prospectOnly: true,
-        flaggedById: manager.id,
-        flaggedAt: new Date(),
+        firstName: people[14].firstName,
+        lastName: people[14].lastName,
+        linkedPersonId: people[14].id,
+        status: "pledged",
+        amount: 250,
+        donationDate: new Date(),
+        paymentMethod: "cheque",
+        createdById: manager.id,
         notes: "Raj Patel — local business owner. Previous donor to other campaigns.",
       },
     ],
   });
-  console.log("  ✓ Donor prospects");
+  console.log("  ✓ Donors");
 
   // ── Audit Log ─────────────────────────────────────────────────────────────
   await db.auditLog.create({

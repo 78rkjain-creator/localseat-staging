@@ -54,7 +54,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
   const latestCanvass = person.canvassResponses[0];
-  const isDonorProspect = person.donorRecords.length > 0;
+  const linkedDonor = person.linkedDonors[0] ?? null;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto">
@@ -172,6 +172,22 @@ export default async function PersonDetailPage({ params }: PageProps) {
                   )}
                 </div>
               </div>
+            </Card>
+          )}
+
+          {/* Donor link */}
+          {linkedDonor && (
+            <Card padding="md">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Donor
+              </h2>
+              <Link
+                href={`/donors/${linkedDonor.id}`}
+                className="text-sm text-brand-600 hover:underline"
+              >
+                View donor record
+              </Link>
+              <p className="text-xs text-slate-400 mt-1 capitalize">{linkedDonor.status}</p>
             </Card>
           )}
 

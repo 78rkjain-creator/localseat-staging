@@ -134,9 +134,11 @@ export async function getPersonDetail(personId: string, campaignId: string) {
         include: { assignee: { select: { firstName: true, lastName: true } } },
         orderBy: { dueDate: "asc" },
       },
-      donorRecords: {
+      linkedDonors: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         take: 1,
+        select: { id: true, status: true, amount: true },
       },
     },
   });

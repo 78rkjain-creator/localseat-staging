@@ -65,7 +65,7 @@ model Campaign {
   addresses     Address[]
   canvassLists  CanvassList[]
   outreachLogs  OutreachLog[]
-  donorRecords  DonorRecord[]
+  donors        Donor[]
   auditLogs     AuditLog[]
   tasks         Task[]
 
@@ -92,6 +92,7 @@ model User {
   tasksAssigned        Task[]
   outreachLogs         OutreachLog[]
   auditLogs            AuditLog[]
+  donorsCreated        Donor[]
 
   @@map("users")
 }
@@ -178,7 +179,7 @@ model Person {
   canvassResponses   CanvassResponse[]
   canvassListEntries CanvassListEntry[]
   outreachLogs       OutreachLog[]
-  donorRecords       DonorRecord[]
+  linkedDonors       Donor[]
   tasks              Task[]
 
   @@map("people")
@@ -347,21 +348,58 @@ model OutreachLog {
 // ─── Donor Record ─────────────────────────────────────────────────────────────
 
 // V1: prospect tracking only — no payment processing
-model DonorRecord {
-  id           String    @id @default(cuid())
-  campaignId   String
-  personId     String
-  prospectOnly Boolean   @default(true)
-  notes        String?
-  flaggedById  String?
-  flaggedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+model Donor {
+  id             String         @id @default(cuid())
+  campaignId     String
 
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  person   Person   @relation(fields: [personId], references: [id])
+  // Contact info — stored directly (donor may not be in voter list)
+  firstName      String
+  lastName       String
+  address        String?
+  city           String?
+  province       String?
+  postalCode     String?
+  phone          String?
+  email          String?
 
-  @@map("donor_records")
+  // Donation details
+  amount         Decimal?       @db.Decimal(10, 2)
+  donationDate   DateTime?
+  status         DonorStatus    @default(interested)
+  paymentMethod  PaymentMethod?
+
+  // Thank you tracking
+  thankYouSent   Boolean        @default(false)
+  thankYouDate   DateTime?
+
+  notes          String?
+
+  // Link to voter record if applicable
+  linkedPersonId String?
+
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  linkedPerson Person?   @relation(fields: [linkedPersonId], references: [id])
+  createdBy    User?     @relation(fields: [createdById], references: [id])
+
+  @@map("donors")
+}
+
+enum DonorStatus {
+  interested
+  pledged
+  received
+}
+
+enum PaymentMethod {
+  cash
+  cheque
+  e_transfer
+  other
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

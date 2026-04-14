@@ -70,6 +70,22 @@ export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {
   not_home:   "Not Home",
 };
 
+export type DonorStatus = "interested" | "pledged" | "received";
+export type PaymentMethod = "cash" | "cheque" | "e_transfer" | "other";
+
+export const DONOR_STATUS_LABELS: Record<DonorStatus, string> = {
+  interested: "Interested",
+  pledged:    "Pledged",
+  received:   "Received",
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash:       "Cash",
+  cheque:     "Cheque",
+  e_transfer: "e-Transfer",
+  other:      "Other",
+};
+
 export const OUTREACH_CHANNEL_LABELS: Record<OutreachChannel, string> = {
   door_knock:   "Door knock",
   phone_call:   "Phone call",
