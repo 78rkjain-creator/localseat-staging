@@ -28,6 +28,7 @@ export default async function AppLayout({
         lastName={lastName}
         role={activeRole}
         campaignName={activeMembership?.campaignName ?? null}
+        campaignCount={memberships.length}
       />
       <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto">
         {children}

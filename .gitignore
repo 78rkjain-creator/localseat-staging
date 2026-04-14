@@ -39,3 +39,6 @@ next-env.d.ts
 
 # Prisma
 .seed-build/
+
+# Local TypeScript check output
+tsc_output.txt

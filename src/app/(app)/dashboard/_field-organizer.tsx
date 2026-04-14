@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { getFieldOrganizerDashboardData } from "@/lib/dashboard";
+import { getRecentActivity } from "@/lib/activity";
+import { RecentActivityFeed } from "@/components/dashboard/RecentActivityFeed";
 import { ROLE_LABELS } from "@/types";
 
 interface Props {
@@ -9,7 +11,10 @@ interface Props {
 }
 
 export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) {
-  const data = await getFieldOrganizerDashboardData(campaignId);
+  const [data, activityEntries] = await Promise.all([
+    getFieldOrganizerDashboardData(campaignId),
+    getRecentActivity(campaignId, 20),
+  ]);
   const { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday } = data;
 
   const totalEntries = walkListProgress.reduce((s, l) => s + l.totalEntries, 0);
@@ -123,6 +128,14 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
             </table>
           </Card>
         )}
+      </div>
+
+      {/* Recent activity feed */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent activity</h2>
+        <Card padding="md">
+          <RecentActivityFeed entries={activityEntries} />
+        </Card>
       </div>
 
       {/* Canvasser activity today */}

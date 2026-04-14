@@ -5,54 +5,53 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { register } from "./actions";
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
 
-    let result;
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      result = await signIn("credentials", {
+      const result = await register({ firstName, lastName, email, phone, password });
+      if (result?.error) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+      // Sign in with the newly created credentials
+      const signInResult = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
         redirect: false,
-        callbackUrl: "/dashboard",
       });
-    } catch (err) {
+      if (signInResult?.error || !signInResult?.ok) {
+        setError("Account created but sign-in failed. Please sign in manually.");
+        setLoading(false);
+        return;
+      }
+      // Hard navigate so the session cookie is picked up before RSC
+      window.location.href = "/onboarding/create-campaign";
+    } catch {
+      setError("Something went wrong. Please try again.");
       setLoading(false);
-      setError(`Sign in error: ${err instanceof Error ? err.message : String(err)}`);
-      return;
     }
-
-    setLoading(false);
-
-    if (!result) {
-      setError("No response from server. Check your connection.");
-      return;
-    }
-
-    if (result.error) {
-      setError("Invalid email or password.");
-      return;
-    }
-
-    if (!result.ok) {
-      setError(`Sign in failed (status: ${result.status}). Please try again.`);
-      return;
-    }
-
-    // Hard navigation ensures the browser makes a fresh HTTP request with all
-    // cookies, so the middleware and server components see the new session.
-    // router.push() uses a soft RSC fetch which can race with cookie commit.
-    window.location.href = "/dashboard";
   }
 
   return (
@@ -87,14 +86,36 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Login card */}
+      {/* Register card */}
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-card border border-slate-100 p-8">
-        <h2 className="text-xl font-semibold text-slate-900 mb-1">Sign in</h2>
+        <h2 className="text-xl font-semibold text-slate-900 mb-1">Create an account</h2>
         <p className="text-sm text-slate-500 mb-6">
-          Enter your email and password to continue.
+          Set up your account to get started.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="First name"
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Jane"
+              autoComplete="given-name"
+              autoFocus
+              required
+            />
+            <Input
+              label="Last name"
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Smith"
+              autoComplete="family-name"
+              required
+            />
+          </div>
+
           <Input
             label="Email"
             type="email"
@@ -102,8 +123,16 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             autoComplete="email"
-            autoFocus
             required
+          />
+
+          <Input
+            label="Phone (optional)"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="613-555-0100"
+            autoComplete="tel"
           />
 
           <div className="flex flex-col gap-1.5">
@@ -117,9 +146,10 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
-                className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 pr-12 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent [&::-ms-reveal]:hidden [&::-ms-clear]:hidden [&::-webkit-contacts-auto-fill-button]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                minLength={8}
+                className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 pr-12 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
               />
               <button
                 type="button"
@@ -141,6 +171,16 @@ export default function LoginPage() {
             </div>
           </div>
 
+          <Input
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            required
+          />
+
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
               <p className="text-sm text-red-600">{error}</p>
@@ -154,14 +194,14 @@ export default function LoginPage() {
             loading={loading}
             className="mt-1"
           >
-            Sign in
+            Create account
           </Button>
         </form>
 
         <p className="mt-5 text-center text-sm text-slate-500">
-          New to LocalSeat?{" "}
-          <Link href="/register" className="text-brand-600 font-medium hover:underline">
-            Create an account
+          Already have an account?{" "}
+          <Link href="/login" className="text-brand-600 font-medium hover:underline">
+            Sign in
           </Link>
         </p>
       </div>

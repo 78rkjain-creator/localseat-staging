@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople } from "@/lib/permissions";
+import { canViewAllPeople, canExportData } from "@/lib/permissions";
 import {
   getPeopleList,
   getPeopleCount,
@@ -13,7 +13,7 @@ import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "./search-bar";
-import type { SupportLevel } from "@/types";
+import type { Role, SupportLevel } from "@/types";
 
 export const metadata: Metadata = { title: "People" };
 
@@ -30,6 +30,8 @@ export default async function PeoplePage({ searchParams }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole)) redirect("/dashboard");
+
+  const canExport = activeRole ? canExportData(activeRole as Role) : false;
 
   const [people, totalCount, allTags] = await Promise.all([
     getPeopleList({
@@ -58,6 +60,18 @@ export default async function PeoplePage({ searchParams }: PageProps) {
             )}
           </p>
         </div>
+        {canExport && (
+          <a
+            href="/people/export"
+            download
+            className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm flex-shrink-0"
+          >
+            <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export CSV
+          </a>
+        )}
       </div>
 
       {/* Search + tag filters */}

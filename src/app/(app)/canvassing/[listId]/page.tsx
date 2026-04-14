@@ -90,9 +90,23 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
             <p className="text-slate-500 text-sm mt-1">{list.description}</p>
           )}
         </div>
-        {canAssign && availableCanvassers.length > 0 && (
-          <AssignCanvasserButton listId={list.id} canvassers={availableCanvassers} />
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canManage && (
+            <a
+              href={`/canvassing/export?listId=${list.id}`}
+              download
+              className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export CSV
+            </a>
+          )}
+          {canAssign && availableCanvassers.length > 0 && (
+            <AssignCanvasserButton listId={list.id} canvassers={availableCanvassers} />
+          )}
+        </div>
       </div>
 
       {/* Summary stats */}

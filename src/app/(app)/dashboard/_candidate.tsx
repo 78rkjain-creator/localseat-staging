@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { getCandidateDashboardData } from "@/lib/dashboard";
+import { getRecentActivity } from "@/lib/activity";
+import { RecentActivityFeed } from "@/components/dashboard/RecentActivityFeed";
 import type { DonorStatus, OutreachChannel, Role } from "@/types";
 import { ROLE_LABELS, OUTREACH_CHANNEL_LABELS, DONOR_STATUS_LABELS } from "@/types";
 
@@ -11,7 +13,10 @@ interface Props {
 }
 
 export async function CandidateDashboard({ campaignId, firstName, role }: Props) {
-  const data = await getCandidateDashboardData(campaignId);
+  const [data, activityEntries] = await Promise.all([
+    getCandidateDashboardData(campaignId),
+    getRecentActivity(campaignId, 20),
+  ]);
   const {
     total, forUs, againstUs, undecided, notHome, uncontacted,
     doorsTotal, doorsToday, walkListProgress,
@@ -167,6 +172,14 @@ export async function CandidateDashboard({ campaignId, firstName, role }: Props)
               ))}
             </div>
           )}
+        </Card>
+      </div>
+
+      {/* Recent activity feed */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent activity</h2>
+        <Card padding="md">
+          <RecentActivityFeed entries={activityEntries} />
         </Card>
       </div>
 

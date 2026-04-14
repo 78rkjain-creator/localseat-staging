@@ -8,9 +8,9 @@ import {
   canViewAllPeople,
   canViewDonors,
   canManageWalkLists,
-  canManageTeam,
   canViewTeam,
 } from "@/lib/permissions";
+import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 
 // Voter list is visible to roles that can view all people
 function canViewVoterList(role: Role): boolean {
@@ -27,6 +27,7 @@ interface SidebarProps {
   lastName: string;
   role: Role | null;
   campaignName: string | null;
+  campaignCount?: number;
 }
 
 interface NavItem {
@@ -57,7 +58,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1 }: SidebarProps) {
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
@@ -180,7 +181,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
         <div className="min-w-0">
           <p className="font-semibold text-slate-900 text-sm">LocalSeat</p>
           {campaignName && (
-            <p className="text-xs text-slate-500 truncate">{campaignName}</p>
+            <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
           )}
         </div>
       </div>

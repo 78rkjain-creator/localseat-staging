@@ -104,13 +104,46 @@ export const authOptions: NextAuthOptions = {
       }
 
       // Handle campaign switching via session update
-      if (trigger === "update" && session?.activeCampaignId) {
+      if (trigger === "update" && session?.activeCampaignId && !session?.refreshMemberships) {
         const membership = token.memberships?.find(
           (m) => m.campaignId === session.activeCampaignId
         );
         if (membership) {
           token.activeCampaignId = membership.campaignId;
           token.activeRole = membership.role;
+        }
+      }
+
+      // Handle new campaign creation: re-fetch full memberships from DB
+      if (trigger === "update" && session?.refreshMemberships && token.id) {
+        const user = await db.user.findUnique({
+          where: { id: token.id as string },
+          include: {
+            memberships: {
+              include: { campaign: { select: { id: true, name: true } } },
+            },
+          },
+        });
+        if (user) {
+          const memberships: SessionMembership[] = user.memberships.map((m) => ({
+            campaignId: m.campaign.id,
+            campaignName: m.campaign.name,
+            role: m.role,
+          }));
+          token.memberships = memberships;
+
+          // Activate the requested campaign if provided, else auto-select if only one
+          const targetId = session.activeCampaignId as string | undefined;
+          const target = targetId
+            ? memberships.find((m) => m.campaignId === targetId)
+            : memberships.length === 1
+            ? memberships[0]
+            : null;
+
+          if (target) {
+            token.activeCampaignId = target.campaignId;
+            token.activeRole = target.role;
+          }
         }
       }
 
