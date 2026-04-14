@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { Role, OutreachChannel } from "@/types";
 import { OUTREACH_CHANNEL_LABELS } from "@/types";
-import { canManageFollowUps } from "@/lib/permissions";
+import { canManageFollowUps, isReadOnly } from "@/lib/permissions";
 import {
   getOutreachLog,
   getMyOutreachLog,
@@ -38,6 +38,7 @@ export default async function OutreachPage({ searchParams }: PageProps) {
 
   const role = activeRole as Role;
   const isManager = canManageFollowUps(role);
+  const readOnly = isReadOnly(role);
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const channelFilter = (channel as OutreachChannel | undefined) || undefined;
 
@@ -61,7 +62,7 @@ export default async function OutreachPage({ searchParams }: PageProps) {
             {isManager ? "" : " (your contacts only)"}
           </p>
         </div>
-        {isManager && (
+        {isManager && !readOnly && (
           <OutreachToolbar campaignId={activeCampaignId} />
         )}
       </div>

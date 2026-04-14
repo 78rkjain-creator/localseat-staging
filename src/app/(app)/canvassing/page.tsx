@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canManageWalkLists, hasMinimumRole } from "@/lib/permissions";
+import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
 import { getCanvassLists, getAssignedLists } from "@/lib/canvassing";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -24,8 +24,8 @@ export default async function CanvassingPage() {
     return <CanvasserView userId={session.user.id} campaignId={activeCampaignId} />;
   }
 
-  // Roles that may not view this page at all
-  if (activeRole && !hasMinimumRole(activeRole as Role, "field_organizer")) {
+  // Only roles that can manage or assign walk lists may view this page
+  if (activeRole && !canManageWalkLists(activeRole as Role) && !canAssignCanvassers(activeRole as Role)) {
     redirect("/dashboard");
   }
 

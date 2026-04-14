@@ -9,11 +9,17 @@ import {
   canViewDonors,
   canManageWalkLists,
   canManageTeam,
+  canViewTeam,
 } from "@/lib/permissions";
 
 // Voter list is visible to roles that can view all people
 function canViewVoterList(role: Role): boolean {
   return canViewAllPeople(role);
+}
+
+// Canvassing list page is visible to walk list managers and co_chair
+function canViewCanvassing(role: Role): boolean {
+  return canManageWalkLists(role) || role === "co_chair";
 }
 
 interface SidebarProps {
@@ -90,7 +96,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
           },
         ]
       : []),
-    ...(role && canManageWalkLists(role)
+    ...(role && canViewCanvassing(role)
       ? [
           {
             href: "/canvassing",
@@ -121,7 +127,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
         </svg>
       ),
     },
-    ...(role && canViewDonors(role)
+    ...(role && canViewDonors(role) && role !== "field_organizer"
       ? [
           {
             href: "/donors",
@@ -134,7 +140,20 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
           },
         ]
       : []),
-    ...(role && canManageTeam(role)
+    ...(role && role === "volunteer_coordinator"
+      ? [
+          {
+            href: "/volunteers/schedule",
+            label: "Volunteers",
+            icon: (
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
+    ...(role && canViewTeam(role)
       ? [
           {
             href: "/team",

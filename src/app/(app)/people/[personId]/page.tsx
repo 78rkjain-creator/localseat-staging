@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople } from "@/lib/permissions";
+import { canViewAllPeople, isReadOnly } from "@/lib/permissions";
 import { getPersonDetail } from "@/lib/people";
 import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole)) redirect("/dashboard");
+  const readOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
 
   const person = await getPersonDetail(params.personId, activeCampaignId);
   if (!person) notFound();
@@ -278,7 +279,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
               </ul>
             )}
 
-            <AddNoteForm personId={person.id} campaignId={activeCampaignId} />
+            {!readOnly && <AddNoteForm personId={person.id} campaignId={activeCampaignId} />}
           </Card>
 
           {/* Activity timeline */}

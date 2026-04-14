@@ -4,6 +4,7 @@
 export type Role =
   | "candidate"
   | "campaign_manager"
+  | "co_chair"
   | "field_organizer"
   | "canvasser"
   | "volunteer_coordinator"
@@ -55,6 +56,7 @@ export interface AppSession {
 export const ROLE_LABELS: Record<Role, string> = {
   candidate: "Candidate",
   campaign_manager: "Campaign Manager",
+  co_chair: "Co-Chair",
   field_organizer: "Field Organizer",
   canvasser: "Canvasser",
   volunteer_coordinator: "Volunteer Coordinator",
@@ -68,6 +70,21 @@ export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {
   soft_no:    "Soft No",
   strong_no:  "Strong No",
   not_home:   "Not Home",
+};
+
+export type VolunteerStatus = "interested" | "committed";
+
+export const VOLUNTEER_STATUS_LABELS: Record<VolunteerStatus, string> = {
+  interested: "Interested",
+  committed:  "Committed",
+};
+
+export type VolunteerAttendanceStatus = "pending" | "attended" | "no_show";
+
+export const VOLUNTEER_ATTENDANCE_LABELS: Record<VolunteerAttendanceStatus, string> = {
+  pending:  "Pending",
+  attended: "Attended",
+  no_show:  "No show",
 };
 
 export type DonorStatus = "interested" | "pledged" | "received";

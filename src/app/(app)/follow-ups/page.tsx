@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import type { Role } from "@/types";
 import {
   canManageFollowUps,
+  isReadOnly,
 } from "@/lib/permissions";
 import {
   getFullFollowUpQueue,
@@ -25,13 +26,14 @@ export default async function FollowUpsPage() {
 
   const role = activeRole as Role;
   const isManager = canManageFollowUps(role);
+  const readOnly = isReadOnly(role);
 
   console.log("[follow-ups] userId:", userId, "| activeCampaignId:", activeCampaignId, "| activeRole:", activeRole, "| isManager:", isManager);
 
   if (isManager) {
     const [queue, teamMembers] = await Promise.all([
       getFullFollowUpQueue(activeCampaignId),
-      getCampaignTeamMembers(activeCampaignId),
+      readOnly ? Promise.resolve([]) : getCampaignTeamMembers(activeCampaignId),
     ]);
 
     console.log("[follow-ups] unassigned:", queue.unassigned.length, "| assigned:", queue.assigned.length);
@@ -41,6 +43,7 @@ export default async function FollowUpsPage() {
         unassigned={queue.unassigned}
         assigned={queue.assigned}
         teamMembers={teamMembers}
+        readOnly={readOnly}
       />
     );
   }
@@ -56,10 +59,12 @@ function ManagerView({
   unassigned,
   assigned,
   teamMembers,
+  readOnly,
 }: {
   unassigned: FollowUpTask[];
   assigned: FollowUpTask[];
   teamMembers: { id: string; firstName: string; lastName: string; role: string }[];
+  readOnly: boolean;
 }) {
   const now = new Date();
 
@@ -91,7 +96,8 @@ function ManagerView({
                 task={task}
                 now={now}
                 teamMembers={teamMembers}
-                showAssign
+                showAssign={!readOnly}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -116,7 +122,8 @@ function ManagerView({
                 task={task}
                 now={now}
                 teamMembers={teamMembers}
-                showAssign
+                showAssign={!readOnly}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -163,11 +170,13 @@ function TaskCard({
   now,
   teamMembers,
   showAssign,
+  readOnly = false,
 }: {
   task: FollowUpTask;
   now: Date;
   teamMembers: { id: string; firstName: string; lastName: string; role: string }[];
   showAssign: boolean;
+  readOnly?: boolean;
 }) {
   const isOverdue = task.dueDate && task.dueDate < now;
   const isDueToday =
@@ -249,8 +258,9 @@ function TaskCard({
       )}
 
       {/* Actions */}
+      {!readOnly && (
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Complete button — available to everyone */}
+        {/* Complete button — available to everyone except co_chair */}
         <form
           action={async () => {
             "use server";
@@ -303,6 +313,7 @@ function TaskCard({
           </form>
         )}
       </div>
+      )}
     </div>
   );
 }

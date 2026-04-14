@@ -89,6 +89,24 @@ export async function saveCanvassResponse(
     console.error("[saveCanvassResponse] Failed to auto-log outreach entry:", err);
   }
 
+  // Auto-create volunteer record when volunteer interest is flagged (idempotent)
+  if (isContacted && input.volunteerInterest) {
+    try {
+      await db.volunteerRecord.upsert({
+        where: { campaignId_personId: { campaignId: activeCampaignId, personId: input.personId } },
+        create: {
+          campaignId: activeCampaignId,
+          personId: input.personId,
+          status: "interested",
+          notes: noteText,
+        },
+        update: {},
+      });
+    } catch (err) {
+      console.error("[saveCanvassResponse] Failed to create volunteer record:", err);
+    }
+  }
+
   // Auto-create donor record when donor interest is flagged (idempotent)
   if (isContacted && input.donorInterest) {
     try {

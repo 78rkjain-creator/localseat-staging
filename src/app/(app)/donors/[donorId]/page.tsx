@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewDonors, canViewDonorAmounts } from "@/lib/permissions";
+import { canViewDonors, canViewDonorAmounts, isReadOnly } from "@/lib/permissions";
 import { getDonorDetail } from "@/lib/donors";
 import { Card } from "@/components/ui/card";
 import { DonorDetailClient } from "./donor-detail-client";
@@ -30,6 +30,7 @@ export default async function DonorDetailPage({ params }: PageProps) {
   if (!donor) notFound();
 
   const showAmounts = canViewDonorAmounts(activeRole as Role);
+  const readOnly = isReadOnly(activeRole as Role);
 
   // Serialize Decimal and Date for client component
   const serialized = {
@@ -82,7 +83,7 @@ export default async function DonorDetailPage({ params }: PageProps) {
       </div>
 
       <Card padding="md">
-        <DonorDetailClient donor={serialized} showAmounts={showAmounts} />
+        <DonorDetailClient donor={serialized} showAmounts={showAmounts} readOnly={readOnly} />
       </Card>
     </div>
   );

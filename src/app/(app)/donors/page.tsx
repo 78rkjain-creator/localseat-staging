@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewDonors, canViewDonorAmounts } from "@/lib/permissions";
+import { canViewDonors, canViewDonorAmounts, isReadOnly } from "@/lib/permissions";
 import { getDonors } from "@/lib/donors";
 import { Card } from "@/components/ui/card";
 import { AddDonorModal } from "./add-donor-modal";
@@ -30,6 +30,7 @@ export default async function DonorsPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
 
   const showAmounts = canViewDonorAmounts(activeRole as Role);
+  const readOnly = isReadOnly(activeRole as Role);
 
   const { donors, total, totalPages } = await getDonors({
     campaignId: activeCampaignId,
@@ -53,15 +54,17 @@ export default async function DonorsPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold text-slate-900">Donors</h1>
           <p className="text-sm text-slate-500 mt-0.5">{total} total</p>
         </div>
-        <div className="flex items-center gap-3">
-          <a
-            href="/api/donors/export"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Export CSV
-          </a>
-          <AddDonorModal />
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-3">
+            <a
+              href="/api/donors/export"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Export CSV
+            </a>
+            <AddDonorModal />
+          </div>
+        )}
       </div>
 
       {/* Filters */}

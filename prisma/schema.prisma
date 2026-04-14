@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   candidate
   campaign_manager
+  co_chair
   field_organizer
   canvasser
   volunteer_coordinator
@@ -65,9 +66,11 @@ model Campaign {
   addresses     Address[]
   canvassLists  CanvassList[]
   outreachLogs  OutreachLog[]
-  donors        Donor[]
-  auditLogs     AuditLog[]
-  tasks         Task[]
+  donors           Donor[]
+  volunteerRecords VolunteerRecord[]
+  volunteerShifts  VolunteerShift[]
+  auditLogs        AuditLog[]
+  tasks            Task[]
 
   @@map("campaigns")
 }
@@ -180,6 +183,7 @@ model Person {
   canvassListEntries CanvassListEntry[]
   outreachLogs       OutreachLog[]
   linkedDonors       Donor[]
+  volunteerRecords   VolunteerRecord[]
   tasks              Task[]
 
   @@map("people")
@@ -400,6 +404,76 @@ enum PaymentMethod {
   cheque
   e_transfer
   other
+}
+
+// ─── Volunteer Record ─────────────────────────────────────────────────────────
+
+// Tracks individuals who expressed volunteer interest (from canvassing) or
+// have been manually marked as committed. One record per person per campaign.
+model VolunteerRecord {
+  id         String          @id @default(cuid())
+  campaignId String
+  personId   String
+  status     VolunteerStatus @default(interested)
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  deletedAt  DateTime?
+
+  campaign Campaign         @relation(fields: [campaignId], references: [id])
+  person   Person           @relation(fields: [personId], references: [id])
+  shifts   VolunteerShiftAttendee[]
+
+  @@unique([campaignId, personId])
+  @@map("volunteer_records")
+}
+
+enum VolunteerStatus {
+  interested
+  committed
+}
+
+// ─── Volunteer Shifts ─────────────────────────────────────────────────────────
+
+model VolunteerShift {
+  id            String    @id @default(cuid())
+  campaignId    String
+  name          String
+  date          DateTime  // date of the shift (time portion ignored — use startTime/endTime)
+  startTime     String    // "09:00"
+  endTime       String    // "12:00"
+  location      String?
+  notes         String?
+  maxVolunteers Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  campaign  Campaign                 @relation(fields: [campaignId], references: [id])
+  attendees VolunteerShiftAttendee[]
+
+  @@map("volunteer_shifts")
+}
+
+model VolunteerShiftAttendee {
+  id         String                   @id @default(cuid())
+  shiftId    String
+  recordId   String                   // FK to VolunteerRecord
+  status     VolunteerAttendanceStatus @default(pending)
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+
+  shift  VolunteerShift  @relation(fields: [shiftId], references: [id])
+  record VolunteerRecord @relation(fields: [recordId], references: [id])
+
+  @@unique([shiftId, recordId])
+  @@map("volunteer_shift_attendees")
+}
+
+enum VolunteerAttendanceStatus {
+  pending
+  attended
+  no_show
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

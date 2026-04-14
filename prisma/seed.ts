@@ -27,6 +27,9 @@ async function main() {
   // ── Clean up existing seed data ──────────────────────────────────────────
   await db.$transaction([
     db.auditLog.deleteMany(),
+    db.volunteerShiftAttendee.deleteMany(),
+    db.volunteerShift.deleteMany(),
+    db.volunteerRecord.deleteMany(),
     db.donor.deleteMany(),
     db.outreachLog.deleteMany(),
     db.canvassResponse.deleteMany(),
@@ -125,9 +128,18 @@ async function main() {
         phone: "613-555-0106",
       },
     }),
+    db.user.create({
+      data: {
+        email: "claire.morgan@example.com",
+        passwordHash: HASH,
+        firstName: "Claire",
+        lastName: "Morgan",
+        phone: "613-555-0107",
+      },
+    }),
   ]);
 
-  const [candidate, manager, organizer, canvasser1, canvasser2, volCoord, finance] = users;
+  const [candidate, manager, organizer, canvasser1, canvasser2, volCoord, finance, cochair] = users;
   console.log(`  ✓ Users: ${users.map((u) => u.firstName).join(", ")}`);
 
   // ── Campaign Memberships ──────────────────────────────────────────────────
@@ -140,9 +152,10 @@ async function main() {
       { userId: canvasser2.id, campaignId: campaign.id, role: "canvasser" },
       { userId: volCoord.id, campaignId: campaign.id, role: "volunteer_coordinator" },
       { userId: finance.id, campaignId: campaign.id, role: "finance_lead" },
+      { userId: cochair.id, campaignId: campaign.id, role: "co_chair" },
     ],
   });
-  console.log("  ✓ Campaign memberships");
+  console.log("  ✓ Campaign memberships (8 members including co_chair)");
 
   // ── Tags ──────────────────────────────────────────────────────────────────
   const [tagVoter, tagVolunteer, tagDonorProspect, tagSignYard, tagUndecided] =
@@ -430,6 +443,21 @@ async function main() {
   });
   console.log(`  ✓ Canvass responses: ${responseData.length}`);
 
+  // ── Volunteer Records ─────────────────────────────────────────────────────
+  // Auto-create volunteer records for responses with volunteerInterest: true
+  const volunteerPersonIds = responseData
+    .filter((r) => r.volunteerInterest)
+    .map((r) => r.personId);
+
+  await db.volunteerRecord.createMany({
+    data: volunteerPersonIds.map((personId) => ({
+      campaignId: campaign.id,
+      personId,
+      status: "interested",
+    })),
+  });
+  console.log(`  ✓ Volunteer records: ${volunteerPersonIds.length}`);
+
   // ── Outreach Logs ─────────────────────────────────────────────────────────
   await db.outreachLog.createMany({
     data: [
@@ -503,6 +531,7 @@ async function main() {
   console.log("  canvasser         → kevin.lafleur@example.com");
   console.log("  volunteer_coord   → sara.bishop@example.com");
   console.log("  finance_lead      → dan.wu@example.com");
+  console.log("  co_chair          → claire.morgan@example.com");
 }
 
 main()

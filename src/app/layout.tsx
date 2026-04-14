@@ -37,6 +37,13 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        {/* PWA — manifest and theme-color are handled by the metadata/viewport exports above.
+            These tags cover Android standalone mode and Apple home screen installation. */}
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="LocalSeat" />
+        <link rel="apple-touch-icon" href="/icons/icon.svg" />
       </head>
       <body>
         <Providers>{children}</Providers>

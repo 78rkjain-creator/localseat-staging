@@ -31,9 +31,10 @@ interface DonorDetailClientProps {
     createdAt: Date;
   };
   showAmounts: boolean;
+  readOnly?: boolean;
 }
 
-export function DonorDetailClient({ donor, showAmounts }: DonorDetailClientProps) {
+export function DonorDetailClient({ donor, showAmounts, readOnly = false }: DonorDetailClientProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -265,27 +266,29 @@ export function DonorDetailClient({ donor, showAmounts }: DonorDetailClientProps
       </p>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-2">
-        <button onClick={() => setEditing(true)} className={primaryBtnCls}>
-          Edit donor
-        </button>
-        {!confirmDelete ? (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="px-4 py-2 rounded-lg border border-red-200 text-sm text-red-600 hover:bg-red-50 transition-colors"
-          >
-            Delete
+      {!readOnly && (
+        <div className="flex gap-3 pt-2">
+          <button onClick={() => setEditing(true)} className={primaryBtnCls}>
+            Edit donor
           </button>
-        ) : (
-          <button
-            onClick={handleDelete}
-            disabled={deletePending}
-            className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
-          >
-            {deletePending ? "Deleting…" : "Confirm delete"}
-          </button>
-        )}
-      </div>
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="px-4 py-2 rounded-lg border border-red-200 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Delete
+            </button>
+          ) : (
+            <button
+              onClick={handleDelete}
+              disabled={deletePending}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {deletePending ? "Deleting…" : "Confirm delete"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
