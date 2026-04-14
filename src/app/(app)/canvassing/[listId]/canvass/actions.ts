@@ -40,11 +40,14 @@ export async function saveCanvassResponse(
 
   const person = await db.person.findFirst({
     where: { id: input.personId, campaignId: activeCampaignId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, firstName: true, lastName: true },
   });
   if (!person) return { error: "Person not found." };
 
   const isContacted = input.outcome === "contacted";
+  const noteText = input.notes.trim() || null;
+
+  console.log("[saveCanvassResponse] needsFollowUp:", input.needsFollowUp, "| outcome:", input.outcome, "| person:", person.firstName, person.lastName);
 
   const response = await db.canvassResponse.create({
     data: {
@@ -55,11 +58,39 @@ export async function saveCanvassResponse(
       signRequest: isContacted ? input.signRequest : false,
       volunteerInterest: isContacted ? input.volunteerInterest : false,
       donorInterest: isContacted ? input.donorInterest : false,
-      notes: input.notes.trim() || null,
+      notes: noteText,
       needsFollowUp: input.needsFollowUp,
     },
     select: { id: true },
   });
+
+  // Task creation is independent of the canvass response — a task failure
+  // must never roll back a canvass response that was successfully saved.
+  if (input.needsFollowUp) {
+    try {
+      const canvasserName = `${session.user.firstName} ${session.user.lastName}`;
+      const taskTitle = `Follow-up: ${person.firstName} ${person.lastName}`;
+      // Prefix the canvasser's name so it's visible in the queue without
+      // a schema change to Task (no createdById field on that model).
+      const taskNotes = [`Flagged by ${canvasserName}`, noteText]
+        .filter(Boolean)
+        .join("\n\n");
+
+      await db.task.create({
+        data: {
+          campaignId: activeCampaignId,
+          personId: input.personId,
+          title: taskTitle,
+          notes: taskNotes,
+          // No due date or assignee — managers assign from the queue
+        },
+      });
+      console.log("[saveCanvassResponse] Task created for", taskTitle);
+    } catch (err) {
+      // Log but don't fail — canvass response is already saved
+      console.error("[saveCanvassResponse] Failed to create follow-up task:", err);
+    }
+  }
 
   return { responseId: response.id };
 }

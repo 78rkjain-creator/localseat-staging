@@ -20,7 +20,7 @@ export default withAuth(
 
     // Canvassers are restricted to their own routes only
     if (token?.activeRole === "canvasser") {
-      const canvasserAllowed = ["/dashboard", "/canvassing", "/api/auth", "/api/canvass"];
+      const canvasserAllowed = ["/dashboard", "/canvassing", "/follow-ups", "/api/auth", "/api/canvass"];
       const isAllowed = canvasserAllowed.some((p) => pathname.startsWith(p));
       if (!isAllowed && pathname !== "/select-campaign") {
         return NextResponse.redirect(new URL("/dashboard", req.url));

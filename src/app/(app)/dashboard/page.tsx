@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { ROLE_LABELS } from "@/types";
 import { getAssignedLists } from "@/lib/canvassing";
+import { getFollowUpSummary } from "@/lib/follow-ups";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -26,14 +27,16 @@ export default async function DashboardPage() {
   }
 
   // ── Base counts ────────────────────────────────────────────────────────────
-  const [peopleCount, tasksCount, canvassListCount, pendingFollowUps] =
+  const now = new Date();
+  const [peopleCount, tasksCount, canvassListCount, pendingFollowUps, followUpSummary] =
     await Promise.all([
       db.person.count({ where: { campaignId: activeCampaignId, deletedAt: null } }),
       db.task.count({ where: { campaignId: activeCampaignId, completed: false } }),
       db.canvassList.count({ where: { campaignId: activeCampaignId, deletedAt: null } }),
       db.task.count({
-        where: { campaignId: activeCampaignId, completed: false, dueDate: { lte: new Date() } },
+        where: { campaignId: activeCampaignId, completed: false, dueDate: { lte: now } },
       }),
+      getFollowUpSummary(activeCampaignId),
     ]);
 
   // ── ID breakdown ───────────────────────────────────────────────────────────
@@ -200,7 +203,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Placeholder sections */}
+      {/* Bottom sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <h2 className="text-base font-semibold text-slate-900 mb-1">
@@ -208,11 +211,69 @@ export default async function DashboardPage() {
           </h2>
           <p className="text-sm text-slate-400">Coming soon — outreach and canvass activity feed.</p>
         </Card>
+
+        {/* Follow-up queue summary */}
         <Card>
-          <h2 className="text-base font-semibold text-slate-900 mb-1">
-            Follow-up queue
-          </h2>
-          <p className="text-sm text-slate-400">Coming soon — tasks due today and overdue items.</p>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-slate-900">Follow-up queue</h2>
+            <Link
+              href="/follow-ups"
+              className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
+            >
+              View all →
+            </Link>
+          </div>
+
+          {followUpSummary.overdue.length === 0 && followUpSummary.dueToday.length === 0 ? (
+            <p className="text-sm text-slate-400">No tasks due today or overdue.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {followUpSummary.overdue.map((task) => (
+                <div key={task.id} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">
+                      {task.person
+                        ? `${task.person.firstName} ${task.person.lastName}`
+                        : task.title}
+                    </p>
+                    {task.assignee && (
+                      <p className="text-xs text-slate-400 truncate">
+                        → {task.assignee.firstName} {task.assignee.lastName}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                    Overdue
+                  </span>
+                </div>
+              ))}
+              {followUpSummary.dueToday.map((task) => (
+                <div key={task.id} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">
+                      {task.person
+                        ? `${task.person.firstName} ${task.person.lastName}`
+                        : task.title}
+                    </p>
+                    {task.assignee && (
+                      <p className="text-xs text-slate-400 truncate">
+                        → {task.assignee.firstName} {task.assignee.lastName}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                    Today
+                  </span>
+                </div>
+              ))}
+              {typeof followUpSummary.upcomingCount === "number" &&
+                followUpSummary.upcomingCount > 0 && (
+                  <p className="text-xs text-slate-400 pt-1">
+                    +{followUpSummary.upcomingCount} upcoming
+                  </p>
+                )}
+            </div>
+          )}
         </Card>
       </div>
     </div>

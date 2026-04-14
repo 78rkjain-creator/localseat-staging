@@ -8,6 +8,7 @@ import {
   canViewAllPeople,
   canViewDonors,
   canManageWalkLists,
+  canManageTeam,
 } from "@/lib/permissions";
 
 // Voter list is visible to roles that can view all people
@@ -89,7 +90,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
           },
         ]
       : []),
-    ...(role && (canManageWalkLists(role) || role === "candidate")
+    ...(role && canManageWalkLists(role)
       ? [
           {
             href: "/canvassing",
@@ -133,7 +134,7 @@ export function Sidebar({ firstName, lastName, role, campaignName }: SidebarProp
           },
         ]
       : []),
-    ...(role === "campaign_manager"
+    ...(role && canManageTeam(role)
       ? [
           {
             href: "/team",

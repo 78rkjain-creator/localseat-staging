@@ -313,8 +313,8 @@ export function CanvassScreen({
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
 
-      {/* ── Header ── compact, ~52px ── */}
-      <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[52px]">
+      {/* ── Header ── compact, ~44px ── */}
+      <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[44px]">
         <Link
           href="/canvassing"
           className="h-11 w-11 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors flex-shrink-0"
@@ -343,18 +343,18 @@ export function CanvassScreen({
       {/* ── Main scrollable content ── */}
       {/* In the default state this content is ~370px, well under the ~460px+ available. */}
       <main className="flex-1 overflow-y-auto min-h-0">
-        <div className="px-4 pt-3 pb-2 max-w-lg mx-auto">
+        <div className="px-4 pt-2 pb-2 max-w-lg mx-auto">
 
           {/* Combined address + person card */}
-          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-3">
-            <p className="text-[13px] text-slate-500 leading-tight truncate">
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-2">
+            <p className="text-[12px] text-slate-500 leading-tight truncate">
               {addressLine}{cityLine ? ` · ${cityLine}` : ""}
             </p>
-            <p className="text-[22px] font-bold text-slate-900 leading-tight mt-0.5">
+            <p className="text-[19px] font-bold text-slate-900 leading-tight mt-0.5">
               {current.person.firstName} {current.person.lastName}
             </p>
             {(coResidents.length > 0 || current.lastResponse) && (
-              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
                 {coResidents.length > 0 && (
                   <p className="text-[11px] text-slate-400">
                     Also here: {coResidents.map((r) => `${r.firstName} ${r.lastName}`).join(", ")}
@@ -370,12 +370,12 @@ export function CanvassScreen({
           </div>
 
           {/* Support level label */}
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 px-0.5">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1 px-0.5">
             Support level
           </p>
 
           {/* 5 support level buttons: 2-col grid, Strong No spans full width */}
-          <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+          <div className="grid grid-cols-2 gap-1 mb-1">
             {SUPPORT_LEVELS.map((s, i) => {
               const isActive = draft.supportLevel === s.value;
               return (
@@ -383,13 +383,16 @@ export function CanvassScreen({
                   key={s.value}
                   type="button"
                   onClick={() =>
-                    setDraft(() => ({
+                    setDraft((d) => ({
                       ...emptyDraft(),
+                      // Preserve follow-up and notes when switching support level
+                      needsFollowUp: d.needsFollowUp,
+                      notes: d.notes,
                       supportLevel: isActive ? null : s.value,
                     }))
                   }
                   className={[
-                    "h-12 rounded-xl border-2 font-semibold text-sm transition-all",
+                    "h-11 rounded-xl border-2 font-semibold text-sm transition-all",
                     i === 4 ? "col-span-2" : "",
                     isActive ? s.activeStyle : s.style,
                   ].join(" ")}
@@ -406,7 +409,7 @@ export function CanvassScreen({
             onClick={handleNotHome}
             disabled={isPending}
             className={[
-              "w-full h-12 rounded-xl border-2 font-semibold text-sm transition-all mb-1",
+              "w-full h-11 rounded-xl border-2 font-semibold text-sm transition-all mb-1",
               isPending
                 ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100",
@@ -446,8 +449,11 @@ export function CanvassScreen({
                       key={o.value}
                       type="button"
                       onClick={() =>
-                        setDraft(() => ({
+                        setDraft((d) => ({
                           ...emptyDraft(),
+                          // Preserve follow-up and notes when switching outcome
+                          needsFollowUp: d.needsFollowUp,
+                          notes: d.notes,
                           otherOutcome: isActive ? null : o.value,
                         }))
                       }
@@ -544,23 +550,23 @@ export function CanvassScreen({
             value={draft.notes}
             onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
             placeholder="Note (optional)…"
-            rows={2}
-            className="w-full px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
+            rows={1}
+            className="w-full px-4 py-2 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
           />
         </div>
       )}
 
       {/* ── Footer — always visible, always at bottom ── */}
-      <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-3 pb-4 safe-area-bottom">
+      <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-2 pb-3 safe-area-bottom">
         {error && (
-          <p className="text-xs text-red-600 text-center mb-2">{error}</p>
+          <p className="text-xs text-red-600 text-center mb-1.5">{error}</p>
         )}
         <div className="flex gap-3 max-w-lg mx-auto">
           <button
             type="button"
             onClick={handleSkip}
             disabled={isPending}
-            className="h-14 px-5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            className="h-12 px-5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
           >
             Skip
           </button>
@@ -569,7 +575,7 @@ export function CanvassScreen({
             onClick={handleSave}
             disabled={!canSave}
             className={[
-              "flex-1 h-14 rounded-2xl font-bold text-base transition-all",
+              "flex-1 h-12 rounded-2xl font-bold text-base transition-all",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
               canSave
                 ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-sm"
