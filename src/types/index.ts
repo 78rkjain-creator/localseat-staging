@@ -25,12 +25,12 @@ export type CanvassOutcome =
   | "unavailable"
   | "deceased";
 
-export type OutreachMethod =
-  | "door"
-  | "phone"
+export type OutreachChannel =
+  | "door_knock"
+  | "phone_call"
   | "email"
-  | "text"
-  | "event"
+  | "text_message"
+  | "in_person"
   | "other";
 
 // The membership summary embedded in the session JWT
@@ -68,6 +68,15 @@ export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {
   soft_no:    "Soft No",
   strong_no:  "Strong No",
   not_home:   "Not Home",
+};
+
+export const OUTREACH_CHANNEL_LABELS: Record<OutreachChannel, string> = {
+  door_knock:   "Door knock",
+  phone_call:   "Phone call",
+  email:        "Email",
+  text_message: "Text message",
+  in_person:    "In person",
+  other:        "Other",
 };
 
 export const CANVASS_OUTCOME_LABELS: Record<CanvassOutcome, string> = {

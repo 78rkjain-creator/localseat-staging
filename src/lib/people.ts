@@ -117,8 +117,17 @@ export async function getPersonDetail(personId: string, campaignId: string) {
         orderBy: { respondedAt: "desc" },
       },
       outreachLogs: {
-        include: { user: { select: { firstName: true, lastName: true } } },
-        orderBy: { createdAt: "desc" },
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          channel: true,
+          date: true,
+          outcome: true,
+          notes: true,
+          createdAt: true,
+          user: { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { date: "desc" },
       },
       tasks: {
         where: { completed: false },

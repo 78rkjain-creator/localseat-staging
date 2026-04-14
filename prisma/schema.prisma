@@ -36,12 +36,12 @@ enum CanvassOutcome {
   deceased
 }
 
-enum OutreachMethod {
-  door
-  phone
+enum OutreachChannel {
+  door_knock
+  phone_call
   email
-  text
-  event
+  text_message
+  in_person
   other
 }
 
@@ -324,17 +324,22 @@ model CanvassResponse {
 // ─── Outreach Log ─────────────────────────────────────────────────────────────
 
 model OutreachLog {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   campaignId String
   personId   String
-  userId     String
-  method     OutreachMethod
+  userId     String?         // null for records imported without a matching system user
+  channel    OutreachChannel
+  date       DateTime        @default(now())
+  outcome    String?
   notes      String?
-  createdAt  DateTime       @default(now())
+  phonedBy   String?         // phone banking: name of caller (may not be a system user)
+  phoneType  String?         // phone banking: cell / landline / etc
+  createdAt  DateTime        @default(now())
+  deletedAt  DateTime?
 
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  person   Person   @relation(fields: [personId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  campaign Campaign  @relation(fields: [campaignId], references: [id])
+  person   Person    @relation(fields: [personId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
 
   @@map("outreach_logs")
 }

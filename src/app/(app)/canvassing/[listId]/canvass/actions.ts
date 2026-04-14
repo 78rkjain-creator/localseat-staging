@@ -64,6 +64,31 @@ export async function saveCanvassResponse(
     select: { id: true },
   });
 
+  // Auto-log to outreach log — door_knock entry for every canvass save
+  try {
+    const outcomeLabel =
+      input.outcome === "contacted" ? (input.supportLevel ? `Support: ${input.supportLevel}` : "Contacted") :
+      input.outcome === "not_home" ? "Not home" :
+      input.outcome === "refused" ? "Refused" :
+      input.outcome === "moved" ? "Moved" :
+      input.outcome === "unavailable" ? "Unavailable" :
+      input.outcome === "deceased" ? "Deceased" : input.outcome;
+
+    await db.outreachLog.create({
+      data: {
+        campaignId: activeCampaignId,
+        personId: input.personId,
+        userId: session.user.id,
+        channel: "door_knock",
+        date: new Date(),
+        outcome: outcomeLabel,
+        notes: noteText,
+      },
+    });
+  } catch (err) {
+    console.error("[saveCanvassResponse] Failed to auto-log outreach entry:", err);
+  }
+
   // Task creation is independent of the canvass response — a task failure
   // must never roll back a canvass response that was successfully saved.
   if (input.needsFollowUp) {

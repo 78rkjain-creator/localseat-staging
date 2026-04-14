@@ -9,7 +9,8 @@ import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { AddNoteForm } from "./add-note-form";
-import type { SupportLevel, CanvassOutcome, OutreachMethod } from "@/types";
+import type { SupportLevel, CanvassOutcome, OutreachChannel } from "@/types";
+import { OUTREACH_CHANNEL_LABELS } from "@/types";
 
 interface PageProps {
   params: { personId: string };
@@ -47,7 +48,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
     })),
     ...person.outreachLogs.map((l) => ({
       type: "outreach" as const,
-      date: new Date(l.createdAt),
+      date: new Date(l.date),
       data: l,
     })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -338,14 +339,8 @@ function FlagChip({
   );
 }
 
-const OUTREACH_METHOD_LABELS: Record<OutreachMethod, string> = {
-  door: "Door knock",
-  phone: "Phone call",
-  email: "Email",
-  text: "Text",
-  event: "Event",
-  other: "Outreach",
-};
+// Alias for clarity at point of use
+const OUTREACH_METHOD_LABELS = OUTREACH_CHANNEL_LABELS;
 
 function CanvassTimelineItem({
   event,
@@ -379,19 +374,22 @@ function OutreachTimelineItem({
   event,
   date,
 }: {
-  event: { method: string; notes?: string | null; user: { firstName: string; lastName: string } };
+  event: { channel: string; outcome?: string | null; notes?: string | null; user?: { firstName: string; lastName: string } | null };
   date: Date;
 }) {
   return (
     <div>
       <p className="text-sm font-medium text-slate-800 mb-1">
-        {OUTREACH_METHOD_LABELS[event.method as OutreachMethod] ?? event.method}
+        {OUTREACH_METHOD_LABELS[event.channel as OutreachChannel] ?? event.channel}
+        {event.outcome && (
+          <span className="text-slate-500 font-normal"> — {event.outcome}</span>
+        )}
       </p>
       {event.notes && (
         <p className="text-sm text-slate-600 mb-1">{event.notes}</p>
       )}
       <p className="text-xs text-slate-400">
-        {event.user.firstName} {event.user.lastName} &middot; {formatDate(date)}
+        {event.user ? `${event.user.firstName} ${event.user.lastName} · ` : ""}{formatDate(date)}
       </p>
     </div>
   );
