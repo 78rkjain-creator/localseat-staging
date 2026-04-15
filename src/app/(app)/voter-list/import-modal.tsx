@@ -20,7 +20,7 @@ const BASE_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
 ];
-const EXTRA_COLUMNS: (keyof RowFields)[] = ["phone", "email", "birthYear"];
+const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthYear"];
 
 type Step = "upload" | "review" | "done";
 
@@ -137,7 +137,8 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         city:         r.fields.city.trim(),
         province:     r.fields.province.trim(),
         postalCode:   r.fields.postalCode.trim(),
-        phone:        r.fields.phone.trim(),
+        phoneHome:    r.fields.phoneHome.trim(),
+        phoneMobile:  r.fields.phoneMobile.trim(),
         email:        r.fields.email.trim(),
         birthYear:    r.fields.birthYear.trim(),
       }));
@@ -198,7 +199,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               </a>
             </div>
             <p className="text-xs text-slate-500 font-mono leading-relaxed break-all">
-              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, Phone, Email, BirthYear
+              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, PhoneHome, PhoneMobile, Email, BirthYear
             </p>
             <p className="text-xs text-slate-400 mt-2">
               Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
@@ -343,7 +344,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
 const ALL_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
-  "phone", "email", "birthYear",
+  "phoneHome", "phoneMobile", "email", "birthYear",
 ];
 
 function ReviewRowComponent({

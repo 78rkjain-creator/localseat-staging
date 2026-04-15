@@ -16,7 +16,8 @@ interface TeamMember {
     firstName: string;
     lastName: string;
     email: string;
-    phone: string | null;
+    phoneHome: string | null;
+    phoneMobile: string | null;
     isActive: boolean;
     createdAt: string;
   };
@@ -219,7 +220,8 @@ function AddMemberForm({
     setError(null);
     setSaving(true);
     const fd = new FormData(e.currentTarget);
-    const phone = (fd.get("phone") as string).trim();
+    const phoneHome = (fd.get("phoneHome") as string).trim();
+    const phoneMobile = (fd.get("phoneMobile") as string).trim();
     try {
       const res = await fetch("/api/team", {
         method: "POST",
@@ -228,7 +230,8 @@ function AddMemberForm({
           firstName: fd.get("firstName"),
           lastName: fd.get("lastName"),
           email: fd.get("email"),
-          phone: phone || null,
+          phoneHome: phoneHome || null,
+          phoneMobile: phoneMobile || null,
           role: fd.get("role"),
         }),
       });
@@ -279,8 +282,15 @@ function AddMemberForm({
             <input name="email" type="email" required className={inputCls + " w-full"} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-500">Phone</label>
-            <input name="phone" type="tel" className={inputCls + " w-full"} />
+            <label className="text-xs font-medium text-slate-500">Home phone</label>
+            <input name="phoneHome" type="tel" className={inputCls + " w-full"} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-500">Mobile phone</label>
+            <input name="phoneMobile" type="tel" className={inputCls + " w-full"} />
           </div>
         </div>
 
@@ -401,8 +411,11 @@ function MemberRow({
             )}
           </div>
           <p className="text-xs text-slate-400 truncate">{member.user.email}</p>
-          {member.user.phone && (
-            <p className="text-xs text-slate-400">{member.user.phone}</p>
+          {member.user.phoneHome && (
+            <p className="text-xs text-slate-400">{member.user.phoneHome}</p>
+          )}
+          {member.user.phoneMobile && (
+            <p className="text-xs text-slate-400">{member.user.phoneMobile}</p>
           )}
         </div>
 

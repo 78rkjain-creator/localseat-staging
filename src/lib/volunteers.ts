@@ -11,7 +11,7 @@ export async function getVolunteerRecords(campaignId: string) {
           id: true,
           firstName: true,
           lastName: true,
-          phone: true,
+          phoneHome: true,
           email: true,
           household: {
             select: {
@@ -83,7 +83,7 @@ export async function getVolunteerShiftDetail(shiftId: string, campaignId: strin
                   id: true,
                   firstName: true,
                   lastName: true,
-                  phone: true,
+                  phoneHome: true,
                   email: true,
                 },
               },

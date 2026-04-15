@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const TEMPLATE_HEADERS =
-  "FirstName,LastName,StreetNumber,StreetName,UnitNumber,City,Province,PostalCode,Phone,Email,BirthYear\r\n";
+  "FirstName,LastName,StreetNumber,StreetName,UnitNumber,City,Province,PostalCode,PhoneHome,PhoneMobile,Email,BirthYear\r\n";
 
 export function GET() {
   return new NextResponse(TEMPLATE_HEADERS, {

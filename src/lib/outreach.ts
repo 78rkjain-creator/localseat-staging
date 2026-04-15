@@ -133,7 +133,7 @@ export async function getAllOutreachLogsForExport(campaignId: string) {
         select: {
           firstName: true,
           lastName: true,
-          phone: true,
+          phoneHome: true,
           household: {
             select: {
               address: {
@@ -192,7 +192,7 @@ export async function getPeopleForExportTemplate(
     select: {
       firstName: true,
       lastName: true,
-      phone: true,
+      phoneHome: true,
       email: true,
       household: {
         select: {

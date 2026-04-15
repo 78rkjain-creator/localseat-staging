@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
+import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -29,13 +30,14 @@ export interface VoterCsvRow {
   lastName: string;
   streetNumber: string;
   streetName: string;
-  unitNumber: string;  // empty string when absent
+  unitNumber: string;   // empty string when absent
   city: string;
   province: string;
   postalCode: string;
-  phone: string;       // empty string when absent
-  email: string;       // empty string when absent
-  birthYear: string;   // empty string when absent
+  phoneHome: string;    // empty string when absent
+  phoneMobile: string;  // empty string when absent
+  email: string;        // empty string when absent
+  birthYear: string;    // empty string when absent
 }
 
 export interface VoterImportResult {
@@ -76,11 +78,10 @@ export async function importVoterRows(
         const province    = row.province.trim();
         const postalCode  = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
         const unitNumber  = row.unitNumber?.trim() || null;
-        const phone       = row.phone?.trim() || null;
-        const email       = row.email?.trim() || null;
-        const birthYear   = row.birthYear?.trim()
-          ? parseInt(row.birthYear.trim(), 10) || null
-          : null;
+        const phoneHome   = sanitizePhone(row.phoneHome);
+        const phoneMobile = sanitizePhone(row.phoneMobile);
+        const email       = sanitizeEmail(row.email);
+        const birthYear   = sanitizeBirthYear(row.birthYear);
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
           skipped++;
@@ -155,7 +156,8 @@ export async function importVoterRows(
             householdId: household.id,
             firstName,
             lastName,
-            phone:        phone ?? undefined,
+            phoneHome:    phoneHome ?? undefined,
+            phoneMobile:  phoneMobile ?? undefined,
             email:        email ?? undefined,
             birthYear:    birthYear ?? undefined,
             sourceNotes:  "voter-list-import",

@@ -2,12 +2,17 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { checkRateLimit, recordFailedAttempt, resetAttempts } from "@/lib/rate-limit";
 import type { SessionMembership } from "@/types";
 
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 43200, // 12 hours
+  },
+
+  jwt: {
+    maxAge: 43200, // 12 hours
   },
 
   // Pin the session cookie name and attributes explicitly so they are
@@ -40,9 +45,25 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null;
+        }
+
+        // Resolve client IP from proxy headers or fall back to "unknown"
+        const forwarded = req?.headers?.["x-forwarded-for"];
+        const ip =
+          (Array.isArray(forwarded)
+            ? forwarded[0]
+            : forwarded?.split(",")[0]?.trim()) ??
+          (req?.headers?.["x-real-ip"] as string | undefined) ??
+          "unknown";
+
+        const { allowed } = checkRateLimit(ip);
+        if (!allowed) {
+          throw new Error(
+            "Too many login attempts. Please try again in 15 minutes."
+          );
         }
 
         const user = await db.user.findUnique({
@@ -55,6 +76,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.isActive) {
+          recordFailedAttempt(ip);
           return null;
         }
 
@@ -64,8 +86,11 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!passwordMatch) {
+          recordFailedAttempt(ip);
           return null;
         }
+
+        resetAttempts(ip);
 
         const memberships: SessionMembership[] = user.memberships.map((m) => ({
           campaignId: m.campaign.id,

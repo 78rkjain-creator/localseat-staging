@@ -167,7 +167,7 @@ export default async function DonorsPage({ searchParams }: PageProps) {
                       </td>
                     )}
                     <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
-                      {donor.email || donor.phone || "—"}
+                      {donor.email || donor.phoneHome || "—"}
                     </td>
                     <td className="px-4 py-3">
                       {donor.thankYouSent ? (

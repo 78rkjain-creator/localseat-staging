@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
 import { saveCanvassResponse, addPersonAtDoor } from "./actions";
 import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
+import { enqueue } from "@/lib/offline-queue";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { SyncStatusBar } from "@/components/ui/SyncStatusBar";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -129,6 +132,21 @@ export function CanvassScreen({
   const savedSetRef = useRef(savedSet);
   savedSetRef.current = savedSet;
 
+  // ── Offline sync ──────────────────────────────────────────────────────────
+  const { pendingCount, isSyncing, lastSyncedAt, refresh: refreshSyncCount } =
+    useOfflineSync(saveCanvassResponse);
+
+  // Register the service worker once on mount (canvassing is the primary
+  // offline-capable surface in LocalSeat).
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Registration failure is non-fatal — offline caching will not work
+        // but the queue still functions for in-session responses.
+      });
+    }
+  }, []);
+
   const current = entries[currentIndex];
   const totalCount = entries.length;
   const doneCount = savedSet.size;
@@ -174,6 +192,26 @@ export function CanvassScreen({
     const capturedIndex = currentIndex;
     const capturedPersonId = current.person.id;
 
+    // ── Offline path ─────────────────────────────────────────────────────────
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueue({
+        assignmentId,
+        personId: capturedPersonId,
+        outcome: "not_home",
+        supportLevel: "not_home",
+        wantsSign: false,
+        isVolunteer: false,
+        isDonorInterest: false,
+        notes: "",
+        needsFollowUp: false,
+      })
+        .then(() => refreshSyncCount())
+        .catch((err) => console.warn("IndexedDB enqueue failed:", err));
+      markSavedAndAdvance(capturedPersonId, capturedIndex);
+      return;
+    }
+
+    // ── Online path (unchanged) ───────────────────────────────────────────────
     startTransition(async () => {
       const result = await saveCanvassResponse({
         assignmentId,
@@ -204,6 +242,26 @@ export function CanvassScreen({
     const capturedIndex = currentIndex;
     const capturedPersonId = current.person.id;
 
+    // ── Offline path ─────────────────────────────────────────────────────────
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueue({
+        assignmentId,
+        personId: capturedPersonId,
+        outcome,
+        supportLevel: otherOutcome ? null : supportLevel,
+        wantsSign: otherOutcome ? false : draft.signRequest,
+        isVolunteer: otherOutcome ? false : draft.volunteerInterest,
+        isDonorInterest: otherOutcome ? false : draft.donorInterest,
+        notes: draft.notes,
+        needsFollowUp: draft.needsFollowUp,
+      })
+        .then(() => refreshSyncCount())
+        .catch((err) => console.warn("IndexedDB enqueue failed:", err));
+      markSavedAndAdvance(capturedPersonId, capturedIndex);
+      return;
+    }
+
+    // ── Online path (unchanged) ───────────────────────────────────────────────
     startTransition(async () => {
       const result = await saveCanvassResponse({
         assignmentId,
@@ -238,7 +296,8 @@ export function CanvassScreen({
           id: result.person.id,
           firstName: result.person.firstName,
           lastName: result.person.lastName,
-          phone: null,
+          phoneHome: null,
+          phoneMobile: null,
           address: current?.person.address ?? null,
           coResidents: [],
         },
@@ -313,6 +372,13 @@ export function CanvassScreen({
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
 
+      {/* ── Sync status — sits above header, renders nothing when queue is empty ── */}
+      <SyncStatusBar
+        pendingCount={pendingCount}
+        isSyncing={isSyncing}
+        lastSyncedAt={lastSyncedAt}
+      />
+
       {/* ── Header ── compact, ~44px ── */}
       <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[44px]">
         <Link
@@ -357,7 +423,7 @@ export function CanvassScreen({
               <div className="flex items-center gap-3 mt-1 flex-wrap">
                 {coResidents.length > 0 && (
                   <p className="text-[11px] text-slate-400">
-                    Also here: {coResidents.map((r) => `${r.firstName} ${r.lastName}`).join(", ")}
+                    Also here: {coResidents.map((r: { id: string; firstName: string; lastName: string }) => `${r.firstName} ${r.lastName}`).join(", ")}
                   </p>
                 )}
                 {current.lastResponse && (

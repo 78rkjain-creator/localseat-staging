@@ -11,7 +11,8 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneHome, setPhoneHome] = useState("");
+  const [phoneMobile, setPhoneMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +30,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const result = await register({ firstName, lastName, email, phone, password });
+      const result = await register({ firstName, lastName, email, phoneHome, phoneMobile, password });
       if (result?.error) {
         setError(result.error);
         setLoading(false);
@@ -47,7 +48,7 @@ export default function RegisterPage() {
         return;
       }
       // Hard navigate so the session cookie is picked up before RSC
-      window.location.href = "/onboarding/create-campaign";
+      window.location.href = "/onboarding/choose-plan";
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -129,8 +130,17 @@ export default function RegisterPage() {
           <Input
             label="Phone (optional)"
             type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={phoneHome}
+            onChange={(e) => setPhoneHome(e.target.value)}
+            placeholder="613-555-0100"
+            autoComplete="tel"
+          />
+
+          <Input
+            label="Mobile phone (optional)"
+            type="tel"
+            value={phoneMobile}
+            onChange={(e) => setPhoneMobile(e.target.value)}
             placeholder="613-555-0100"
             autoComplete="tel"
           />

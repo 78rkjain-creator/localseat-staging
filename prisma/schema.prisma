@@ -49,18 +49,20 @@ enum OutreachChannel {
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
-  id          String   @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
+  ballotName   String?
+  officeSought String?
   description  String?
   municipality String?
-  ward         String?
+  wards        String[]
   city         String
   province     String   @default("ON")
   year         Int
   electionDate DateTime?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   memberships   CampaignMembership[]
   people        Person[]
@@ -85,7 +87,8 @@ model User {
   passwordHash String
   firstName    String
   lastName     String
-  phone        String?
+  phoneHome    String?
+  phoneMobile  String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -168,9 +171,11 @@ model Person {
   firstName   String
   lastName    String
   email       String?
-  phone       String?
-  birthYear   Int?
-  gender      String?
+  phoneHome   String?
+  phoneMobile String?
+  birthYear    Int?
+  supportLevel String?
+  gender       String?
   // Tracks data import source / quality notes for deduplication
   sourceNotes String?
   createdAt   DateTime  @default(now())
@@ -365,7 +370,8 @@ model Donor {
   city           String?
   province       String?
   postalCode     String?
-  phone          String?
+  phoneHome      String?
+  phoneMobile    String?
   email          String?
 
   // Donation details

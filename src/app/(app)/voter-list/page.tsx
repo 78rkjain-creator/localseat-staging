@@ -12,7 +12,7 @@ import { VoterListSearchBar } from "./search-bar";
 import { ImportButton } from "./import-button";
 import type { Role, SupportLevel } from "@/types";
 
-export const metadata: Metadata = { title: "Voter List" };
+export const metadata: Metadata = { title: "Import & Data Management" };
 
 interface PageProps {
   searchParams: Promise<{ q?: string; street?: string; tag?: string; page?: string }>;
@@ -58,7 +58,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Import & Data Management</h1>
           <p className="text-slate-500 text-sm mt-0.5">
             {total.toLocaleString()} total record{total !== 1 ? "s" : ""}
             {isFiltered && (
@@ -180,9 +180,10 @@ export default async function VoterListPage({ searchParams }: PageProps) {
                           )}
                         </td>
                         <td className="px-5 py-3 hidden lg:table-cell">
-                          {person.phone && <p className="text-slate-600 text-xs">{person.phone}</p>}
+                          {person.phoneHome && <p className="text-slate-600 text-xs">{person.phoneHome}</p>}
+                          {person.phoneMobile && <p className="text-slate-600 text-xs">{person.phoneMobile}</p>}
                           {person.email && <p className="text-slate-500 text-xs">{person.email}</p>}
-                          {!person.phone && !person.email && (
+                          {!person.phoneHome && !person.phoneMobile && !person.email && (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
                         </td>

@@ -9,8 +9,10 @@ import { createCampaign } from "./actions";
 export default function CreateCampaignPage() {
   const { update } = useSession();
   const [name, setName] = useState("");
+  const [ballotName, setBallotName] = useState("");
+  const [officeSought, setOfficeSought] = useState("");
   const [municipality, setMunicipality] = useState("");
-  const [ward, setWard] = useState("");
+  const [wardsInput, setWardsInput] = useState("");
   const [electionDate, setElectionDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ export default function CreateCampaignPage() {
     setLoading(true);
 
     try {
-      const result = await createCampaign({ name, municipality, ward, electionDate });
+      const result = await createCampaign({ name, ballotName, officeSought, municipality, wardsInput, electionDate });
       if (result?.error) {
         setError(result.error);
         setLoading(false);
@@ -88,6 +90,25 @@ export default function CreateCampaignPage() {
             required
           />
 
+          <div className="flex flex-col gap-1.5">
+            <Input
+              label="Your name on the ballot"
+              type="text"
+              value={ballotName}
+              onChange={(e) => setBallotName(e.target.value)}
+              placeholder="Jane Smith"
+            />
+            <p className="text-xs text-slate-400">As it will appear on official materials</p>
+          </div>
+
+          <Input
+            label="Office sought"
+            type="text"
+            value={officeSought}
+            onChange={(e) => setOfficeSought(e.target.value)}
+            placeholder="e.g. City Councillor, Mayor, School Board Trustee"
+          />
+
           <Input
             label="Municipality"
             type="text"
@@ -96,13 +117,16 @@ export default function CreateCampaignPage() {
             placeholder="Ottawa"
           />
 
-          <Input
-            label="Ward or district (optional)"
-            type="text"
-            value={ward}
-            onChange={(e) => setWard(e.target.value)}
-            placeholder="Ward 12"
-          />
+          <div className="flex flex-col gap-1.5">
+            <Input
+              label="Ward(s) or district(s)"
+              type="text"
+              value={wardsInput}
+              onChange={(e) => setWardsInput(e.target.value)}
+              placeholder="Ward 3, Ward 7"
+            />
+            <p className="text-xs text-slate-400">Enter one or more, separated by commas (e.g. Ward 3, Ward 7)</p>
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="electionDate" className="text-sm font-medium text-slate-700">

@@ -7,8 +7,10 @@ import { Role } from "@prisma/client";
 
 interface CreateCampaignInput {
   name: string;
+  ballotName?: string;
+  officeSought?: string;
   municipality?: string;
-  ward?: string;
+  wardsInput?: string;
   electionDate?: string;
 }
 
@@ -25,16 +27,23 @@ export async function createCampaign(
     return { error: "Campaign name is required." };
   }
 
+  const ballotName = input.ballotName?.trim() || null;
+  const officeSought = input.officeSought?.trim() || null;
   const municipality = input.municipality?.trim() || null;
-  const ward = input.ward?.trim() || null;
+  const wards = (input.wardsInput ?? "")
+    .split(",")
+    .map((w) => w.trim())
+    .filter(Boolean);
   const electionDate = input.electionDate ? new Date(input.electionDate) : null;
   const year = electionDate ? electionDate.getFullYear() : new Date().getFullYear();
 
   const campaign = await db.campaign.create({
     data: {
       name,
+      ...(ballotName ? { ballotName } : {}),
+      ...(officeSought ? { officeSought } : {}),
       ...(municipality ? { municipality, city: municipality } : { city: "" }),
-      ...(ward ? { ward } : {}),
+      wards,
       province: "ON",
       year,
       ...(electionDate ? { electionDate } : {}),

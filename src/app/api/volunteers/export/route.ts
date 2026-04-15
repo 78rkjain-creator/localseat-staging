@@ -28,7 +28,7 @@ export async function GET() {
         select: {
           firstName: true,
           lastName: true,
-          phone: true,
+          phoneHome: true,
           email: true,
           household: {
             select: {
@@ -69,7 +69,7 @@ export async function GET() {
       addr?.city ?? "",
       addr?.province ?? "",
       addr?.postalCode ?? "",
-      p.phone ?? "",
+      p.phoneHome ?? "",
       p.email ?? "",
       r.respondedAt.toISOString().split("T")[0],
     ];

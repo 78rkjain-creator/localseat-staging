@@ -17,7 +17,8 @@ interface DonorDetailClientProps {
     city: string | null;
     province: string | null;
     postalCode: string | null;
-    phone: string | null;
+    phoneHome: string | null;
+    phoneMobile: string | null;
     email: string | null;
     amount: string | null;
     donationDate: Date | null;
@@ -56,7 +57,8 @@ export function DonorDetailClient({ donor, showAmounts, readOnly = false }: Dono
         city: fd.get("city") as string,
         province: fd.get("province") as string,
         postalCode: fd.get("postalCode") as string,
-        phone: fd.get("phone") as string,
+        phoneHome: fd.get("phoneHome") as string,
+        phoneMobile: fd.get("phoneMobile") as string,
         email: fd.get("email") as string,
         amount: fd.get("amount") as string,
         donationDate: fd.get("donationDate") as string,
@@ -112,9 +114,15 @@ export function DonorDetailClient({ donor, showAmounts, readOnly = false }: Dono
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Phone">
-            <input name="phone" type="tel" defaultValue={donor.phone ?? ""} className={inputCls} />
+          <Field label="Phone (home)">
+            <input name="phoneHome" type="tel" defaultValue={donor.phoneHome ?? ""} className={inputCls} />
           </Field>
+          <Field label="Phone (mobile)">
+            <input name="phoneMobile" type="tel" defaultValue={donor.phoneMobile ?? ""} className={inputCls} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Email">
             <input name="email" type="email" defaultValue={donor.email ?? ""} className={inputCls} />
           </Field>
@@ -221,7 +229,8 @@ export function DonorDetailClient({ donor, showAmounts, readOnly = false }: Dono
       {/* Contact */}
       <Section title="Contact">
         <dl className="flex flex-col gap-2.5">
-          <Row label="Phone" value={donor.phone} />
+          <Row label="Phone (home)" value={donor.phoneHome} />
+          <Row label="Phone (mobile)" value={donor.phoneMobile} />
           <Row label="Email" value={donor.email} />
           {(donor.address || donor.city) && (
             <Row

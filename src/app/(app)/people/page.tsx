@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "./search-bar";
 import type { Role, SupportLevel } from "@/types";
 
-export const metadata: Metadata = { title: "People" };
+export const metadata: Metadata = { title: "Voter List" };
 
 interface PageProps {
   searchParams: Promise<{ q?: string; tag?: string }>;
@@ -52,7 +52,7 @@ export default async function PeoplePage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">People</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
           <p className="text-slate-500 text-sm mt-0.5">
             {totalCount.toLocaleString()} total
             {isFiltered && people.length < totalCount && (
@@ -116,7 +116,7 @@ export default async function PeoplePage({ searchParams }: PageProps) {
           description={
             isFiltered
               ? "Try a different name or clear the filter."
-              : "People will appear here once voter data is imported."
+              : "Voter records will appear here once data is imported."
           }
         />
       ) : (

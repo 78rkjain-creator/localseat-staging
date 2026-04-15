@@ -54,7 +54,7 @@ async function main() {
       name: "Greenfield Ward 3 — 2026",
       description:
         "Municipal election campaign for Ward 3, Greenfield, Ontario. Focus on affordable housing and transit.",
-      ward: "Ward 3",
+      wards: ["Ward 3", "Ward 4"],
       city: "Greenfield",
       province: "ON",
       year: 2026,
@@ -71,7 +71,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Alex",
         lastName: "Chen",
-        phone: "613-555-0100",
+        phoneHome: "613-555-0100",
       },
     }),
     db.user.create({
@@ -80,7 +80,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Maria",
         lastName: "Santos",
-        phone: "613-555-0101",
+        phoneHome: "613-555-0101",
       },
     }),
     db.user.create({
@@ -89,7 +89,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "James",
         lastName: "Okafor",
-        phone: "613-555-0102",
+        phoneHome: "613-555-0102",
       },
     }),
     db.user.create({
@@ -98,7 +98,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Priya",
         lastName: "Nair",
-        phone: "613-555-0103",
+        phoneHome: "613-555-0103",
       },
     }),
     db.user.create({
@@ -107,7 +107,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Kevin",
         lastName: "Lafleur",
-        phone: "613-555-0104",
+        phoneHome: "613-555-0104",
       },
     }),
     db.user.create({
@@ -116,7 +116,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Sara",
         lastName: "Bishop",
-        phone: "613-555-0105",
+        phoneHome: "613-555-0105",
       },
     }),
     db.user.create({
@@ -125,7 +125,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Dan",
         lastName: "Wu",
-        phone: "613-555-0106",
+        phoneHome: "613-555-0106",
       },
     }),
     db.user.create({
@@ -134,7 +134,7 @@ async function main() {
         passwordHash: HASH,
         firstName: "Claire",
         lastName: "Morgan",
-        phone: "613-555-0107",
+        phoneHome: "613-555-0107",
       },
     }),
   ]);
@@ -532,6 +532,7 @@ async function main() {
   console.log("  volunteer_coord   → sara.bishop@example.com");
   console.log("  finance_lead      → dan.wu@example.com");
   console.log("  co_chair          → claire.morgan@example.com");
+  console.warn("⚠️  Campaign IDs have changed. Sign out and sign back in to refresh your session.");
 }
 
 main()

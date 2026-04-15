@@ -44,7 +44,7 @@ export async function GET() {
   });
 
   const headers = row([
-    "First Name", "Last Name", "Email", "Phone",
+    "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
     "Street", "Unit", "City", "Province", "Postal Code",
     "Tags", "Support Level", "Notes Count", "Created Date",
   ]);
@@ -61,7 +61,7 @@ export async function GET() {
       : "";
 
     return row([
-      p.firstName, p.lastName, p.email, p.phone,
+      p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
       street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
       tags, supportLevel, p.notes.length,
       p.createdAt.toISOString().slice(0, 10),

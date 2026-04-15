@@ -41,7 +41,8 @@ export async function GET() {
           firstName: true,
           lastName: true,
           email: true,
-          phone: true,
+          phoneHome: true,
+          phoneMobile: true,
           isActive: true,
           createdAt: true,
         },
@@ -82,10 +83,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, firstName, lastName, phone, role: roleInput } = body as Record<string, string | undefined>;
+  const { email, firstName, lastName, phoneHome, phoneMobile, role: roleInput } = body as Record<string, string | undefined>;
 
   if (!email || !firstName || !lastName || !roleInput) {
-    // phone is intentionally excluded — it is optional
+    // phoneHome is intentionally excluded — it is optional
     return NextResponse.json(
       { error: "email, firstName, lastName, and role are required" },
       { status: 400 }
@@ -113,14 +114,16 @@ export async function POST(req: NextRequest) {
 
   if (!user) {
     const passwordHash = bcrypt.hashSync("password", 12);
-    const normalizedPhone = phone?.trim() || null;
+    const normalizedPhone = phoneHome?.trim() || null;
+    const normalizedPhoneMobile = phoneMobile?.trim() || null;
     user = await db.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        ...(normalizedPhone !== null && { phone: normalizedPhone }),
+        ...(normalizedPhone !== null && { phoneHome: normalizedPhone }),
+        ...(normalizedPhoneMobile !== null && { phoneMobile: normalizedPhoneMobile }),
       },
     });
   }
@@ -146,7 +149,8 @@ export async function POST(req: NextRequest) {
           firstName: true,
           lastName: true,
           email: true,
-          phone: true,
+          phoneHome: true,
+          phoneMobile: true,
           isActive: true,
           createdAt: true,
         },

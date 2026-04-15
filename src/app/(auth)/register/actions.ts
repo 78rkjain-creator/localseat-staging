@@ -3,22 +3,25 @@
 import bcrypt from "bcryptjs";
 import { signIn } from "next-auth/react";
 import { db } from "@/lib/db";
+import { sanitizeText, sanitizeEmail, sanitizePhone } from "@/lib/sanitize";
 
 interface RegisterInput {
   firstName: string;
   lastName: string;
   email: string;
-  phone?: string;
+  phoneHome?: string;
+  phoneMobile?: string;
   password: string;
 }
 
 // Note: signIn from next-auth/react cannot be called in a server action.
 // This action creates the user and returns success; the client calls signIn.
 export async function register(input: RegisterInput): Promise<{ error?: string } | null> {
-  const email = input.email.toLowerCase().trim();
-  const firstName = input.firstName.trim();
-  const lastName = input.lastName.trim();
-  const phone = input.phone?.trim() || null;
+  const email = sanitizeEmail(input.email);
+  const firstName = sanitizeText(input.firstName, 100);
+  const lastName = sanitizeText(input.lastName, 100);
+  const phoneHome = sanitizePhone(input.phoneHome);
+  const phoneMobile = sanitizePhone(input.phoneMobile);
   const password = input.password;
 
   if (!firstName || !lastName || !email || !password) {
@@ -42,7 +45,8 @@ export async function register(input: RegisterInput): Promise<{ error?: string }
       firstName,
       lastName,
       passwordHash,
-      ...(phone ? { phone } : {}),
+      ...(phoneHome ? { phoneHome } : {}),
+      ...(phoneMobile ? { phoneMobile } : {}),
     },
   });
 

@@ -10,7 +10,7 @@ interface Campaign {
   campaignId: string;
   campaignName: string;
   role: Role;
-  ward: string | null;
+  wards: string[];
   city: string;
   province: string;
   year: number;
@@ -61,7 +61,7 @@ export function CampaignPicker({ campaigns }: Props) {
                 </p>
                 <p className="text-sm text-slate-500 mt-0.5">
                   {c.city}, {c.province} &middot; {c.year}
-                  {c.ward ? ` · ${c.ward}` : ""}
+                  {c.wards?.length ? ` · ${c.wards.join(", ")}` : ""}
                 </p>
                 <span className="inline-flex items-center mt-2 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
                   {ROLE_LABELS[c.role]}

@@ -21,7 +21,7 @@ export default async function SelectCampaignPage() {
         select: {
           id: true,
           name: true,
-          ward: true,
+          wards: true,
           city: true,
           province: true,
           year: true,
@@ -46,7 +46,7 @@ export default async function SelectCampaignPage() {
     campaignId: m.campaign.id,
     campaignName: m.campaign.name,
     role: m.role as Role,
-    ward: m.campaign.ward,
+    wards: m.campaign.wards,
     city: m.campaign.city,
     province: m.campaign.province,
     year: m.campaign.year,

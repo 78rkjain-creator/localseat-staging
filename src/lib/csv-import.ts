@@ -12,7 +12,8 @@ export interface RowFields {
   city: string;
   province: string;
   postalCode: string;
-  phone: string;
+  phoneHome: string;
+  phoneMobile: string;
   email: string;
   birthYear: string;
 }
@@ -36,7 +37,8 @@ export const FIELD_LABELS: Record<keyof RowFields, string> = {
   city:         "City",
   province:     "Province",
   postalCode:   "Postal code",
-  phone:        "Phone",
+  phoneHome:    "Phone (home)",
+  phoneMobile:  "Phone (mobile)",
   email:        "Email",
   birthYear:    "Birth year",
 };
@@ -122,7 +124,8 @@ export function parseCsvToReviewRows(text: string): {
       city:         getField(raw, "city"),
       province:     getField(raw, "province", "prov"),
       postalCode:   getField(raw, "postalcode", "postal_code", "postal", "zip"),
-      phone:        getField(raw, "phone", "phonenumber", "phone_number", "tel"),
+      phoneHome:    getField(raw, "phone", "phonehome", "phone_home", "phonenumber", "phone_number", "tel"),
+      phoneMobile:  getField(raw, "mobile", "cell", "cellphone", "mobilephon", "phone_mobile", "phonemobile"),
       email:        getField(raw, "email", "emailaddress", "email_address"),
       birthYear:    getField(raw, "birthyear", "birth_year", "dob", "yearofbirth"),
     };

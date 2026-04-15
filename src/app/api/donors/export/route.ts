@@ -20,7 +20,7 @@ export async function GET() {
 
   const headers = [
     "First Name", "Last Name", "Address", "City", "Province", "Postal Code",
-    "Phone", "Email",
+    "Phone (home)", "Email",
     ...(showAmounts ? ["Amount", "Donation Date", "Payment Method"] : []),
     "Status", "Thank You Sent", "Thank You Date", "Notes",
   ];
@@ -33,7 +33,7 @@ export async function GET() {
       d.city ?? "",
       d.province ?? "",
       d.postalCode ?? "",
-      d.phone ?? "",
+      d.phoneHome ?? "",
       d.email ?? "",
     ];
     const financial = showAmounts ? [

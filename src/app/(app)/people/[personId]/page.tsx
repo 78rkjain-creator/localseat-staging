@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { AddNoteForm } from "./add-note-form";
+import { PersonEditForm } from "./person-edit-form";
 import type { SupportLevel, CanvassOutcome, OutreachChannel } from "@/types";
 import { OUTREACH_CHANNEL_LABELS } from "@/types";
 
@@ -67,7 +68,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        People
+        Voter List
       </Link>
 
       {/* Person header */}
@@ -109,43 +110,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
         <div className="lg:col-span-1 flex flex-col gap-4">
           {/* Contact info */}
           <Card padding="md">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Contact
-            </h2>
-            <dl className="flex flex-col gap-3">
-              {person.email && (
-                <ContactRow
-                  label="Email"
-                  value={
-                    <a
-                      href={`mailto:${person.email}`}
-                      className="text-brand-600 hover:underline"
-                    >
-                      {person.email}
-                    </a>
-                  }
-                />
-              )}
-              {person.phone && (
-                <ContactRow
-                  label="Phone"
-                  value={
-                    <a
-                      href={`tel:${person.phone}`}
-                      className="text-brand-600 hover:underline"
-                    >
-                      {person.phone}
-                    </a>
-                  }
-                />
-              )}
-              {person.birthYear && (
-                <ContactRow label="Birth year" value={String(person.birthYear)} />
-              )}
-              {!person.email && !person.phone && !person.birthYear && (
-                <p className="text-sm text-slate-400">No contact info recorded.</p>
-              )}
-            </dl>
+            <PersonEditForm
+              personId={person.id}
+              firstName={person.firstName}
+              lastName={person.lastName}
+              email={person.email}
+              phoneHome={person.phoneHome}
+              phoneMobile={person.phoneMobile}
+              birthYear={person.birthYear}
+              supportLevel={person.supportLevel}
+            />
           </Card>
 
           {/* Support status */}

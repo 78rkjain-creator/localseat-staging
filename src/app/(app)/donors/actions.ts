@@ -5,7 +5,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewDonorAmounts, canViewDonors } from "@/lib/permissions";
+import { sanitizeEmail, sanitizePhone, sanitizeAmount, sanitizeDate, sanitizeEnum } from "@/lib/sanitize";
 import type { DonorStatus, PaymentMethod, Role } from "@/types";
+
+const DONOR_STATUS_VALUES: DonorStatus[] = ["interested", "pledged", "received"];
+const PAYMENT_METHOD_VALUES: PaymentMethod[] = ["cash", "cheque", "e_transfer", "other"];
 
 // ── Auth guard ─────────────────────────────────────────────────────────────
 
@@ -31,7 +35,8 @@ export interface AddDonorInput {
   city?: string;
   province?: string;
   postalCode?: string;
-  phone?: string;
+  phoneHome?: string;
+  phoneMobile?: string;
   email?: string;
   amount?: string;
   donationDate?: string;
@@ -52,6 +57,9 @@ export async function addDonor(
   const lastName = input.lastName.trim();
   if (!firstName || !lastName) return { error: "First and last name are required." };
 
+  const status = sanitizeEnum(input.status, DONOR_STATUS_VALUES);
+  if (!status) return { error: "Invalid donor status." };
+
   const donor = await db.donor.create({
     data: {
       campaignId,
@@ -61,12 +69,13 @@ export async function addDonor(
       city: input.city?.trim() || null,
       province: input.province?.trim() || null,
       postalCode: input.postalCode?.trim() || null,
-      phone: input.phone?.trim() || null,
-      email: input.email?.trim() || null,
-      amount: input.amount ? parseFloat(input.amount) : null,
-      donationDate: input.donationDate ? new Date(input.donationDate) : null,
-      status: input.status,
-      paymentMethod: input.paymentMethod || null,
+      phoneHome: sanitizePhone(input.phoneHome),
+      phoneMobile: sanitizePhone(input.phoneMobile),
+      email: sanitizeEmail(input.email),
+      amount: sanitizeAmount(input.amount),
+      donationDate: sanitizeDate(input.donationDate),
+      status,
+      paymentMethod: sanitizeEnum(input.paymentMethod, PAYMENT_METHOD_VALUES),
       notes: input.notes?.trim() || null,
       linkedPersonId: input.linkedPersonId || null,
       createdById: session.user.id,
@@ -88,7 +97,8 @@ export interface UpdateDonorInput {
   city?: string;
   province?: string;
   postalCode?: string;
-  phone?: string;
+  phoneHome?: string;
+  phoneMobile?: string;
   email?: string;
   amount?: string;
   donationDate?: string;
@@ -122,21 +132,25 @@ export async function updateDonor(
   if (input.city !== undefined) data.city = input.city.trim() || null;
   if (input.province !== undefined) data.province = input.province.trim() || null;
   if (input.postalCode !== undefined) data.postalCode = input.postalCode.trim() || null;
-  if (input.phone !== undefined) data.phone = input.phone.trim() || null;
-  if (input.email !== undefined) data.email = input.email.trim() || null;
-  if (input.status !== undefined) data.status = input.status;
+  if (input.phoneHome !== undefined) data.phoneHome = sanitizePhone(input.phoneHome);
+  if (input.phoneMobile !== undefined) data.phoneMobile = sanitizePhone(input.phoneMobile);
+  if (input.email !== undefined) data.email = sanitizeEmail(input.email);
+  if (input.status !== undefined) {
+    const status = sanitizeEnum(input.status, DONOR_STATUS_VALUES);
+    if (status !== null) data.status = status;
+  }
   if (input.notes !== undefined) data.notes = input.notes.trim() || null;
   if (input.thankYouSent !== undefined) {
     data.thankYouSent = input.thankYouSent;
     if (input.thankYouSent && input.thankYouDate) {
-      data.thankYouDate = new Date(input.thankYouDate);
+      data.thankYouDate = sanitizeDate(input.thankYouDate);
     }
   }
   // Amount and payment method restricted to roles with financial access
   if (canAmounts) {
-    if (input.amount !== undefined) data.amount = input.amount ? parseFloat(input.amount) : null;
-    if (input.donationDate !== undefined) data.donationDate = input.donationDate ? new Date(input.donationDate) : null;
-    if (input.paymentMethod !== undefined) data.paymentMethod = input.paymentMethod || null;
+    if (input.amount !== undefined) data.amount = sanitizeAmount(input.amount);
+    if (input.donationDate !== undefined) data.donationDate = sanitizeDate(input.donationDate);
+    if (input.paymentMethod !== undefined) data.paymentMethod = sanitizeEnum(input.paymentMethod as string, PAYMENT_METHOD_VALUES);
   }
 
   await db.donor.update({ where: { id: input.donorId }, data });

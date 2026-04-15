@@ -188,7 +188,8 @@ function PersonCard({ person, label }: { person: PersonRow; label: string }) {
             {cityLine && <span className="text-slate-400">, {cityLine}</span>}
           </DataRow>
         )}
-        {person.phone && <DataRow label="Phone">{person.phone}</DataRow>}
+        {person.phoneHome && <DataRow label="Phone (home)">{person.phoneHome}</DataRow>}
+        {person.phoneMobile && <DataRow label="Phone (mobile)">{person.phoneMobile}</DataRow>}
         {person.email && <DataRow label="Email">{person.email}</DataRow>}
         {person.sourceNotes && (
           <DataRow label="Source">{person.sourceNotes}</DataRow>

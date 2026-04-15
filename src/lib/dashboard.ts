@@ -223,7 +223,7 @@ export async function getVolunteerCoordinatorDashboardData(campaignId: string) {
             id: true,
             firstName: true,
             lastName: true,
-            phone: true,
+            phoneHome: true,
             email: true,
             household: {
               select: {

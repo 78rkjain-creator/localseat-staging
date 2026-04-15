@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const people = await getPeopleForExportTemplate(activeCampaignId, supportLevel);
 
   const headers = [
-    "First Name", "Last Name", "Address", "Phone", "Email",
+    "First Name", "Last Name", "Address", "Phone (home)", "Email",
     "Channel", "Date", "Outcome", "Notes", "Phoned By", "Phone Type",
   ];
 
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       p.firstName,
       p.lastName,
       address,
-      p.phone ?? "",
+      p.phoneHome ?? "",
       p.email ?? "",
       channel,
       "", // Date — blank for provider

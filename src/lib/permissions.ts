@@ -75,9 +75,17 @@ export function canAssignCanvassers(role: Role): boolean {
   return FIELD_AND_ABOVE.includes(role);
 }
 
-// Every authenticated user may access the canvassing workflow.
-export function canCanvass(_role: Role): boolean {
-  return true;
+// Every role may access the canvassing workflow.
+export function canCanvass(role: Role): boolean {
+  return [
+    Role.candidate,
+    Role.campaign_manager,
+    Role.field_organizer,
+    Role.volunteer_coordinator,
+    Role.canvasser,
+    Role.co_chair,
+    Role.finance_lead,
+  ].includes(role);
 }
 
 // ── Volunteers ────────────────────────────────────────────────────────────────
@@ -87,9 +95,12 @@ export function canManageVolunteers(role: Role): boolean {
   return VOL_AND_ABOVE.includes(role);
 }
 
-// Alias kept for callers that use the old name.
+// Viewing volunteer records and schedule (broader than manage — includes co_chair).
 export function canViewVolunteers(role: Role): boolean {
-  return canManageVolunteers(role);
+  return (
+    canManageVolunteers(role) ||
+    role === Role.co_chair
+  );
 }
 
 // ── Follow-ups ────────────────────────────────────────────────────────────────

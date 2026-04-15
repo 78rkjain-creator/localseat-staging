@@ -22,7 +22,8 @@ export async function getPeopleList({ campaignId, q, tagId }: PeopleListFilters)
               { firstName: { contains: q.trim(), mode: "insensitive" } },
               { lastName: { contains: q.trim(), mode: "insensitive" } },
               { email: { contains: q.trim(), mode: "insensitive" } },
-              { phone: { contains: q.trim(), mode: "insensitive" } },
+              { phoneHome: { contains: q.trim(), mode: "insensitive" } },
+              { phoneMobile: { contains: q.trim(), mode: "insensitive" } },
             ],
           }
         : {}),
@@ -35,7 +36,8 @@ export async function getPeopleList({ campaignId, q, tagId }: PeopleListFilters)
       firstName: true,
       lastName: true,
       email: true,
-      phone: true,
+      phoneHome: true,
+      phoneMobile: true,
       household: {
         select: {
           address: {
@@ -178,7 +180,8 @@ export async function getVoterList({
       { firstName: { contains: term, mode: "insensitive" } },
       { lastName:  { contains: term, mode: "insensitive" } },
       { email:     { contains: term, mode: "insensitive" } },
-      { phone:     { contains: term, mode: "insensitive" } },
+      { phoneHome: { contains: term, mode: "insensitive" } },
+      { phoneMobile: { contains: term, mode: "insensitive" } },
     ];
   }
 
@@ -202,7 +205,8 @@ export async function getVoterList({
         firstName: true,
         lastName: true,
         email: true,
-        phone: true,
+        phoneHome: true,
+        phoneMobile: true,
         birthYear: true,
         sourceNotes: true,
         createdAt: true,
@@ -253,7 +257,8 @@ export async function findDuplicatePairs(campaignId: string) {
       firstName: true,
       lastName: true,
       email: true,
-      phone: true,
+      phoneHome: true,
+      phoneMobile: true,
       birthYear: true,
       sourceNotes: true,
       createdAt: true,

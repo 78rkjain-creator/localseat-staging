@@ -5,7 +5,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewVolunteers, isReadOnly } from "@/lib/permissions";
+import { sanitizeDate, sanitizeInteger } from "@/lib/sanitize";
 import type { Role, VolunteerAttendanceStatus } from "@/types";
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 async function requireVolunteerAccess() {
   const session = await getServerSession(authOptions);
@@ -39,25 +42,77 @@ export async function createVolunteerShift(input: {
 
   const name = input.name.trim();
   if (!name) return { error: "Shift name is required." };
-  if (!input.date) return { error: "Date is required." };
+  const shiftDate = sanitizeDate(input.date);
+  if (!shiftDate) return { error: "Date is required." };
   if (!input.startTime || !input.endTime) return { error: "Start and end time are required." };
+  if (!TIME_RE.test(input.startTime) || !TIME_RE.test(input.endTime)) {
+    return { error: "Times must be in HH:MM format (24-hour)." };
+  }
 
   const shift = await db.volunteerShift.create({
     data: {
       campaignId,
       name,
-      date: new Date(input.date),
+      date: shiftDate,
       startTime: input.startTime,
       endTime: input.endTime,
       location: input.location?.trim() || null,
       notes: input.notes?.trim() || null,
-      maxVolunteers: input.maxVolunteers ? parseInt(input.maxVolunteers, 10) : null,
+      maxVolunteers: sanitizeInteger(input.maxVolunteers, 1, 500),
     },
     select: { id: true },
   });
 
   revalidatePath("/volunteers/schedule");
   return { shiftId: shift.id };
+}
+
+// ── Update shift ─────────────────────────────────────────────────────────────
+
+export async function updateVolunteerShift(input: {
+  shiftId: string;
+  name: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  notes?: string;
+  maxVolunteers?: string;
+}): Promise<{ error?: string }> {
+  const auth = await requireVolunteerAccess();
+  if ("error" in auth) return auth;
+  const { campaignId } = auth;
+
+  const shift = await db.volunteerShift.findFirst({
+    where: { id: input.shiftId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!shift) return { error: "Shift not found." };
+
+  const name = input.name.trim();
+  if (!name) return { error: "Shift name is required." };
+  const shiftDate = sanitizeDate(input.date);
+  if (!shiftDate) return { error: "Date is required." };
+  if (!input.startTime || !input.endTime) return { error: "Start and end time are required." };
+  if (!TIME_RE.test(input.startTime) || !TIME_RE.test(input.endTime)) {
+    return { error: "Times must be in HH:MM format (24-hour)." };
+  }
+
+  await db.volunteerShift.update({
+    where: { id: input.shiftId },
+    data: {
+      name,
+      date: shiftDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      location: input.location?.trim() || null,
+      notes: input.notes?.trim() || null,
+      maxVolunteers: sanitizeInteger(input.maxVolunteers, 1, 500),
+    },
+  });
+
+  revalidatePath("/volunteers/schedule");
+  return {};
 }
 
 // ── Assign volunteer to shift ─────────────────────────────────────────────────

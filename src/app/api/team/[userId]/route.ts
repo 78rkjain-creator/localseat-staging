@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { role: roleInput, phone } = body as Record<string, string | undefined>;
+  const { role: roleInput, phoneHome, phoneMobile } = body as Record<string, string | undefined>;
   if (!roleInput) {
     return NextResponse.json({ error: "role is required" }, { status: 400 });
   }
@@ -76,21 +76,26 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  // Update the membership role, and optionally update the user's phone number
-  // in the same request if the caller provides one.
-  const normalizedPhone = phone?.trim();
+  // Update the membership role, and optionally update the user's phone numbers
+  // in the same request if the caller provides them.
+  const normalizedPhoneHome = phoneHome?.trim();
+  const normalizedPhoneMobile = phoneMobile?.trim();
+  const phoneData: Record<string, string | null> = {};
+  if (normalizedPhoneHome !== undefined) phoneData.phoneHome = normalizedPhoneHome || null;
+  if (normalizedPhoneMobile !== undefined) phoneData.phoneMobile = normalizedPhoneMobile || null;
+
   const [updated] = await db.$transaction([
     db.campaignMembership.update({
       where: { userId_campaignId: { userId, campaignId: activeCampaignId } },
       data: { role: newRole },
       include: {
         user: {
-          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, email: true, phoneHome: true, phoneMobile: true },
         },
       },
     }),
-    ...(normalizedPhone !== undefined
-      ? [db.user.update({ where: { id: userId }, data: { phone: normalizedPhone || null } })]
+    ...(Object.keys(phoneData).length > 0
+      ? [db.user.update({ where: { id: userId }, data: phoneData })]
       : []),
   ]);
 
