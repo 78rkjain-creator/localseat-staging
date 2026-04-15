@@ -12,7 +12,10 @@ import { SyncStatusBar } from "@/components/ui/SyncStatusBar";
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type LocalEntry = CanvassingQueue["entries"][number] & {
-  person: { coResidents: { id: string; firstName: string; lastName: string }[] };
+  person: {
+    phoneMobile: string | null;
+    coResidents: { id: string; firstName: string; lastName: string }[];
+  };
 };
 
 interface ResponseDraft {
