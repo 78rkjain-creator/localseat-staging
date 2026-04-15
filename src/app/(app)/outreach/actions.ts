@@ -143,7 +143,14 @@ export async function importOutreachResults(
 
     if (row.phone?.trim()) {
       person = await db.person.findFirst({
-        where: { campaignId, deletedAt: null, phone: { contains: row.phone.trim() } },
+        where: {
+          campaignId,
+          deletedAt: null,
+          OR: [
+            { phoneHome: { contains: row.phone?.trim() ?? "" } },
+            { phoneMobile: { contains: row.phone?.trim() ?? "" } },
+          ],
+        },
         select: { id: true },
       });
     }
