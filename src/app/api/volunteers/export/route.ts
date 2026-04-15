@@ -29,6 +29,7 @@ export async function GET() {
           firstName: true,
           lastName: true,
           phoneHome: true,
+          phoneMobile: true,
           email: true,
           household: {
             select: {
@@ -52,7 +53,7 @@ export async function GET() {
   const headers = [
     "First Name", "Last Name",
     "Address", "City", "Province", "Postal Code",
-    "Phone", "Email",
+    "Phone (home)", "Phone (mobile)", "Email",
     "Flagged At",
   ];
 
@@ -70,6 +71,7 @@ export async function GET() {
       addr?.province ?? "",
       addr?.postalCode ?? "",
       p.phoneHome ?? "",
+      p.phoneMobile ?? "",
       p.email ?? "",
       r.respondedAt.toISOString().split("T")[0],
     ];

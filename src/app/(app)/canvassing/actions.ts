@@ -69,13 +69,13 @@ export async function assignCanvasser(
 
   // Verify canvasser is a member of this campaign
   const membership = await db.campaignMembership.findFirst({
-    where: { userId: canvasserId, campaignId: activeCampaignId, role: "canvasser" },
+    where: { userId: canvasserId, campaignId: activeCampaignId, role: "canvasser", deletedAt: null },
   });
   if (!membership) return { error: "User is not a canvasser in this campaign." };
 
   // Prevent duplicate assignment
   const existing = await db.canvassAssignment.findFirst({
-    where: { canvassListId: listId, canvasserId },
+    where: { canvassListId: listId, canvasserId, deletedAt: null },
   });
   if (existing) return { error: "This canvasser is already assigned to this list." };
 

@@ -51,7 +51,7 @@ export async function getRecentActivity(
 
     // Notes — scoped via person
     db.note.findMany({
-      where: { person: { campaignId } },
+      where: { deletedAt: null, person: { campaignId } },
       include: {
         person: { select: { firstName: true, lastName: true } },
         author: { select: { firstName: true, lastName: true } },

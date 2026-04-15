@@ -79,7 +79,7 @@ export async function getPeopleCount(campaignId: string): Promise<number> {
 export async function getCampaignTags(campaignId: string) {
   // Tags are global but we only show ones used in this campaign
   const rows = await db.personTag.findMany({
-    where: { person: { campaignId, deletedAt: null } },
+    where: { deletedAt: null, person: { campaignId, deletedAt: null } },
     select: { tag: { select: { id: true, name: true, color: true } } },
     distinct: ["tagId"],
   });
@@ -104,6 +104,7 @@ export async function getPersonDetail(personId: string, campaignId: string) {
         },
       },
       notes: {
+        where: { deletedAt: null },
         include: { author: { select: { firstName: true, lastName: true } } },
         orderBy: { createdAt: "desc" },
       },

@@ -32,6 +32,7 @@ export async function GET() {
   const members = await db.campaignMembership.findMany({
     where: {
       campaignId: activeCampaignId,
+      deletedAt: null,
       ...(isFieldOrganizer && { role: { in: FIELD_ORGANIZER_VISIBLE_ROLES } }),
     },
     include: {
@@ -128,9 +129,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Check for existing membership
-  const existing = await db.campaignMembership.findUnique({
-    where: { userId_campaignId: { userId: user.id, campaignId: activeCampaignId } },
+  // Check for existing active membership (soft-deleted memberships do not block re-adding)
+  const existing = await db.campaignMembership.findFirst({
+    where: { userId: user.id, campaignId: activeCampaignId, deletedAt: null },
   });
 
   if (existing) {

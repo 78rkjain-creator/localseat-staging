@@ -32,6 +32,7 @@ export async function saveCanvassResponse(
     where: {
       id: input.assignmentId,
       canvasserId: session.user.id,
+      deletedAt: null,
       canvassList: { campaignId: activeCampaignId },
     },
     select: { id: true },
@@ -190,6 +191,7 @@ export async function addPersonAtDoor(input: {
     where: {
       id: input.assignmentId,
       canvasserId: session.user.id,
+      deletedAt: null,
       canvassList: { campaignId: activeCampaignId, id: input.listId },
     },
     select: { id: true },
@@ -198,7 +200,7 @@ export async function addPersonAtDoor(input: {
 
   // Look up the field-entry system tag (tags are global, not campaign-scoped)
   const fieldEntryTag = await db.tag.findFirst({
-    where: { name: "field-entry" },
+    where: { name: "field-entry", deletedAt: null },
     select: { id: true },
   });
 

@@ -154,8 +154,9 @@ export async function removeVolunteerFromShift(
   const auth = await requireVolunteerAccess();
   if ("error" in auth) return auth;
 
-  await db.volunteerShiftAttendee.deleteMany({
-    where: { shiftId, recordId },
+  await db.volunteerShiftAttendee.updateMany({
+    where: { shiftId, recordId, deletedAt: null },
+    data: { deletedAt: new Date() },
   });
 
   revalidatePath("/volunteers/schedule");

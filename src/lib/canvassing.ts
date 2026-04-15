@@ -9,6 +9,7 @@ export async function getCanvassLists(campaignId: string) {
     where: { campaignId, deletedAt: null },
     include: {
       assignments: {
+        where: { deletedAt: null },
         include: {
           canvasser: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { responses: true } },
@@ -35,6 +36,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
     where: { id: listId, campaignId, deletedAt: null },
     include: {
       assignments: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "asc" },
         include: {
           canvasser: {
@@ -67,6 +69,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
         },
       },
       entries: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "asc" },
         include: {
           person: {
@@ -109,7 +112,7 @@ export async function getAvailableCanvassers(
   listId: string
 ) {
   const alreadyAssigned = await db.canvassAssignment.findMany({
-    where: { canvassListId: listId },
+    where: { canvassListId: listId, deletedAt: null },
     select: { canvasserId: true },
   });
   const assignedIds = alreadyAssigned.map((a) => a.canvasserId);
@@ -117,6 +120,7 @@ export async function getAvailableCanvassers(
   const memberships = await db.campaignMembership.findMany({
     where: {
       campaignId,
+      deletedAt: null,
       role: "canvasser",
       userId: { notIn: assignedIds },
       user: { isActive: true },
@@ -157,7 +161,7 @@ export async function previewPeopleFilter({
 }: PeopleFilterParams): Promise<{ count: number; sample: string[] }> {
   // People already in this list
   const existing = await db.canvassListEntry.findMany({
-    where: { canvassListId: listId },
+    where: { canvassListId: listId, deletedAt: null },
     select: { personId: true },
   });
   const existingIds = existing.map((e) => e.personId);
@@ -237,6 +241,7 @@ export async function getAssignedLists(canvasserId: string, campaignId: string) 
   const assignments = await db.canvassAssignment.findMany({
     where: {
       canvasserId,
+      deletedAt: null,
       canvassList: { campaignId, deletedAt: null },
     },
     include: {
@@ -273,6 +278,7 @@ export async function getCanvassingQueue(
     where: {
       canvassListId: listId,
       canvasserId,
+      deletedAt: null,
       canvassList: { campaignId },
     },
     select: { id: true },
@@ -281,11 +287,11 @@ export async function getCanvassingQueue(
 
   const [listRecord, entries] = await Promise.all([
     db.canvassList.findFirst({
-      where: { id: listId, campaignId },
+      where: { id: listId, campaignId, deletedAt: null },
       select: { name: true },
     }),
     db.canvassListEntry.findMany({
-      where: { canvassListId: listId },
+      where: { canvassListId: listId, deletedAt: null },
       orderBy: [
         { person: { household: { address: { streetName: "asc" } } } },
         { person: { household: { address: { streetNumber: "asc" } } } },

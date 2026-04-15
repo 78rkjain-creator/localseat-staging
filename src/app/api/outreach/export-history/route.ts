@@ -18,7 +18,7 @@ export async function GET() {
   const logs = await getAllOutreachLogsForExport(activeCampaignId);
 
   const headers = [
-    "First Name", "Last Name", "Address", "Phone (home)",
+    "First Name", "Last Name", "Address", "Phone (home)", "Phone (mobile)",
     "Channel", "Date", "Outcome", "Notes",
     "Staff Member", "Phoned By", "Phone Type",
   ];
@@ -36,6 +36,7 @@ export async function GET() {
       l.person.lastName,
       address,
       l.person.phoneHome ?? "",
+      l.person.phoneMobile ?? "",
       channelLabel,
       l.date.toISOString().split("T")[0],
       l.outcome ?? "",

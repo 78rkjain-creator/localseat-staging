@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   // Fetch entries scoped to the campaign, optionally filtered by listId
   const entries = await db.canvassListEntry.findMany({
     where: {
+      deletedAt: null,
       canvassList: {
         campaignId,
         ...(listId ? { id: listId } : {}),

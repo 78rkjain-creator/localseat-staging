@@ -205,7 +205,7 @@ export async function mergePersons(input: {
 
   // Find the record-outdated system tag
   const outdatedTag = await db.tag.findFirst({
-    where: { name: "record-outdated" },
+    where: { name: "record-outdated", deletedAt: null },
     select: { id: true },
   });
 
@@ -214,7 +214,7 @@ export async function mergePersons(input: {
 
   // Find tags the winner already has
   const winnerTags = await db.personTag.findMany({
-    where: { personId: input.winnerId },
+    where: { personId: input.winnerId, deletedAt: null },
     select: { tagId: true },
   });
   const winnerTagIds = new Set(winnerTags.map((t) => t.tagId));

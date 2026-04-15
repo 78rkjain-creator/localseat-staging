@@ -60,9 +60,10 @@ model Campaign {
   province     String   @default("ON")
   year         Int
   electionDate DateTime?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
   memberships   CampaignMembership[]
   people        Person[]
@@ -76,6 +77,7 @@ model Campaign {
   auditLogs        AuditLog[]
   tasks            Task[]
 
+  @@index([deletedAt])
   @@map("campaigns")
 }
 
@@ -89,9 +91,10 @@ model User {
   lastName     String
   phoneHome    String?
   phoneMobile  String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
   memberships          CampaignMembership[]
   canvassAssignments   CanvassAssignment[]
@@ -102,6 +105,7 @@ model User {
   auditLogs            AuditLog[]
   donorsCreated        Donor[]
 
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -112,7 +116,8 @@ model CampaignMembership {
   userId     String
   campaignId String
   role       Role
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
 
   user     User     @relation(fields: [userId], references: [id])
   campaign Campaign @relation(fields: [campaignId], references: [id])
@@ -120,6 +125,7 @@ model CampaignMembership {
   @@unique([userId, campaignId])
   @@index([campaignId])
   @@index([userId])
+  @@index([deletedAt])
   @@map("campaign_memberships")
 }
 
@@ -207,21 +213,25 @@ model Person {
 model Tag {
   id    String  @id @default(cuid())
   name  String  @unique
-  color String?
+  color     String?
+  deletedAt DateTime?
 
   personTags PersonTag[]
 
+  @@index([deletedAt])
   @@map("tags")
 }
 
 model PersonTag {
-  personId String
-  tagId    String
+  personId  String
+  tagId     String
+  deletedAt DateTime?
 
   person Person @relation(fields: [personId], references: [id])
   tag    Tag    @relation(fields: [tagId], references: [id])
 
   @@id([personId, tagId])
+  @@index([deletedAt])
   @@map("person_tags")
 }
 
@@ -232,13 +242,15 @@ model Note {
   personId  String
   authorId  String
   body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   person Person @relation(fields: [personId], references: [id])
   author User   @relation(fields: [authorId], references: [id])
 
   @@index([personId])
+  @@index([deletedAt])
   @@map("notes")
 }
 
@@ -256,6 +268,7 @@ model Task {
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   campaign Campaign @relation(fields: [campaignId], references: [id])
   person   Person?  @relation(fields: [personId], references: [id])
@@ -263,6 +276,7 @@ model Task {
 
   @@index([campaignId])
   @@index([assignedTo])
+  @@index([deletedAt])
   @@map("tasks")
 }
 
@@ -293,13 +307,15 @@ model CanvassListEntry {
   canvassListId String
   personId      String
   addedById     String
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
 
   canvassList CanvassList @relation(fields: [canvassListId], references: [id])
   person      Person      @relation(fields: [personId], references: [id])
   addedBy     User        @relation(fields: [addedById], references: [id])
 
   @@unique([canvassListId, personId])
+  @@index([deletedAt])
   @@map("canvass_list_entries")
 }
 
@@ -310,8 +326,9 @@ model CanvassAssignment {
   canvassListId String
   canvasserId   String
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   canvassList CanvassList       @relation(fields: [canvassListId], references: [id])
   canvasser   User              @relation(fields: [canvasserId], references: [id])
@@ -319,6 +336,7 @@ model CanvassAssignment {
 
   @@index([canvassListId])
   @@index([canvasserId])
+  @@index([deletedAt])
   @@map("canvass_assignments")
 }
 
@@ -485,13 +503,15 @@ model VolunteerShiftAttendee {
   shiftId    String
   recordId   String                   // FK to VolunteerRecord
   status     VolunteerAttendanceStatus @default(pending)
-  createdAt  DateTime                 @default(now())
-  updatedAt  DateTime                 @updatedAt
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+  deletedAt  DateTime?
 
   shift  VolunteerShift  @relation(fields: [shiftId], references: [id])
   record VolunteerRecord @relation(fields: [recordId], references: [id])
 
   @@unique([shiftId, recordId])
+  @@index([deletedAt])
   @@map("volunteer_shift_attendees")
 }
 

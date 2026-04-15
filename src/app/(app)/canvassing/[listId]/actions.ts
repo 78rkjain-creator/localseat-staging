@@ -51,7 +51,7 @@ export async function addFilteredPeople(
 
   // Re-run the same query used for preview, but fetch IDs
   const existing = await db.canvassListEntry.findMany({
-    where: { canvassListId: listId },
+    where: { canvassListId: listId, deletedAt: null },
     select: { personId: true },
   });
   const existingIds = existing.map((e) => e.personId);

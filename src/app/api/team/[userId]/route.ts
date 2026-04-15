@@ -13,8 +13,8 @@ interface RouteContext {
 // ── Shared lookup ─────────────────────────────────────────────────────────────
 
 async function resolveMembership(userId: string, campaignId: string) {
-  return db.campaignMembership.findUnique({
-    where: { userId_campaignId: { userId, campaignId } },
+  return db.campaignMembership.findFirst({
+    where: { userId, campaignId, deletedAt: null },
   });
 }
 
@@ -136,8 +136,9 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  await db.campaignMembership.delete({
+  await db.campaignMembership.update({
     where: { userId_campaignId: { userId, campaignId: activeCampaignId } },
+    data: { deletedAt: new Date() },
   });
 
   return new NextResponse(null, { status: 204 });

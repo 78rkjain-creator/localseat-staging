@@ -23,14 +23,14 @@ export async function assignTask(
   }
 
   const task = await db.task.findFirst({
-    where: { id: taskId, campaignId: activeCampaignId },
+    where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true },
   });
   if (!task) return { error: "Task not found." };
 
   // Verify the assignee is a member of this campaign
   const membership = await db.campaignMembership.findFirst({
-    where: { campaignId: activeCampaignId, userId: assigneeId },
+    where: { campaignId: activeCampaignId, userId: assigneeId, deletedAt: null },
     select: { userId: true },
   });
   if (!membership) return { error: "Assignee is not a member of this campaign." };
@@ -58,8 +58,8 @@ export async function completeTask(
   // Canvassers can only complete tasks assigned to them
   const whereClause =
     activeRole === "canvasser"
-      ? { id: taskId, campaignId: activeCampaignId, assignedTo: session.user.id }
-      : { id: taskId, campaignId: activeCampaignId };
+      ? { id: taskId, campaignId: activeCampaignId, assignedTo: session.user.id, deletedAt: null }
+      : { id: taskId, campaignId: activeCampaignId, deletedAt: null };
 
   const task = await db.task.findFirst({
     where: whereClause,
@@ -92,7 +92,7 @@ export async function unassignTask(
   }
 
   const task = await db.task.findFirst({
-    where: { id: taskId, campaignId: activeCampaignId },
+    where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true },
   });
   if (!task) return { error: "Task not found." };

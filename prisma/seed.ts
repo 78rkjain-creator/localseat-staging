@@ -362,7 +362,14 @@ async function main() {
       notes: "Focus on the even-numbered houses. Bring door-knocker pamphlets.",
     },
   });
-  console.log("  ✓ Canvass assignment");
+  await db.canvassAssignment.create({
+    data: {
+      canvassListId: walkList.id,
+      canvasserId: canvasser2.id,
+      notes: "Focus on the odd-numbered houses. Introduce yourself and leave a flyer.",
+    },
+  });
+  console.log("  ✓ Canvass assignments");
 
   // ── Canvass List Entries (Elm Street residents on the list) ───────────────
   // people[0]–people[15] are the 16 Elm Street residents (14–32 Elm)

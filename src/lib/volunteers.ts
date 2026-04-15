@@ -47,6 +47,7 @@ export async function getVolunteerShifts(campaignId: string) {
     where: { campaignId, deletedAt: null },
     include: {
       attendees: {
+        where: { deletedAt: null },
         include: {
           record: {
             select: {
@@ -75,6 +76,7 @@ export async function getVolunteerShiftDetail(shiftId: string, campaignId: strin
     where: { id: shiftId, campaignId, deletedAt: null },
     include: {
       attendees: {
+        where: { deletedAt: null },
         include: {
           record: {
             include: {
@@ -114,6 +116,7 @@ export async function getVolunteerDashboardData(campaignId: string) {
     }),
     db.volunteerShiftAttendee.findMany({
       where: {
+        deletedAt: null,
         shift: { campaignId, deletedAt: null, date: { lt: now } },
       },
       select: { status: true },

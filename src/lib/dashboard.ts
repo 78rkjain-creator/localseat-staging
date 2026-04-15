@@ -80,7 +80,7 @@ export async function getCandidateDashboardData(campaignId: string) {
       },
     }),
     db.campaignMembership.findMany({
-      where: { campaignId },
+      where: { campaignId, deletedAt: null },
       select: {
         role: true,
         user: { select: { firstName: true, lastName: true } },
@@ -160,7 +160,7 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
         },
       }),
       db.task.count({
-        where: { campaignId, completed: false, assignedTo: null },
+        where: { campaignId, completed: false, deletedAt: null, assignedTo: null },
       }),
       // Who knocked doors today and how many
       db.canvassResponse.groupBy({
@@ -178,7 +178,7 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
   const assignments =
     assignmentIds.length > 0
       ? await db.canvassAssignment.findMany({
-          where: { id: { in: assignmentIds } },
+          where: { id: { in: assignmentIds }, deletedAt: null },
           select: {
             id: true,
             canvasser: { select: { firstName: true, lastName: true } },
@@ -243,7 +243,7 @@ export async function getVolunteerCoordinatorDashboardData(campaignId: string) {
     }),
     // Open tasks for volunteer follow-up
     db.task.findMany({
-      where: { campaignId, completed: false },
+      where: { campaignId, completed: false, deletedAt: null },
       include: {
         person: { select: { id: true, firstName: true, lastName: true } },
         assignee: { select: { firstName: true, lastName: true } },

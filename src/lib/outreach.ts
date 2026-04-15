@@ -116,7 +116,7 @@ export async function getMyOutreachLog({
 
 export async function getOutreachStaffMembers(campaignId: string) {
   const memberships = await db.campaignMembership.findMany({
-    where: { campaignId, user: { isActive: true } },
+    where: { campaignId, deletedAt: null, user: { isActive: true } },
     select: { user: { select: { id: true, firstName: true, lastName: true } } },
     orderBy: [{ user: { lastName: "asc" } }, { user: { firstName: "asc" } }],
   });
@@ -134,6 +134,7 @@ export async function getAllOutreachLogsForExport(campaignId: string) {
           firstName: true,
           lastName: true,
           phoneHome: true,
+          phoneMobile: true,
           household: {
             select: {
               address: {

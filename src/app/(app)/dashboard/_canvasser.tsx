@@ -12,7 +12,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
   const [assignments, tasks] = await Promise.all([
     getAssignedLists(userId, campaignId),
     db.task.findMany({
-      where: { campaignId, assignedTo: userId, completed: false },
+      where: { campaignId, assignedTo: userId, completed: false, deletedAt: null },
       include: {
         person: { select: { id: true, firstName: true, lastName: true } },
       },

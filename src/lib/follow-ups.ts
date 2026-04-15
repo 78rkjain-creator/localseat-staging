@@ -36,7 +36,7 @@ export async function getFullFollowUpQueue(campaignId: string): Promise<{
 }> {
   console.log("[getFullFollowUpQueue] querying campaignId:", campaignId);
   const tasks = await db.task.findMany({
-    where: { campaignId, completed: false },
+    where: { campaignId, completed: false, deletedAt: null },
     include: {
       person: {
         select: {
@@ -79,7 +79,7 @@ export async function getMyFollowUpTasks(
   campaignId: string
 ): Promise<FollowUpTask[]> {
   const tasks = await db.task.findMany({
-    where: { campaignId, assignedTo: userId, completed: false },
+    where: { campaignId, assignedTo: userId, completed: false, deletedAt: null },
     include: {
       person: {
         select: {
@@ -122,6 +122,7 @@ export async function getFollowUpSummary(campaignId: string) {
       where: {
         campaignId,
         completed: false,
+        deletedAt: null,
         dueDate: { lt: now },
       },
       include: {
@@ -135,6 +136,7 @@ export async function getFollowUpSummary(campaignId: string) {
       where: {
         campaignId,
         completed: false,
+        deletedAt: null,
         dueDate: { gte: now, lte: todayEnd },
       },
       include: {
@@ -145,7 +147,7 @@ export async function getFollowUpSummary(campaignId: string) {
       take: 5,
     }),
     db.task.count({
-      where: { campaignId, completed: false, dueDate: { gt: todayEnd } },
+      where: { campaignId, completed: false, deletedAt: null, dueDate: { gt: todayEnd } },
     }),
   ]);
 
@@ -156,7 +158,7 @@ export async function getFollowUpSummary(campaignId: string) {
 
 export async function getCampaignTeamMembers(campaignId: string) {
   const memberships = await db.campaignMembership.findMany({
-    where: { campaignId, user: { isActive: true } },
+    where: { campaignId, deletedAt: null, user: { isActive: true } },
     select: {
       user: { select: { id: true, firstName: true, lastName: true } },
       role: true,

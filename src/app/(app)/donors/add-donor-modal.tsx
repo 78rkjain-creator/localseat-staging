@@ -23,6 +23,7 @@ export function AddDonorModal() {
         province: fd.get("province") as string,
         postalCode: fd.get("postalCode") as string,
         phoneHome: fd.get("phoneHome") as string,
+        phoneMobile: fd.get("phoneMobile") as string,
         email: fd.get("email") as string,
         amount: fd.get("amount") as string,
         donationDate: fd.get("donationDate") as string,
@@ -121,13 +122,21 @@ export function AddDonorModal() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-slate-600">Email</label>
+                  <label className="text-xs font-medium text-slate-600">Phone (mobile)</label>
                   <input
-                    name="email"
-                    type="email"
+                    name="phoneMobile"
+                    type="tel"
                     className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-600">Email</label>
+                <input
+                  name="email"
+                  type="email"
+                  className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
               </div>
 
               {/* Address */}
