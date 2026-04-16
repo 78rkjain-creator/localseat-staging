@@ -154,3 +154,14 @@ export function isReadOnly(_role: Role): boolean {
 export function isCanvasser(role: Role): boolean {
   return role === Role.canvasser;
 }
+
+// ── Platform-level roles (cross-campaign) ─────────────────────────────────────
+
+export function isSuperUser(platformRole: string | null | undefined): boolean {
+  return platformRole === "super_user";
+}
+
+// super_user inherits all super_admin capabilities
+export function isSuperAdmin(platformRole: string | null | undefined): boolean {
+  return platformRole === "super_user" || platformRole === "super_admin";
+}

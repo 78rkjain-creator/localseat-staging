@@ -6,6 +6,28 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
+    // /admin routes require a platform role of super_user or super_admin
+    if (pathname.startsWith("/admin")) {
+      if (!token) {
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+      const platformRole = (token as { platformRole?: string | null }).platformRole;
+      if (platformRole !== "super_user" && platformRole !== "super_admin") {
+        return NextResponse.redirect(new URL("/dashboard", req.url));
+      }
+      return NextResponse.next();
+    }
+
+    // Platform users (super_user, super_admin) bypass campaign
+    // onboarding and go straight to /admin
+    const platformRole = (token as { platformRole?: string | null }).platformRole;
+    if (platformRole === "super_user" || platformRole === "super_admin") {
+      if (!pathname.startsWith("/admin")) {
+        return NextResponse.redirect(new URL("/admin", req.url));
+      }
+      return NextResponse.next();
+    }
+
     // Authenticated users with no active campaign must complete onboarding
     if (token && !token.activeCampaignId && pathname !== "/onboarding/create-campaign") {
       return NextResponse.redirect(new URL("/onboarding/create-campaign", req.url));
@@ -34,6 +56,11 @@ export default withAuth(
 
         // Onboarding requires auth but not an active campaign
         if (pathname === "/onboarding/create-campaign") {
+          return !!token;
+        }
+
+        // Admin routes require auth but not a campaign
+        if (pathname.startsWith("/admin")) {
           return !!token;
         }
 

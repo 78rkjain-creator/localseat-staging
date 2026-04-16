@@ -120,3 +120,10 @@ export const CANVASS_OUTCOME_LABELS: Record<CanvassOutcome, string> = {
   unavailable: "Unavailable",
   deceased: "Deceased",
 };
+
+export type PlatformRole = "super_user" | "super_admin";
+
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  super_user: "Super User",
+  super_admin: "Super Admin",
+};

@@ -91,7 +91,8 @@ model User {
   lastName     String
   phoneHome    String?
   phoneMobile  String?
-  isActive     Boolean   @default(true)
+  isActive      Boolean   @default(true)
+  platformRole  String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -106,6 +107,7 @@ model User {
   donorsCreated        Donor[]
 
   @@index([deletedAt])
+  @@index([platformRole])
   @@map("users")
 }
 

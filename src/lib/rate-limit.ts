@@ -21,6 +21,11 @@ export function checkRateLimit(ip: string): {
   remainingAttempts: number;
   resetInMs: number;
 } {
+  // Bypass rate limiting for local development and unknown IPs
+  if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
+    return { allowed: true, remainingAttempts: MAX_ATTEMPTS, resetInMs: 0 };
+  }
+
   const now = Date.now();
   const record = store.get(ip);
 

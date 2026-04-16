@@ -5,6 +5,41 @@ import { db } from "@/lib/db";
 import { checkRateLimit, recordFailedAttempt, resetAttempts } from "@/lib/rate-limit";
 import type { SessionMembership } from "@/types";
 
+// ── NextAuth type extensions ──────────────────────────────────────────────────
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      memberships: SessionMembership[];
+      activeCampaignId: string | null;
+      activeRole: string | null;
+      platformRole: string | null;
+    };
+  }
+  interface User {
+    id: string;
+    firstName: string;
+    lastName: string;
+    memberships: SessionMembership[];
+    platformRole?: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    firstName: string;
+    lastName: string;
+    memberships: SessionMembership[];
+    activeCampaignId: string | null;
+    activeRole: string | null;
+    platformRole: string | null;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
@@ -104,6 +139,7 @@ export const authOptions: NextAuthOptions = {
           firstName: user.firstName,
           lastName: user.lastName,
           memberships,
+          platformRole: user.platformRole ?? null,
         };
       },
     }),
@@ -117,6 +153,7 @@ export const authOptions: NextAuthOptions = {
         token.firstName = user.firstName;
         token.lastName = user.lastName;
         token.memberships = user.memberships;
+        token.platformRole = user.platformRole ?? null;
 
         // Auto-select the first campaign if only one membership exists
         if (user.memberships.length === 1) {
@@ -182,6 +219,7 @@ export const authOptions: NextAuthOptions = {
       session.user.memberships = token.memberships ?? [];
       session.user.activeCampaignId = token.activeCampaignId ?? null;
       session.user.activeRole = token.activeRole ?? null;
+      session.user.platformRole = token.platformRole ?? null;
       return session;
     },
   },

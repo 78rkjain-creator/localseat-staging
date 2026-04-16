@@ -142,6 +142,21 @@ async function main() {
   const [candidate, manager, organizer, canvasser1, canvasser2, volCoord, finance, cochair] = users;
   console.log(`  ✓ Users: ${users.map((u) => u.firstName).join(", ")}`);
 
+  // ── Platform super user (no campaign membership) ──────────────────────────
+  await db.user.upsert({
+    where: { email: "superuser@localseat.io" },
+    create: {
+      email: "superuser@localseat.io",
+      passwordHash: HASH,
+      firstName: "Super",
+      lastName: "User",
+      isActive: true,
+      platformRole: "super_user",
+    },
+    update: { platformRole: "super_user" },
+  });
+  console.log("  ✓ Platform super user: superuser@localseat.io");
+
   // ── Campaign Memberships ──────────────────────────────────────────────────
   await db.campaignMembership.createMany({
     data: [

@@ -56,7 +56,23 @@ export default function LoginPage() {
     // Hard navigation ensures the browser makes a fresh HTTP request with all
     // cookies, so the middleware and server components see the new session.
     // router.push() uses a soft RSC fetch which can race with cookie commit.
-    window.location.href = "/dashboard";
+
+    // Platform users go to /admin, campaign users go to /dashboard.
+    // Retry loop waits for the session cookie to be fully committed before reading.
+    let platformRole = null;
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      const meRes = await fetch("/api/auth/session");
+      const meData = await meRes.json();
+      platformRole = meData?.user?.platformRole ?? null;
+      if (meData?.user?.id) break;
+    }
+
+    if (platformRole === "super_user" || platformRole === "super_admin") {
+      window.location.href = "/admin";
+    } else {
+      window.location.href = "/dashboard";
+    }
   }
 
   return (
