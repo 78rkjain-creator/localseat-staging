@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
+import type { Role } from "@/types";
 
 export default async function AppLayout({
   children,
@@ -26,7 +27,7 @@ export default async function AppLayout({
       <Sidebar
         firstName={firstName}
         lastName={lastName}
-        role={activeRole}
+        role={activeRole as Role | null}
         campaignName={activeMembership?.campaignName ?? null}
         campaignCount={memberships.length}
       />
