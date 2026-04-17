@@ -100,10 +100,10 @@ export default async function AdminCampaignDetailPage({
 
   const callerIsSuperUser = isSuperUser(session.user.platformRole);
 
-  const deactivateAction = deactivateCampaign.bind(null, campaignId);
-  const reactivateAction = reactivateCampaign.bind(null, campaignId);
-  const deleteAction = deleteCampaign.bind(null, campaignId);
-  const restoreAction = restoreCampaign.bind(null, campaignId);
+  const deactivateAction = deactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
+  const reactivateAction = reactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
+  const deleteAction = deleteCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
+  const restoreAction = restoreCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
 
   return (
     <div className="px-6 py-8 max-w-5xl mx-auto">

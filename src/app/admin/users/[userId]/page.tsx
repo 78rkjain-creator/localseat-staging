@@ -64,10 +64,10 @@ export default async function AdminUserDetailPage({
   const callerIsSuperUser = isSuperUser(session.user.platformRole);
   const isOwnAccount = session.user.id === userId;
 
-  const deactivateAction = deactivateUser.bind(null, userId);
-  const reactivateAction = reactivateUser.bind(null, userId);
-  const assignSuperAdminAction = assignSuperAdmin.bind(null, userId);
-  const revokeAction = revokePlatformRole.bind(null, userId);
+  const deactivateAction = deactivateUser.bind(null, userId) as unknown as () => Promise<void>;
+  const reactivateAction = reactivateUser.bind(null, userId) as unknown as () => Promise<void>;
+  const assignSuperAdminAction = assignSuperAdmin.bind(null, userId) as unknown as () => Promise<void>;
+  const revokeAction = revokePlatformRole.bind(null, userId) as unknown as () => Promise<void>;
 
   const platformRoleLabel = user.platformRole
     ? (PLATFORM_ROLE_LABELS[user.platformRole as PlatformRole] ?? user.platformRole)
