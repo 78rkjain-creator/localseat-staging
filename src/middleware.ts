@@ -15,6 +15,21 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
+    // Temporary debug log — remove after diagnosing redirect loop
+    console.log("[middleware]", pathname, "| token:", token
+      ? JSON.stringify({
+          id: (token as { id?: string }).id,
+          emailVerified: (token as { emailVerified?: boolean }).emailVerified,
+          activeCampaignId: (token as { activeCampaignId?: string | null }).activeCampaignId,
+          activeRole: (token as { activeRole?: string | null }).activeRole,
+          platformRole: (token as { platformRole?: string | null }).platformRole,
+          membershipsCount: Array.isArray((token as { memberships?: unknown[] }).memberships)
+            ? (token as { memberships: unknown[] }).memberships.length
+            : "n/a",
+        })
+      : "null"
+    );
+
     // Authenticated users visiting /login are sent to the right landing page
     // rather than being served the login form.
     if (pathname === "/login" && token) {
@@ -78,9 +93,23 @@ export default withAuth(
       }
     }
 
-    // Authenticated users with no active campaign must complete onboarding
-    if (token && !token.activeCampaignId && pathname !== "/onboarding/create-campaign") {
-      return NextResponse.redirect(new URL("/onboarding/create-campaign", req.url));
+    // Authenticated users with no active campaign selected:
+    // - Already at a campaign-selection page → let them through
+    // - Has existing memberships but none active → pick a campaign
+    // - No memberships at all → create a campaign
+    if (token && !token.activeCampaignId) {
+      const atCampaignGate =
+        pathname === "/onboarding/create-campaign" ||
+        pathname === "/select-campaign";
+
+      if (!atCampaignGate) {
+        const hasMemberships =
+          Array.isArray((token as { memberships?: unknown[] }).memberships) &&
+          (token as { memberships: unknown[] }).memberships.length > 0;
+        const dest = hasMemberships ? "/select-campaign" : "/onboarding/create-campaign";
+        console.log("[middleware] no activeCampaignId — redirecting to", dest, "| hasMemberships:", hasMemberships);
+        return NextResponse.redirect(new URL(dest, req.url));
+      }
     }
 
     return NextResponse.next();
