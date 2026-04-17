@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 /**
  * Write a structured audit log entry.
@@ -27,7 +28,9 @@ export async function createAuditLog(params: {
         action:     params.action,
         entityType: params.entityType,
         entityId:   params.entityId   ?? "",
-        after:      params.details    ?? null,
+        after:      params.details !== undefined
+                      ? (params.details as unknown as Prisma.InputJsonValue)
+                      : Prisma.JsonNull,
       },
     });
   } catch (err) {
