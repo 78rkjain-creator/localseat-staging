@@ -79,9 +79,9 @@ export async function assignCanvasser(
 
   // Verify canvasser is a member of this campaign
   const membership = await db.campaignMembership.findFirst({
-    where: { userId: canvasserId, campaignId: activeCampaignId, role: "canvasser", deletedAt: null },
+    where: { userId: canvasserId, campaignId: activeCampaignId, deletedAt: null, role: { not: "finance_lead" as const } },
   });
-  if (!membership) return { error: "User is not a canvasser in this campaign." };
+  if (!membership) return { error: "User is not eligible to be assigned to this walk list." };
 
   // Prevent duplicate assignment
   const existing = await db.canvassAssignment.findFirst({

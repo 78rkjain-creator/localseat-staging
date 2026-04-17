@@ -122,7 +122,7 @@ export async function getAvailableCanvassers(
     where: {
       campaignId,
       deletedAt: null,
-      role: "canvasser",
+      role: { not: "finance_lead" as const },
       userId: { notIn: assignedIds },
       user: { isActive: true },
     },
