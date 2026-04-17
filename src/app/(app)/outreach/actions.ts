@@ -206,7 +206,17 @@ export async function importOutreachResults(
 
   let imported = 0;
   const unmatched: { firstName: string; lastName: string; address: string }[] = [];
-  const logsToCreate: Parameters<typeof db.outreachLog.createMany>[0]["data"] = [];
+  const logsToCreate: {
+    campaignId: string;
+    personId: string;
+    userId: string;
+    channel: string;
+    date: Date;
+    outcome: string | null;
+    notes: string | null;
+    phonedBy: string | null;
+    phoneType: string | null;
+  }[] = [];
 
   for (const row of rows) {
     let personId: string | undefined;
