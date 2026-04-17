@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createAuditLog } from "@/lib/audit";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { SupportLevel } from "@/types";
 
@@ -106,6 +107,19 @@ export async function GET(req: NextRequest) {
       response?.notes,
       canvassDate, canvasserName,
     ]);
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "EXPORT_WALK_LIST",
+    entityType: "export",
+    details: {
+      rowCount: entries.length,
+      userRole: session.user.activeRole ?? null,
+      filters: { listId: listId ?? null },
+      format: "csv",
+    },
   });
 
   const csv = [headers, ...rows].join("\r\n");

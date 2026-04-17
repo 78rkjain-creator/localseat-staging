@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewDonorAmounts, canViewDonors } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeAmount, sanitizeDate, sanitizeEnum } from "@/lib/sanitize";
+import { createAuditLog } from "@/lib/audit";
 import type { DonorStatus, PaymentMethod, Role } from "@/types";
 
 const DONOR_STATUS_VALUES: DonorStatus[] = ["interested", "pledged", "received"];
@@ -83,6 +84,15 @@ export async function addDonor(
     select: { id: true },
   });
 
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "DONOR_CREATED",
+    entityType: "donor",
+    entityId: donor.id,
+    details: { firstName, lastName, status },
+  });
+
   revalidatePath("/donors");
   return { donorId: donor.id };
 }
@@ -154,6 +164,16 @@ export async function updateDonor(
   }
 
   await db.donor.update({ where: { id: input.donorId }, data });
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "DONOR_UPDATED",
+    entityType: "donor",
+    entityId: input.donorId,
+    details: { fields: Object.keys(data) },
+  });
+
   revalidatePath("/donors");
   revalidatePath(`/donors/${input.donorId}`);
   return {};
@@ -177,6 +197,14 @@ export async function deleteDonor(
   await db.donor.update({
     where: { id: donorId },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "DONOR_DELETED",
+    entityType: "donor",
+    entityId: donorId,
   });
 
   revalidatePath("/donors");

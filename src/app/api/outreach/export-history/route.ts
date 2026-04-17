@@ -1,7 +1,9 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { canManageFollowUps } from "@/lib/permissions";
 import { getAllOutreachLogsForExport } from "@/lib/outreach";
+import { createAuditLog } from "@/lib/audit";
 import { OUTREACH_CHANNEL_LABELS } from "@/types";
 import type { Role, OutreachChannel } from "@/types";
 
@@ -14,6 +16,13 @@ export async function GET() {
   if (!activeRole || !canManageFollowUps(activeRole as Role)) {
     return new Response("Forbidden", { status: 403 });
   }
+
+  // Re-verify the user still has an active membership in this campaign.
+  const membership = await db.campaignMembership.findFirst({
+    where: { userId: session.user.id, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!membership) return new Response("Forbidden", { status: 403 });
 
   const logs = await getAllOutreachLogsForExport(activeCampaignId);
 
@@ -45,6 +54,18 @@ export async function GET() {
       l.phonedBy ?? "",
       l.phoneType ?? "",
     ];
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "EXPORT_OUTREACH",
+    entityType: "export",
+    details: {
+      rowCount: logs.length,
+      userRole: activeRole,
+      format: "csv",
+    },
   });
 
   const csv = [headers, ...rows].map(csvRow).join("\n");

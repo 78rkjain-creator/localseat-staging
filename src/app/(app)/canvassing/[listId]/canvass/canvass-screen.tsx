@@ -136,16 +136,19 @@ export function CanvassScreen({
   savedSetRef.current = savedSet;
 
   // ── Offline sync ──────────────────────────────────────────────────────────
-  const { pendingCount, isSyncing, lastSyncedAt, refresh: refreshSyncCount } =
+  const { pendingCount, isSyncing, lastSyncedAt, droppedCount, refresh: refreshSyncCount } =
     useOfflineSync(saveCanvassResponse);
+
+  // Fix 10: track SW registration failure so we can warn the canvasser.
+  const [swFailure, setSwFailure] = useState(false);
 
   // Register the service worker once on mount (canvassing is the primary
   // offline-capable surface in LocalSeat).
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Registration failure is non-fatal — offline caching will not work
-        // but the queue still functions for in-session responses.
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.error("[CanvassScreen] Service worker registration failed:", err);
+        setSwFailure(true);
       });
     }
   }, []);
@@ -189,7 +192,7 @@ export function CanvassScreen({
     setDone(true);
   }
 
-  function handleNotHome() {
+  async function handleNotHome() {
     if (isPending) return;
     setError(null);
     const capturedIndex = currentIndex;
@@ -197,20 +200,24 @@ export function CanvassScreen({
 
     // ── Offline path ─────────────────────────────────────────────────────────
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      enqueue({
-        assignmentId,
-        personId: capturedPersonId,
-        outcome: "not_home",
-        supportLevel: "not_home",
-        wantsSign: false,
-        isVolunteer: false,
-        isDonorInterest: false,
-        notes: "",
-        needsFollowUp: false,
-      })
-        .then(() => refreshSyncCount())
-        .catch((err) => console.warn("IndexedDB enqueue failed:", err));
-      markSavedAndAdvance(capturedPersonId, capturedIndex);
+      try {
+        await enqueue({
+          assignmentId,
+          personId: capturedPersonId,
+          outcome: "not_home",
+          supportLevel: "not_home",
+          wantsSign: false,
+          isVolunteer: false,
+          isDonorInterest: false,
+          notes: "",
+          needsFollowUp: false,
+        });
+        await refreshSyncCount();
+        markSavedAndAdvance(capturedPersonId, capturedIndex);
+      } catch (err) {
+        console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
+        setError("Failed to save offline. Please try again.");
+      }
       return;
     }
 
@@ -232,7 +239,7 @@ export function CanvassScreen({
     });
   }
 
-  function handleSave() {
+  async function handleSave() {
     const { supportLevel, otherOutcome } = draft;
     if (!supportLevel && !otherOutcome) return;
     if (isPending) return;
@@ -247,20 +254,24 @@ export function CanvassScreen({
 
     // ── Offline path ─────────────────────────────────────────────────────────
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      enqueue({
-        assignmentId,
-        personId: capturedPersonId,
-        outcome,
-        supportLevel: otherOutcome ? null : supportLevel,
-        wantsSign: otherOutcome ? false : draft.signRequest,
-        isVolunteer: otherOutcome ? false : draft.volunteerInterest,
-        isDonorInterest: otherOutcome ? false : draft.donorInterest,
-        notes: draft.notes,
-        needsFollowUp: draft.needsFollowUp,
-      })
-        .then(() => refreshSyncCount())
-        .catch((err) => console.warn("IndexedDB enqueue failed:", err));
-      markSavedAndAdvance(capturedPersonId, capturedIndex);
+      try {
+        await enqueue({
+          assignmentId,
+          personId: capturedPersonId,
+          outcome,
+          supportLevel: otherOutcome ? null : supportLevel,
+          wantsSign: otherOutcome ? false : draft.signRequest,
+          isVolunteer: otherOutcome ? false : draft.volunteerInterest,
+          isDonorInterest: otherOutcome ? false : draft.donorInterest,
+          notes: draft.notes,
+          needsFollowUp: draft.needsFollowUp,
+        });
+        await refreshSyncCount();
+        markSavedAndAdvance(capturedPersonId, capturedIndex);
+      } catch (err) {
+        console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
+        setError("Failed to save offline. Please try again.");
+      }
       return;
     }
 
@@ -380,7 +391,20 @@ export function CanvassScreen({
         pendingCount={pendingCount}
         isSyncing={isSyncing}
         lastSyncedAt={lastSyncedAt}
+        droppedCount={droppedCount}
       />
+
+      {/* Fix 10: SW failure warning — shown when offline caching is unavailable */}
+      {swFailure && (
+        <div className="flex-none bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
+          <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-xs text-amber-800">
+            Offline caching unavailable — stay connected to save responses.
+          </p>
+        </div>
+      )}
 
       {/* ── Header ── compact, ~44px ── */}
       <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[44px]">

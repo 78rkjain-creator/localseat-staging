@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
+import { createAuditLog } from "@/lib/audit";
 
 interface CreateCampaignInput {
   name: string;
@@ -54,6 +55,15 @@ export async function createCampaign(
         },
       },
     },
+  });
+
+  await createAuditLog({
+    campaignId: campaign.id,
+    userId: session.user.id,
+    action: "CAMPAIGN_CREATED",
+    entityType: "campaign",
+    entityId: campaign.id,
+    details: { name, officeSought, municipality },
   });
 
   return { campaignId: campaign.id };

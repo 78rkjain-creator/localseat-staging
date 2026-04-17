@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import Link from "next/link";
+import { formatAuditDescription } from "@/lib/audit-descriptions";
 
 const PAGE_SIZE = 50;
 
@@ -60,17 +61,14 @@ export default async function AdminAuditLogPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                   Timestamp
                 </th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">
-                  User
-                </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                  Action
+                  Description
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">
-                  Entity
+                  Action
                 </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden lg:table-cell">
                   Campaign
@@ -78,46 +76,52 @@ export default async function AdminAuditLogPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3.5 text-slate-500 tabular-nums whitespace-nowrap">
-                    <p className="text-xs">
-                      {new Date(log.createdAt).toLocaleDateString("en-CA", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {new Date(log.createdAt).toLocaleTimeString("en-CA", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        hour12: false,
-                      })}
-                    </p>
-                  </td>
-                  <td className="px-5 py-3.5 hidden sm:table-cell text-slate-700">
-                    {log.user
-                      ? `${log.user.firstName} ${log.user.lastName}`
-                      : <span className="text-slate-400">System</span>}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 font-mono">
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 hidden md:table-cell">
-                    <span className="text-xs text-slate-500">{log.entityType}</span>
-                    <p className="text-xs text-slate-300 font-mono truncate max-w-[120px]">
-                      {log.entityId}
-                    </p>
-                  </td>
-                  <td className="px-5 py-3.5 hidden lg:table-cell text-slate-500">
-                    {log.campaign?.name ?? <span className="text-slate-300">—</span>}
-                  </td>
-                </tr>
-              ))}
+              {logs.map((log) => {
+                const actorName = log.user
+                  ? `${log.user.firstName} ${log.user.lastName}`
+                  : "System";
+                const metadata =
+                  log.after && typeof log.after === "object" && !Array.isArray(log.after)
+                    ? (log.after as Record<string, unknown>)
+                    : null;
+                const description = formatAuditDescription(log.action, metadata, actorName);
+
+                return (
+                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-3.5 text-slate-500 tabular-nums whitespace-nowrap align-top">
+                      <p className="text-xs">
+                        {new Date(log.createdAt).toLocaleDateString("en-CA", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {new Date(log.createdAt).toLocaleTimeString("en-CA", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          hour12: false,
+                        })}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3.5 align-top">
+                      <p className="text-sm text-slate-800">{description}</p>
+                    </td>
+                    <td className="px-5 py-3.5 hidden md:table-cell align-top">
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600 font-mono"
+                        title={log.action}
+                      >
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 hidden lg:table-cell text-slate-500 align-top">
+                      {log.campaign?.name ?? <span className="text-slate-300">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

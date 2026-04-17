@@ -253,6 +253,8 @@ export async function getVoterList({
 export async function findDuplicatePairs(campaignId: string) {
   const people = await db.person.findMany({
     where: { campaignId, deletedAt: null },
+    take: 5000,
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       firstName: true,

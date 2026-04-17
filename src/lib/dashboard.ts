@@ -24,6 +24,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     donorGroups,
     recentOutreach,
     teamMembers,
+    pendingAddressChangeCount,
   ] = await Promise.all([
     db.person.findMany({
       where: { campaignId, deletedAt: null },
@@ -87,6 +88,9 @@ export async function getCandidateDashboardData(campaignId: string) {
       },
       orderBy: [{ role: "asc" }, { user: { lastName: "asc" } }],
     }),
+    db.addressChangeRequest.count({
+      where: { campaignId, status: "pending", deletedAt: null },
+    }),
   ]);
 
   // Voter ID breakdown
@@ -128,6 +132,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     donorCountByStatus,
     recentOutreach,
     teamMembers,
+    pendingAddressChangeCount,
   };
 }
 
@@ -136,7 +141,7 @@ export async function getCandidateDashboardData(campaignId: string) {
 export async function getFieldOrganizerDashboardData(campaignId: string) {
   const todayStart = startOfToday();
 
-  const [walkLists, doorsToday, unassignedFollowUpCount, canvasserActivityToday] =
+  const [walkLists, doorsToday, unassignedFollowUpCount, canvasserActivityToday, pendingAddressChangeCount] =
     await Promise.all([
       db.canvassList.findMany({
         where: { campaignId, deletedAt: null },
@@ -171,6 +176,9 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
         },
         _count: { id: true },
       }),
+      db.addressChangeRequest.count({
+        where: { campaignId, status: "pending", deletedAt: null },
+      }),
     ]);
 
   // Enrich canvasser activity with names
@@ -200,7 +208,7 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
     canvassers: l.assignments.map((a) => a.canvasser),
   }));
 
-  return { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday };
+  return { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday, pendingAddressChangeCount };
 }
 
 // ── Volunteer Coordinator ──────────────────────────────────────────────────

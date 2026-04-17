@@ -7,6 +7,7 @@ import { ROLE_LABELS, PLATFORM_ROLE_LABELS } from "@/types";
 import type { Role, PlatformRole } from "@/types";
 import Link from "next/link";
 import { ResetPasswordButton } from "./reset-password-button";
+import { HardDeleteButton } from "./hard-delete-button";
 import {
   deactivateUser,
   reactivateUser,
@@ -265,6 +266,19 @@ export default async function AdminUserDetailPage({
                     </p>
                     <ResetPasswordButton userId={userId} />
                   </div>
+
+                  {/* Hard delete — destructive, super_user only */}
+                  {!isOwnAccount && (
+                    <div className="border-t border-slate-100 pt-3 mt-1">
+                      <p className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-3">
+                        Danger Zone
+                      </p>
+                      <HardDeleteButton
+                        userId={userId}
+                        userName={`${user.firstName} ${user.lastName}`}
+                      />
+                    </div>
+                  )}
                 </>
               )}
             </div>

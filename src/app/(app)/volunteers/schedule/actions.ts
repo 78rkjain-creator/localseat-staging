@@ -131,6 +131,13 @@ export async function assignVolunteerToShift(
   });
   if (!shift) return { error: "Shift not found." };
 
+  // Verify the volunteer record belongs to this campaign (prevents cross-campaign assignment).
+  const volunteerRecord = await db.volunteerRecord.findFirst({
+    where: { id: recordId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!volunteerRecord) return { error: "Volunteer record not found." };
+
   if (shift.maxVolunteers && shift._count.attendees >= shift.maxVolunteers) {
     return { error: "This shift is already at capacity." };
   }

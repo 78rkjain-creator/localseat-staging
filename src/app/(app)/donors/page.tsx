@@ -151,7 +151,7 @@ export default async function DonorsPage({ searchParams }: PageProps) {
                       </Link>
                       {donor.linkedPerson && (
                         <Link
-                          href={`/people/${donor.linkedPerson.id}`}
+                          href={`/voter-list/${donor.linkedPerson.id}`}
                           className="block text-xs text-slate-400 hover:text-brand-500 mt-0.5"
                         >
                           View voter record

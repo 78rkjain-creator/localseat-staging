@@ -15,7 +15,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
     getFieldOrganizerDashboardData(campaignId),
     getRecentActivity(campaignId, 20),
   ]);
-  const { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday } = data;
+  const { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday, pendingAddressChangeCount } = data;
 
   const totalEntries = walkListProgress.reduce((s, l) => s + l.totalEntries, 0);
   const totalResponses = walkListProgress.reduce((s, l) => s + l.totalResponses, 0);
@@ -27,6 +27,26 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
         <h1 className="text-2xl font-bold text-slate-900">Good to see you, {firstName}</h1>
         <p className="text-slate-500 mt-1">{ROLE_LABELS["field_organizer"]}</p>
       </div>
+
+      {/* Pending address changes alert */}
+      {pendingAddressChangeCount > 0 && (
+        <Link
+          href="/address-changes"
+          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 hover:bg-amber-100 transition-colors"
+        >
+          <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <svg className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">
+              {pendingAddressChangeCount} pending address change{pendingAddressChangeCount !== 1 ? "s" : ""}
+            </p>
+            <p className="text-xs text-amber-600">Review and approve or reject →</p>
+          </div>
+        </Link>
+      )}
 
       {/* Top metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

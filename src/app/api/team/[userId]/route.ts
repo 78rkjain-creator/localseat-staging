@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit";
 import type { Role as AppRole } from "@/types";
 
 interface RouteContext {
@@ -99,6 +100,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       : []),
   ]);
 
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "ROLE_CHANGED",
+    entityType: "campaign_membership",
+    entityId: updated.id,
+    details: { targetUserId: userId, previousRole: membership.role, newRole },
+  });
+
   return NextResponse.json({
     membershipId: updated.id,
     role: updated.role,
@@ -139,6 +149,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   await db.campaignMembership.update({
     where: { userId_campaignId: { userId, campaignId: activeCampaignId } },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: callerId,
+    action: "MEMBER_REMOVED",
+    entityType: "campaign_membership",
+    entityId: membership.id,
+    details: { targetUserId: userId, role: membership.role },
   });
 
   return new NextResponse(null, { status: 204 });

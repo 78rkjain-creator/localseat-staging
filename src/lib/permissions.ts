@@ -155,6 +155,13 @@ export function isCanvasser(role: Role): boolean {
   return role === Role.canvasser;
 }
 
+// ── Address change requests ───────────────────────────────────────────────────
+
+// field_organizer and above may review (approve / reject) address change requests.
+export function canReviewAddressChanges(role: Role): boolean {
+  return FIELD_AND_ABOVE.includes(role) || role === Role.co_chair;
+}
+
 // ── Platform-level roles (cross-campaign) ─────────────────────────────────────
 
 export function isSuperUser(platformRole: string | null | undefined): boolean {

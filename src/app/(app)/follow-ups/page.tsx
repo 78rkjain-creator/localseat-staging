@@ -13,7 +13,8 @@ import {
   getCampaignTeamMembers,
   type FollowUpTask,
 } from "@/lib/follow-ups";
-import { assignTask, completeTask, unassignTask } from "./actions";
+import { completeTask } from "./actions";
+import { AssignForm } from "./assign-form";
 
 export const metadata: Metadata = { title: "Follow-ups" };
 
@@ -277,40 +278,11 @@ function TaskCard({
 
         {/* Assign selector — managers only */}
         {showAssign && (
-          <form
-            action={async (formData: FormData) => {
-              "use server";
-              const assigneeId = formData.get("assigneeId") as string;
-              if (assigneeId === "__unassign__") {
-                await unassignTask(task.id);
-              } else if (assigneeId) {
-                await assignTask(task.id, assigneeId);
-              }
-            }}
-            className="flex items-center gap-1.5"
-          >
-            <select
-              name="assigneeId"
-              defaultValue={task.assignee?.id ?? ""}
-              className="h-9 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 px-3 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-            >
-              <option value="">Assign to…</option>
-              {task.assignee && (
-                <option value="__unassign__">— Unassign</option>
-              )}
-              {teamMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.firstName} {m.lastName}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 font-medium hover:bg-slate-50 active:bg-slate-100 transition-colors"
-            >
-              Save
-            </button>
-          </form>
+          <AssignForm
+            taskId={task.id}
+            currentAssigneeId={task.assignee?.id}
+            teamMembers={teamMembers}
+          />
         )}
       </div>
       )}

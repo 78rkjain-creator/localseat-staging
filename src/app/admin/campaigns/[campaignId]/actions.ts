@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit";
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,14 @@ export async function deactivateCampaign(
     data: { isActive: false },
   });
 
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "CAMPAIGN_DEACTIVATED",
+    entityType: "campaign",
+    entityId: campaignId,
+  });
+
   revalidatePath(`/admin/campaigns/${campaignId}`);
   revalidatePath("/admin/campaigns");
   return {};
@@ -46,6 +55,14 @@ export async function reactivateCampaign(
     data: { isActive: true },
   });
 
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "CAMPAIGN_REACTIVATED",
+    entityType: "campaign",
+    entityId: campaignId,
+  });
+
   revalidatePath(`/admin/campaigns/${campaignId}`);
   revalidatePath("/admin/campaigns");
   return {};
@@ -60,6 +77,14 @@ export async function deleteCampaign(
   await db.campaign.update({
     where: { id: campaignId },
     data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "CAMPAIGN_DELETED",
+    entityType: "campaign",
+    entityId: campaignId,
   });
 
   revalidatePath(`/admin/campaigns/${campaignId}`);
@@ -81,6 +106,14 @@ export async function restoreCampaign(
   await db.campaign.update({
     where: { id: campaignId },
     data: { deletedAt: null },
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "CAMPAIGN_RESTORED",
+    entityType: "campaign",
+    entityId: campaignId,
   });
 
   revalidatePath(`/admin/campaigns/${campaignId}`);

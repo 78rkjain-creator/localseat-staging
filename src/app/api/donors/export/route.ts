@@ -1,7 +1,9 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { canViewDonors, canViewDonorAmounts } from "@/lib/permissions";
 import { getAllDonorsForExport } from "@/lib/donors";
+import { createAuditLog } from "@/lib/audit";
 import { DONOR_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/types";
 import type { Role, DonorStatus, PaymentMethod } from "@/types";
 
@@ -14,6 +16,13 @@ export async function GET() {
   if (!activeRole || !canViewDonors(activeRole as Role)) {
     return new Response("Forbidden", { status: 403 });
   }
+
+  // Re-verify the user still has an active membership in this campaign.
+  const membership = await db.campaignMembership.findFirst({
+    where: { userId: session.user.id, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!membership) return new Response("Forbidden", { status: 403 });
 
   const showAmounts = canViewDonorAmounts(activeRole as Role);
   const donors = await getAllDonorsForExport(activeCampaignId);
@@ -49,6 +58,18 @@ export async function GET() {
       d.notes ?? "",
     ];
     return [...base, ...financial, ...rest];
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "EXPORT_DONORS",
+    entityType: "export",
+    details: {
+      rowCount: donors.length,
+      userRole: activeRole,
+      format: "csv",
+    },
   });
 
   const csv = [headers, ...rows].map(csvRow).join("\n");

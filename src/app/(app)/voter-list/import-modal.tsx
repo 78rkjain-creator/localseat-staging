@@ -20,7 +20,7 @@ const BASE_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
 ];
-const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthYear"];
+const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthYear", "pollNumber"];
 
 type Step = "upload" | "review" | "done";
 
@@ -35,6 +35,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
+  const [importSource, setImportSource] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -50,6 +51,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     if (fileRef.current) fileRef.current.value = "";
     setStep("upload");
     setReviewRows([]);
+    setImportSource("");
     setFileError(null);
     setSubmitError(null);
     setResult(null);
@@ -141,6 +143,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         phoneMobile:  r.fields.phoneMobile.trim(),
         email:        r.fields.email.trim(),
         birthYear:    r.fields.birthYear.trim(),
+        pollNumber:   r.fields.pollNumber.trim(),
       }));
 
     if (toImport.length === 0) {
@@ -149,7 +152,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     }
 
     startSubmit(async () => {
-      const res = await importVoterRows(toImport);
+      const res = await importVoterRows(toImport, importSource.trim() || undefined);
       if (res.error) {
         setSubmitError(res.error);
       } else {
@@ -205,6 +208,21 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
               Rows with missing mandatory fields are flagged for review. Max 2,000 rows per file.
             </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Source description
+              <span className="text-slate-400 font-normal ml-1">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={importSource}
+              onChange={(e) => setImportSource(e.target.value)}
+              placeholder="e.g. Voters List 2024, Ward 3 residents"
+              className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 w-full"
+            />
+            <p className="text-xs text-slate-400">Saved on every record in this import. Useful for tracking which file records came from.</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -344,7 +362,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
 const ALL_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
-  "phoneHome", "phoneMobile", "email", "birthYear",
+  "phoneHome", "phoneMobile", "email", "birthYear", "pollNumber",
 ];
 
 function ReviewRowComponent({

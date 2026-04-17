@@ -6,6 +6,7 @@ interface Props {
   pendingCount: number;
   isSyncing: boolean;
   lastSyncedAt: Date | null;
+  droppedCount?: number;
 }
 
 /**
@@ -14,7 +15,7 @@ interface Props {
  * Uses flex-none so it sits above the fixed-height canvass layout without
  * disrupting the header/main/footer structure.
  */
-export function SyncStatusBar({ pendingCount, isSyncing, lastSyncedAt }: Props) {
+export function SyncStatusBar({ pendingCount, isSyncing, lastSyncedAt, droppedCount = 0 }: Props) {
   // Brief "all synced" confirmation after queue drains to zero.
   const [showSynced, setShowSynced] = useState(false);
   // Track previous pendingCount so we only flash "synced" when it actually dropped.
@@ -31,6 +32,33 @@ export function SyncStatusBar({ pendingCount, isSyncing, lastSyncedAt }: Props) 
       return () => clearTimeout(t);
     }
   }, [isSyncing, pendingCount, lastSyncedAt]);
+
+  // Dropped items always render — they require user attention.
+  if (droppedCount > 0) {
+    return (
+      <div
+        role="alert"
+        className="flex-none bg-red-50 border-b border-red-200 px-4 py-1.5 flex items-center gap-2"
+      >
+        <svg
+          className="h-3.5 w-3.5 text-red-500 flex-shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <p className="text-xs font-medium text-red-800">
+          {droppedCount} response{droppedCount !== 1 ? "s" : ""} could not sync — please tell your campaign manager.
+        </p>
+      </div>
+    );
+  }
 
   // Nothing to show: online, queue empty, no recent sync confirmation.
   if (!isSyncing && pendingCount === 0 && !showSynced) return null;

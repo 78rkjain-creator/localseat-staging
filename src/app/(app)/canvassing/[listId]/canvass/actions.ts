@@ -3,6 +3,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createAuditLog } from "@/lib/audit";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 
 // ── Save canvass response ─────────────────────────────────────────────────
@@ -17,6 +18,10 @@ export interface SaveResponseInput {
   donorInterest: boolean;
   notes: string;
   needsFollowUp: boolean;
+  /** Client-side timestamp (ms) from the offline queue. When present and within
+   *  48 hours, used as respondedAt so door-knock times reflect when the canvasser
+   *  was at the door, not when the sync ran. */
+  queuedAt?: number;
 }
 
 export async function saveCanvassResponse(
@@ -48,22 +53,50 @@ export async function saveCanvassResponse(
   const isContacted = input.outcome === "contacted";
   const noteText = input.notes.trim() || null;
 
-  console.log("[saveCanvassResponse] needsFollowUp:", input.needsFollowUp, "| outcome:", input.outcome, "| person:", person.firstName, person.lastName);
+  // Resolve respondedAt: use client-side queuedAt when provided and within 48h,
+  // so offline door-knock times are preserved rather than reflecting sync time.
+  const now = new Date();
+  const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+  let respondedAt = now;
+  if (input.queuedAt) {
+    const candidate = new Date(input.queuedAt);
+    if (candidate.getTime() > now.getTime() - FORTY_EIGHT_HOURS_MS && candidate <= now) {
+      respondedAt = candidate;
+    } else {
+      console.warn("[saveCanvassResponse] queuedAt out of range, falling back to server time:", input.queuedAt);
+    }
+  }
 
-  const response = await db.canvassResponse.create({
-    data: {
-      assignmentId: input.assignmentId,
-      personId: input.personId,
-      outcome: input.outcome,
-      supportLevel: isContacted ? input.supportLevel : null,
-      signRequest: isContacted ? input.signRequest : false,
-      volunteerInterest: isContacted ? input.volunteerInterest : false,
-      donorInterest: isContacted ? input.donorInterest : false,
-      notes: noteText,
-      needsFollowUp: input.needsFollowUp,
-    },
+  // Check whether this is a new response or a retry — side effects (outreach log,
+  // volunteer/donor records, tasks) only run on the first successful save.
+  const existingResponse = await db.canvassResponse.findUnique({
+    where: { assignmentId_personId: { assignmentId: input.assignmentId, personId: input.personId } },
     select: { id: true },
   });
+  const isNewResponse = !existingResponse;
+
+  const responseData = {
+    outcome: input.outcome,
+    supportLevel: isContacted ? input.supportLevel : null,
+    signRequest: isContacted ? input.signRequest : false,
+    volunteerInterest: isContacted ? input.volunteerInterest : false,
+    donorInterest: isContacted ? input.donorInterest : false,
+    notes: noteText,
+    needsFollowUp: input.needsFollowUp,
+    respondedAt,
+  };
+
+  const response = await db.canvassResponse.upsert({
+    where: { assignmentId_personId: { assignmentId: input.assignmentId, personId: input.personId } },
+    create: { assignmentId: input.assignmentId, personId: input.personId, ...responseData },
+    update: responseData,
+    select: { id: true },
+  });
+
+  if (!isNewResponse) {
+    // Duplicate submission (retry/re-sync) — update accepted, skip side effects.
+    return { responseId: response.id };
+  }
 
   // Auto-log to outreach log — door_knock entry for every canvass save
   try {
@@ -162,6 +195,20 @@ export async function saveCanvassResponse(
     }
   }
 
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "CANVASS_RESPONSE_SUBMITTED",
+    entityType: "canvass_response",
+    entityId: response.id,
+    details: {
+      personId: input.personId,
+      assignmentId: input.assignmentId,
+      outcome: input.outcome,
+      supportLevel: input.supportLevel ?? null,
+    },
+  });
+
   return { responseId: response.id };
 }
 
@@ -198,22 +245,25 @@ export async function addPersonAtDoor(input: {
   });
   if (!assignment) return { error: "Assignment not found." };
 
-  // Look up the field-entry system tag (tags are global, not campaign-scoped)
+  // Look up the field-entry system tag (tags are global, not campaign-scoped).
+  // If the tag is missing (seed data not run or tag deleted) we refuse rather
+  // than silently creating an untagged record that would be hard to identify.
   const fieldEntryTag = await db.tag.findFirst({
     where: { name: "field-entry", deletedAt: null },
     select: { id: true },
   });
+  if (!fieldEntryTag) {
+    return { error: "System setup incomplete: 'field-entry' tag not found. Please contact your campaign manager." };
+  }
 
   const result = await db.$transaction(async (tx) => {
     const person = await tx.person.create({
       data: { firstName, lastName, campaignId: activeCampaignId },
     });
 
-    if (fieldEntryTag) {
-      await tx.personTag.create({
-        data: { personId: person.id, tagId: fieldEntryTag.id },
-      });
-    }
+    await tx.personTag.create({
+      data: { personId: person.id, tagId: fieldEntryTag.id },
+    });
 
     const entry = await tx.canvassListEntry.create({
       data: { canvassListId: input.listId, personId: person.id, addedById: session.user.id },

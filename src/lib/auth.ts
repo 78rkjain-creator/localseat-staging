@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { checkRateLimit, recordFailedAttempt, resetAttempts } from "@/lib/rate-limit";
+import { createAuditLog } from "@/lib/audit";
 import type { SessionMembership } from "@/types";
 
 // ── NextAuth type extensions ──────────────────────────────────────────────────
@@ -25,6 +26,8 @@ declare module "next-auth" {
     lastName: string;
     memberships: SessionMembership[];
     platformRole?: string | null;
+    emailVerified: boolean;
+    verificationTokenExpiry: string | null;
   }
 }
 
@@ -37,6 +40,8 @@ declare module "next-auth/jwt" {
     activeCampaignId: string | null;
     activeRole: string | null;
     platformRole: string | null;
+    emailVerified: boolean;
+    verificationTokenExpiry: string | null;
   }
 }
 
@@ -85,7 +90,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Resolve client IP from proxy headers or fall back to "unknown"
+        // Resolve client IP from proxy headers for audit logging only.
         const forwarded = req?.headers?.["x-forwarded-for"];
         const ip =
           (Array.isArray(forwarded)
@@ -94,15 +99,19 @@ export const authOptions: NextAuthOptions = {
           (req?.headers?.["x-real-ip"] as string | undefined) ??
           "unknown";
 
-        const { allowed } = checkRateLimit(ip);
+        // Rate limit is keyed by email so a single account cannot be
+        // brute-forced from multiple IPs, and shared IPs (e.g. an office)
+        // don't affect unrelated accounts.
+        const emailKey = credentials.email.toLowerCase().trim();
+        const { allowed } = checkRateLimit(emailKey);
         if (!allowed) {
           throw new Error(
-            "Too many login attempts. Please try again in 15 minutes."
+            "Too many failed attempts. Please try again in 15 minutes."
           );
         }
 
         const user = await db.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
+          where: { email: emailKey },
           include: {
             memberships: {
               include: { campaign: { select: { id: true, name: true } } },
@@ -111,7 +120,13 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.isActive) {
-          recordFailedAttempt(ip);
+          recordFailedAttempt(emailKey);
+          await createAuditLog({
+            action: "LOGIN_FAILED",
+            entityType: "auth",
+            entityId: emailKey,
+            details: { reason: !user ? "user_not_found" : "account_inactive", ip },
+          });
           return null;
         }
 
@@ -121,11 +136,25 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!passwordMatch) {
-          recordFailedAttempt(ip);
+          recordFailedAttempt(emailKey);
+          await createAuditLog({
+            userId: user.id,
+            action: "LOGIN_FAILED",
+            entityType: "auth",
+            entityId: user.id,
+            details: { reason: "wrong_password", ip },
+          });
           return null;
         }
 
-        resetAttempts(ip);
+        resetAttempts(emailKey);
+        await createAuditLog({
+          userId: user.id,
+          action: "LOGIN_SUCCESS",
+          entityType: "auth",
+          entityId: user.id,
+          details: { ip },
+        });
 
         const memberships: SessionMembership[] = user.memberships.map((m) => ({
           campaignId: m.campaign.id,
@@ -140,6 +169,8 @@ export const authOptions: NextAuthOptions = {
           lastName: user.lastName,
           memberships,
           platformRole: user.platformRole ?? null,
+          emailVerified: !!user.emailVerified,
+          verificationTokenExpiry: user.verificationTokenExpiry?.toISOString() ?? null,
         };
       },
     }),
@@ -154,6 +185,8 @@ export const authOptions: NextAuthOptions = {
         token.lastName = user.lastName;
         token.memberships = user.memberships;
         token.platformRole = user.platformRole ?? null;
+        token.emailVerified = !!user.emailVerified;
+        token.verificationTokenExpiry = user.verificationTokenExpiry ?? null;
 
         // Auto-select the first campaign if only one membership exists
         if (user.memberships.length === 1) {
@@ -173,6 +206,18 @@ export const authOptions: NextAuthOptions = {
         if (membership) {
           token.activeCampaignId = membership.campaignId;
           token.activeRole = membership.role;
+        }
+      }
+
+      // After email verification: re-fetch emailVerified from DB and update token
+      if (trigger === "update" && session?.refreshVerification && token.id) {
+        const fresh = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { emailVerified: true },
+        });
+        if (fresh) {
+          token.emailVerified = !!fresh.emailVerified;
+          token.verificationTokenExpiry = null;
         }
       }
 

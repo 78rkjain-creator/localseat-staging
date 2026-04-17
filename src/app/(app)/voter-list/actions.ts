@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
 import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
+import { createAuditLog } from "@/lib/audit";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export interface VoterCsvRow {
   phoneMobile: string;  // empty string when absent
   email: string;        // empty string when absent
   birthYear: string;    // empty string when absent
+  pollNumber: string;   // empty string when absent
 }
 
 export interface VoterImportResult {
@@ -50,7 +52,8 @@ export interface VoterImportResult {
 // ── importVoterRows ───────────────────────────────────────────────────────
 
 export async function importVoterRows(
-  rows: VoterCsvRow[]
+  rows: VoterCsvRow[],
+  importSource?: string
 ): Promise<VoterImportResult> {
   const auth = await requireVoterListManager();
   if ("error" in auth) return auth;
@@ -67,21 +70,25 @@ export async function importVoterRows(
   let created = 0;
   let skipped = 0;
 
-  await db.$transaction(
-    async (tx) => {
-      for (const row of rows) {
-        const firstName   = row.firstName.trim();
-        const lastName    = row.lastName.trim();
-        const streetNumber = row.streetNumber.trim();
-        const streetName  = row.streetName.trim();
-        const city        = row.city.trim();
-        const province    = row.province.trim();
-        const postalCode  = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
-        const unitNumber  = row.unitNumber?.trim() || null;
-        const phoneHome   = sanitizePhone(row.phoneHome);
-        const phoneMobile = sanitizePhone(row.phoneMobile);
-        const email       = sanitizeEmail(row.email);
-        const birthYear   = sanitizeBirthYear(row.birthYear);
+  const normalizedImportSource = importSource?.trim() || null;
+
+  try {
+    await db.$transaction(
+      async (tx) => {
+        for (const row of rows) {
+          const firstName   = row.firstName.trim();
+          const lastName    = row.lastName.trim();
+          const streetNumber = row.streetNumber.trim();
+          const streetName  = row.streetName.trim();
+          const city        = row.city.trim();
+          const province    = row.province.trim();
+          const postalCode  = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
+          const unitNumber  = row.unitNumber?.trim() || null;
+          const phoneHome   = sanitizePhone(row.phoneHome);
+          const phoneMobile = sanitizePhone(row.phoneMobile);
+          const email       = sanitizeEmail(row.email);
+          const birthYear   = sanitizeBirthYear(row.birthYear);
+          const pollNumber  = row.pollNumber?.trim() || null;
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
           skipped++;
@@ -149,28 +156,45 @@ export async function importVoterRows(
           });
         }
 
-        // 4. Create person
-        await tx.person.create({
-          data: {
-            campaignId,
-            householdId: household.id,
-            firstName,
-            lastName,
-            phoneHome:    phoneHome ?? undefined,
-            phoneMobile:  phoneMobile ?? undefined,
-            email:        email ?? undefined,
-            birthYear:    birthYear ?? undefined,
-            sourceNotes:  "voter-list-import",
-          },
-        });
+          // 4. Create person
+          await tx.person.create({
+            data: {
+              campaignId,
+              householdId: household.id,
+              firstName,
+              lastName,
+              phoneHome:    phoneHome ?? undefined,
+              phoneMobile:  phoneMobile ?? undefined,
+              email:        email ?? undefined,
+              birthYear:    birthYear ?? undefined,
+              pollNumber:   pollNumber ?? undefined,
+              importSource: normalizedImportSource ?? undefined,
+              sourceNotes:  "voter-list-import",
+            },
+          });
 
-        created++;
-      }
-    },
-    { timeout: 60_000 }
-  );
+          created++;
+        }
+      },
+      { timeout: 60_000 }
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error during import.";
+    return { error: `Import failed: ${message}` };
+  }
 
   revalidatePath("/voter-list");
+
+  if (created > 0) {
+    await createAuditLog({
+      campaignId,
+      userId: auth.session.user.id,
+      action: "VOTER_IMPORT_COMPLETED",
+      entityType: "person",
+      details: { created, matched, skipped },
+    });
+  }
+
   return { matched, created, skipped };
 }
 
@@ -258,6 +282,15 @@ export async function mergePersons(input: {
         body: `Record merged: duplicate entry for ${loserName} (ID: ${input.loserId}) was removed and this record was kept as the primary.`,
       },
     });
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "PERSON_MERGED",
+    entityType: "person",
+    entityId: input.winnerId,
+    details: { winnerId: input.winnerId, loserId: input.loserId },
   });
 
   revalidatePath("/voter-list");

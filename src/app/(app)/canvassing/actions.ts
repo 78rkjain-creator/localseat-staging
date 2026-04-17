@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit";
 import type { Role } from "@/types";
 
 // ── Create walk list ───────────────────────────────────────────────────────
@@ -34,6 +35,15 @@ export async function createCanvassList(
       name,
       description,
     },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_CREATED",
+    entityType: "canvass_list",
+    entityId: list.id,
+    details: { name, description: description ?? null },
   });
 
   revalidatePath("/canvassing");
@@ -79,8 +89,18 @@ export async function assignCanvasser(
   });
   if (existing) return { error: "This canvasser is already assigned to this list." };
 
-  await db.canvassAssignment.create({
+  const assignment = await db.canvassAssignment.create({
     data: { canvassListId: listId, canvasserId, notes },
+    select: { id: true },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "CANVASSER_ASSIGNED",
+    entityType: "canvass_assignment",
+    entityId: assignment.id,
+    details: { listId, canvasserId },
   });
 
   revalidatePath(`/canvassing/${listId}`);

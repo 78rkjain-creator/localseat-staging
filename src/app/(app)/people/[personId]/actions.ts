@@ -60,7 +60,7 @@ export async function updatePerson(
     },
   });
 
-  revalidatePath(`/people/${input.personId}`);
+  revalidatePath(`/voter-list/${input.personId}`);
   return { success: true };
 }
 
@@ -98,6 +98,6 @@ export async function addNote(
     },
   });
 
-  revalidatePath(`/people/${personId}`);
+  revalidatePath(`/voter-list/${personId}`);
   return {};
 }

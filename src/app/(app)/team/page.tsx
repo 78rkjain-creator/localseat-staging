@@ -23,6 +23,19 @@ interface TeamMember {
   };
 }
 
+interface RemovedMember {
+  membershipId: string;
+  role: Role;
+  removedAt: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    isActive: boolean;
+  };
+}
+
 // ── Role ordering + helpers ───────────────────────────────────────────────────
 
 const ROLE_ORDER: Role[] = [
@@ -80,18 +93,29 @@ export default function TeamPage() {
   const isFieldOrganizer = activeRole === "field_organizer";
 
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [removedMembers, setRemovedMembers] = useState<RemovedMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
 
   async function loadMembers() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch("/api/team");
-      if (!res.ok) throw new Error(await res.text());
-      const data: TeamMember[] = await res.json();
+      const [activeRes, removedRes] = await Promise.all([
+        fetch("/api/team"),
+        fetch("/api/team/removed"),
+      ]);
+      if (!activeRes.ok) throw new Error(await activeRes.text());
+      const data: TeamMember[] = await activeRes.json();
       setMembers(sortMembers(data));
+
+      // 403 means user lacks access to removed members — silently ignore
+      if (removedRes.ok) {
+        const removedData: RemovedMember[] = await removedRes.json();
+        setRemovedMembers(removedData);
+      }
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Failed to load team");
     } finally {
@@ -191,6 +215,32 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Removed members */}
+      {canManage && removedMembers.length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setShowRemoved((v) => !v)}
+            className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 hover:text-slate-600 transition-colors"
+          >
+            <svg
+              className={["h-3.5 w-3.5 transition-transform", showRemoved ? "rotate-90" : ""].join(" ")}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            Removed members ({removedMembers.length})
+          </button>
+
+          {showRemoved && (
+            <div className="flex flex-col gap-2">
+              {removedMembers.map((m) => (
+                <RemovedMemberRow key={m.membershipId} member={m} onRestored={loadMembers} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* New accounts note */}
       {canManage && (
         <p className="mt-6 text-xs text-slate-400">
@@ -233,6 +283,7 @@ function AddMemberForm({
           phoneHome: phoneHome || null,
           phoneMobile: phoneMobile || null,
           role: fd.get("role"),
+          skipVerification: fd.get("skipVerification") === "on",
         }),
       });
       if (!res.ok) {
@@ -304,6 +355,18 @@ function AddMemberForm({
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
             ))}
           </select>
+        </div>
+
+        <div className="flex items-start gap-2 pt-1">
+          <input
+            type="checkbox"
+            id="skipVerification"
+            name="skipVerification"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <label htmlFor="skipVerification" className="text-xs text-slate-500 leading-relaxed">
+            Skip email verification — member can sign in immediately with the temporary password
+          </label>
         </div>
 
         <div className="flex gap-3 pt-1">
@@ -500,5 +563,71 @@ function RoleBadge({ role }: { role: Role }) {
     >
       {ROLE_LABELS[role]}
     </span>
+  );
+}
+
+// ── Removed member row ────────────────────────────────────────────────────────
+
+function RemovedMemberRow({
+  member,
+  onRestored,
+}: {
+  member: RemovedMember;
+  onRestored: () => void;
+}) {
+  const [restoring, setRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRestore() {
+    setRestoring(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/team/${member.user.id}/restore`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        setError(body.error ?? "Failed to restore member");
+        return;
+      }
+      onRestored();
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  return (
+    <div className="bg-slate-50 rounded-2xl border border-slate-100 px-4 py-3 opacity-70">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-semibold text-slate-400">
+            {member.user.firstName[0]}{member.user.lastName[0]}
+          </span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-500">
+            {member.user.firstName} {member.user.lastName}
+          </p>
+          <p className="text-xs text-slate-400 truncate">{member.user.email}</p>
+        </div>
+
+        <RoleBadge role={member.role} />
+
+        <button
+          onClick={handleRestore}
+          disabled={restoring}
+          className="flex-shrink-0 h-8 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-brand-600 hover:border-brand-300 transition-colors disabled:opacity-50"
+        >
+          {restoring ? "Restoring…" : "Restore"}
+        </button>
+      </div>
+
+      {error && (
+        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

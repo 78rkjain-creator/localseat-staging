@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useRef, FormEvent } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register } from "./actions";
+import { TERMS_V1_1_HTML } from "@/lib/terms";
 
 export default function RegisterPage() {
   const [firstName, setFirstName] = useState("");
@@ -19,6 +20,24 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Terms state
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const [termsSignedName, setTermsSignedName] = useState("");
+  const [termsChecked, setTermsChecked] = useState(false);
+  const termsBoxRef = useRef<HTMLDivElement>(null);
+
+  const termsComplete = scrolledToBottom && termsSignedName.trim().length > 0 && termsChecked;
+  const canSubmit = !loading && termsComplete;
+
+  function handleTermsScroll() {
+    const el = termsBoxRef.current;
+    if (!el || scrolledToBottom) return;
+    // Allow a 20px buffer so users aren't pixel-hunting
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      setScrolledToBottom(true);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -28,9 +47,22 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!termsComplete) {
+      setError("Please scroll through the Terms and Conditions, sign, and check the agreement box.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await register({ firstName, lastName, email, phoneHome, phoneMobile, password });
+      const result = await register({
+        firstName,
+        lastName,
+        email,
+        phoneHome,
+        phoneMobile,
+        password,
+        termsSignedName: termsSignedName.trim(),
+      });
       if (result?.error) {
         setError(result.error);
         setLoading(false);
@@ -88,7 +120,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Register card */}
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-card border border-slate-100 p-8">
+      <div className="w-full max-w-lg bg-white rounded-3xl shadow-card border border-slate-100 p-8">
         <h2 className="text-xl font-semibold text-slate-900 mb-1">Create an account</h2>
         <p className="text-sm text-slate-500 mb-6">
           Set up your account to get started.
@@ -191,6 +223,110 @@ export default function RegisterPage() {
             required
           />
 
+          {/* ── Terms and Conditions ───────────────────────────────────────── */}
+          <div className="flex flex-col gap-3 pt-2">
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-1">
+                Terms and Conditions
+              </p>
+              <p className="text-xs text-slate-500 mb-2">
+                Scroll to the bottom to unlock the signature field.
+              </p>
+
+              {/* Scrollable terms box */}
+              <div
+                ref={termsBoxRef}
+                onScroll={handleTermsScroll}
+                className="h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700 leading-relaxed terms-content"
+                tabIndex={0}
+                aria-label="Terms and Conditions — scroll to read"
+              >
+                <div
+                  // eslint-disable-next-line react/no-danger
+                  dangerouslySetInnerHTML={{ __html: TERMS_V1_1_HTML }}
+                />
+              </div>
+
+              {/* Scroll progress indicator */}
+              {!scrolledToBottom && (
+                <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                  <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Scroll to the bottom to continue
+                </p>
+              )}
+              {scrolledToBottom && (
+                <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
+                  <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  You have read the full Terms and Conditions
+                </p>
+              )}
+            </div>
+
+            {/* Electronic signature */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="termsSignedName"
+                className={[
+                  "text-sm font-medium transition-colors",
+                  scrolledToBottom ? "text-slate-700" : "text-slate-400",
+                ].join(" ")}
+              >
+                Electronic signature
+              </label>
+              <input
+                id="termsSignedName"
+                type="text"
+                value={termsSignedName}
+                onChange={(e) => setTermsSignedName(e.target.value)}
+                placeholder="Type your full legal name"
+                disabled={!scrolledToBottom}
+                autoComplete="name"
+                className={[
+                  "h-12 w-full rounded-2xl border bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent",
+                  scrolledToBottom
+                    ? "border-slate-200 hover:border-slate-300"
+                    : "border-slate-100 bg-slate-50 cursor-not-allowed",
+                ].join(" ")}
+              />
+              {scrolledToBottom && (
+                <p className="text-xs text-slate-400">
+                  This constitutes your legally binding electronic signature.
+                </p>
+              )}
+            </div>
+
+            {/* Agreement checkbox */}
+            <label
+              className={[
+                "flex items-start gap-3 cursor-pointer rounded-xl border p-3 transition-colors",
+                !scrolledToBottom
+                  ? "opacity-50 cursor-not-allowed border-slate-100 bg-slate-50"
+                  : termsChecked
+                  ? "border-brand-200 bg-brand-50"
+                  : "border-slate-200 bg-white hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <input
+                type="checkbox"
+                checked={termsChecked}
+                onChange={(e) => setTermsChecked(e.target.checked)}
+                disabled={!scrolledToBottom}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
+              />
+              <span className="text-xs text-slate-600 leading-relaxed">
+                I have read and agree to the LocalSeat.io Terms and Conditions,
+                including the post-campaign data provisions in{" "}
+                <strong>section 4.4</strong> and the data deletion rights in{" "}
+                <strong>section 4.6</strong>.
+              </span>
+            </label>
+          </div>
+
+          {/* ── Error + Submit ─────────────────────────────────────────────── */}
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
               <p className="text-sm text-red-600">{error}</p>
@@ -202,10 +338,17 @@ export default function RegisterPage() {
             size="lg"
             fullWidth
             loading={loading}
+            disabled={!canSubmit}
             className="mt-1"
           >
             Create account
           </Button>
+
+          {!termsComplete && !error && (
+            <p className="text-xs text-center text-slate-400">
+              Complete the Terms and Conditions section above to create your account.
+            </p>
+          )}
         </form>
 
         <p className="mt-5 text-center text-sm text-slate-500">

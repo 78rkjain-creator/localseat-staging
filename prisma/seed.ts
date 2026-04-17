@@ -14,7 +14,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient, SupportLevel, CanvassOutcome } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome, AddressChangeStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -40,6 +40,7 @@ async function main() {
     db.note.deleteMany(),
     db.personTag.deleteMany(),
     db.tag.deleteMany(),
+    db.addressChangeRequest.deleteMany(),
     db.person.deleteMany(),
     db.household.deleteMany(),
     db.address.deleteMany(),
@@ -64,6 +65,7 @@ async function main() {
   console.log(`  ✓ Campaign: ${campaign.name}`);
 
   // ── Users ─────────────────────────────────────────────────────────────────
+  const VERIFIED_NOW = new Date();
   const users = await Promise.all([
     db.user.create({
       data: {
@@ -72,6 +74,7 @@ async function main() {
         firstName: "Alex",
         lastName: "Chen",
         phoneHome: "613-555-0100",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -81,6 +84,7 @@ async function main() {
         firstName: "Maria",
         lastName: "Santos",
         phoneHome: "613-555-0101",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -90,6 +94,7 @@ async function main() {
         firstName: "James",
         lastName: "Okafor",
         phoneHome: "613-555-0102",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -99,6 +104,7 @@ async function main() {
         firstName: "Priya",
         lastName: "Nair",
         phoneHome: "613-555-0103",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -108,6 +114,7 @@ async function main() {
         firstName: "Kevin",
         lastName: "Lafleur",
         phoneHome: "613-555-0104",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -117,6 +124,7 @@ async function main() {
         firstName: "Sara",
         lastName: "Bishop",
         phoneHome: "613-555-0105",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -126,6 +134,7 @@ async function main() {
         firstName: "Dan",
         lastName: "Wu",
         phoneHome: "613-555-0106",
+        emailVerified: VERIFIED_NOW,
       },
     }),
     db.user.create({
@@ -135,6 +144,7 @@ async function main() {
         firstName: "Claire",
         lastName: "Morgan",
         phoneHome: "613-555-0107",
+        emailVerified: VERIFIED_NOW,
       },
     }),
   ]);
@@ -152,8 +162,9 @@ async function main() {
       lastName: "User",
       isActive: true,
       platformRole: "super_user",
+      emailVerified: new Date(),
     },
-    update: { platformRole: "super_user" },
+    update: { platformRole: "super_user", emailVerified: new Date() },
   });
   console.log("  ✓ Platform super user: superuser@localseat.io");
 
@@ -503,6 +514,61 @@ async function main() {
   });
   console.log("  ✓ Outreach logs");
 
+  // ── Address Change Requests (3 pending — for review flow testing) ─────────
+  await db.addressChangeRequest.createMany({
+    data: [
+      {
+        // Submitted by canvasser (priya) — moving Susan Tran from 18 Elm to 45 Oak Ave
+        campaignId: campaign.id,
+        requestedByUserId: canvasser1.id,
+        personId: people[4].id,  // Susan Tran
+        affectedPersonIds: [people[4].id],
+        oldAddressId: addresses[2].id,  // 18 Elm Street
+        newAddressData: {
+          streetNumber: "45",
+          streetName: "Oak Avenue",
+          city: "Greenfield",
+          province: "ON",
+          postalCode: "K1B 2C3",
+        },
+        status: AddressChangeStatus.pending,
+      },
+      {
+        // Submitted by field organizer — moving the Ibrahim household to 55 Cedar Dr
+        campaignId: campaign.id,
+        requestedByUserId: organizer.id,
+        personId: people[2].id,  // Yusuf Ibrahim
+        affectedPersonIds: [people[2].id, people[3].id],  // Both Ibrahims
+        oldAddressId: addresses[1].id,  // 16 Elm Street
+        newAddressData: {
+          streetNumber: "55",
+          streetName: "Cedar Drive",
+          city: "Greenfield",
+          province: "ON",
+          postalCode: "K1C 3D4",
+        },
+        status: AddressChangeStatus.pending,
+      },
+      {
+        // Submitted by canvasser (kevin) — moving Marcus Dupont to 201 Birch Blvd
+        campaignId: campaign.id,
+        requestedByUserId: canvasser2.id,
+        personId: people[7].id,  // Marcus Dupont
+        affectedPersonIds: [people[7].id],
+        oldAddressId: addresses[4].id,  // 22 Elm Street
+        newAddressData: {
+          streetNumber: "201",
+          streetName: "Birch Boulevard",
+          city: "Greenfield",
+          province: "ON",
+          postalCode: "K1D 4E5",
+        },
+        status: AddressChangeStatus.pending,
+      },
+    ],
+  });
+  console.log("  ✓ Address change requests: 3 pending");
+
   // ── Donors ────────────────────────────────────────────────────────────────
   await db.donor.createMany({
     data: [
@@ -531,18 +597,94 @@ async function main() {
   });
   console.log("  ✓ Donors");
 
-  // ── Audit Log ─────────────────────────────────────────────────────────────
-  await db.auditLog.create({
-    data: {
-      campaignId: campaign.id,
-      userId: manager.id,
-      action: "seed",
-      entityType: "campaign",
-      entityId: campaign.id,
-      after: { note: "Database seeded for development" },
-    },
+  // ── Audit Log (60+ realistic entries spanning the last 30 days) ──────────
+  const now = new Date();
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+
+  await db.auditLog.createMany({
+    data: [
+      // ── Account & terms ──────────────────────────────────────────────────
+      { userId: candidate.id, action: "TERMS_ACCEPTED", entityType: "user", entityId: candidate.id, createdAt: daysAgo(30), after: { termsVersion: "1.1", termsSignedName: "Alex Chen", ip: "192.168.1.10" } },
+      { userId: manager.id, action: "TERMS_ACCEPTED", entityType: "user", entityId: manager.id, createdAt: daysAgo(29), after: { termsVersion: "1.1", termsSignedName: "Maria Santos", ip: "192.168.1.11" } },
+      { userId: organizer.id, action: "TERMS_ACCEPTED", entityType: "user", entityId: organizer.id, createdAt: daysAgo(28), after: { termsVersion: "1.1", termsSignedName: "James Okafor", ip: "192.168.1.12" } },
+      { userId: canvasser1.id, action: "TERMS_ACCEPTED", entityType: "user", entityId: canvasser1.id, createdAt: daysAgo(27), after: { termsVersion: "1.1", termsSignedName: "Priya Nair", ip: "192.168.1.13" } },
+      { userId: canvasser2.id, action: "TERMS_ACCEPTED", entityType: "user", entityId: canvasser2.id, createdAt: daysAgo(26), after: { termsVersion: "1.1", termsSignedName: "Kevin Lafleur", ip: "192.168.1.14" } },
+      // ── Logins ────────────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: candidate.id, action: "LOGIN", entityType: "user", entityId: candidate.id, createdAt: daysAgo(25) },
+      { campaignId: campaign.id, userId: manager.id, action: "LOGIN", entityType: "user", entityId: manager.id, createdAt: daysAgo(24) },
+      { campaignId: campaign.id, userId: organizer.id, action: "LOGIN", entityType: "user", entityId: organizer.id, createdAt: daysAgo(24) },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "LOGIN", entityType: "user", entityId: canvasser1.id, createdAt: daysAgo(22) },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "LOGIN", entityType: "user", entityId: canvasser2.id, createdAt: daysAgo(22) },
+      { campaignId: campaign.id, userId: manager.id, action: "LOGIN", entityType: "user", entityId: manager.id, createdAt: daysAgo(18) },
+      { campaignId: campaign.id, userId: candidate.id, action: "LOGIN", entityType: "user", entityId: candidate.id, createdAt: daysAgo(10) },
+      { campaignId: campaign.id, userId: manager.id, action: "LOGIN", entityType: "user", entityId: manager.id, createdAt: daysAgo(5) },
+      { campaignId: campaign.id, userId: organizer.id, action: "LOGIN", entityType: "user", entityId: organizer.id, createdAt: daysAgo(3) },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "LOGIN", entityType: "user", entityId: canvasser1.id, createdAt: daysAgo(1) },
+      // ── Logouts ───────────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: canvasser1.id, action: "LOGOUT", entityType: "user", entityId: canvasser1.id, createdAt: daysAgo(22) },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "LOGOUT", entityType: "user", entityId: canvasser2.id, createdAt: daysAgo(22) },
+      { campaignId: campaign.id, userId: organizer.id, action: "LOGOUT", entityType: "user", entityId: organizer.id, createdAt: daysAgo(3) },
+      // ── Canvass responses ─────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[0].id, createdAt: daysAgo(1), after: { outcome: "contacted", supportLevel: "strong_yes", signRequest: true, donorInterest: true } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[1].id, createdAt: daysAgo(1), after: { outcome: "contacted", supportLevel: "soft_yes" } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[2].id, createdAt: daysAgo(1), after: { outcome: "contacted", supportLevel: "strong_yes", volunteerInterest: true } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[4].id, createdAt: daysAgo(1), after: { outcome: "not_home" } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[5].id, createdAt: daysAgo(1), after: { outcome: "contacted", supportLevel: "undecided" } },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[7].id, createdAt: daysAgo(1), after: { outcome: "contacted", supportLevel: "soft_no" } },
+      // ── Notes ─────────────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: manager.id, action: "NOTE_ADDED", entityType: "person", entityId: people[0].id, createdAt: daysAgo(20), after: { body: "Patricia — good donor contact" } },
+      { campaignId: campaign.id, userId: organizer.id, action: "NOTE_ADDED", entityType: "person", entityId: people[2].id, createdAt: daysAgo(15), after: { body: "Yusuf — weekend volunteer" } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "NOTE_ADDED", entityType: "person", entityId: people[11].id, createdAt: daysAgo(1), after: { body: "Trevor — yard sign in window" } },
+      // ── Follow-ups ────────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: manager.id, action: "FOLLOW_UP_CREATED", entityType: "task", entityId: people[0].id, createdAt: daysAgo(20), after: { title: "Follow up re: donation interest", dueDate: daysAgo(-7).toISOString() } },
+      { campaignId: campaign.id, userId: organizer.id, action: "FOLLOW_UP_CREATED", entityType: "task", entityId: people[2].id, createdAt: daysAgo(15), after: { title: "Call re: volunteer availability" } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "FOLLOW_UP_CREATED", entityType: "task", entityId: people[4].id, createdAt: daysAgo(1), after: { title: "Return visit — not home" } },
+      { campaignId: campaign.id, userId: manager.id, action: "FOLLOW_UP_COMPLETED", entityType: "task", entityId: people[0].id, createdAt: daysAgo(14), before: { completed: false }, after: { completed: true } },
+      // ── Address change requests ───────────────────────────────────────────
+      { campaignId: campaign.id, userId: canvasser1.id, action: "ADDRESS_CHANGE_REQUESTED", entityType: "address_change_request", entityId: people[4].id, createdAt: daysAgo(5), after: { newAddress: "45 Oak Avenue, Greenfield ON" } },
+      { campaignId: campaign.id, userId: organizer.id, action: "ADDRESS_CHANGE_REQUESTED", entityType: "address_change_request", entityId: people[2].id, createdAt: daysAgo(4), after: { newAddress: "55 Cedar Drive, Greenfield ON" } },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "ADDRESS_CHANGE_REQUESTED", entityType: "address_change_request", entityId: people[7].id, createdAt: daysAgo(2), after: { newAddress: "201 Birch Boulevard, Greenfield ON" } },
+      // ── Exports ───────────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: manager.id, action: "ADMIN_EXPORT", entityType: "voter_list", entityId: campaign.id, createdAt: daysAgo(18), after: { format: "csv", count: 20 } },
+      { campaignId: campaign.id, userId: finance.id, action: "ADMIN_EXPORT", entityType: "donor_list", entityId: campaign.id, createdAt: daysAgo(12), after: { format: "csv", count: 2 } },
+      { campaignId: campaign.id, userId: manager.id, action: "ADMIN_EXPORT", entityType: "volunteer_list", entityId: campaign.id, createdAt: daysAgo(7), after: { format: "csv", count: 1 } },
+      { campaignId: campaign.id, userId: organizer.id, action: "ADMIN_EXPORT", entityType: "outreach_history", entityId: campaign.id, createdAt: daysAgo(3), after: { format: "csv", count: 2 } },
+      // ── Team management ───────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: candidate.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: manager.id, createdAt: daysAgo(29), after: { targetUserId: manager.id, role: "campaign_manager" } },
+      { campaignId: campaign.id, userId: manager.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: organizer.id, createdAt: daysAgo(28), after: { targetUserId: organizer.id, role: "field_organizer" } },
+      { campaignId: campaign.id, userId: manager.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: canvasser1.id, createdAt: daysAgo(27), after: { targetUserId: canvasser1.id, role: "canvasser" } },
+      { campaignId: campaign.id, userId: manager.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: canvasser2.id, createdAt: daysAgo(27), after: { targetUserId: canvasser2.id, role: "canvasser" } },
+      { campaignId: campaign.id, userId: manager.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: volCoord.id, createdAt: daysAgo(26), after: { targetUserId: volCoord.id, role: "volunteer_coordinator" } },
+      { campaignId: campaign.id, userId: manager.id, action: "MEMBER_ADDED", entityType: "campaign_membership", entityId: finance.id, createdAt: daysAgo(26), after: { targetUserId: finance.id, role: "finance_lead" } },
+      { campaignId: campaign.id, userId: candidate.id, action: "ROLE_CHANGED", entityType: "campaign_membership", entityId: cochair.id, createdAt: daysAgo(20), before: { role: "campaign_manager" }, after: { role: "co_chair" } },
+      // ── Voter data imports ────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: manager.id, action: "VOTER_LIST_IMPORTED", entityType: "campaign", entityId: campaign.id, createdAt: daysAgo(25), after: { recordsImported: 20, fileName: "ward3_voters.csv" } },
+      // ── Canvass list management ───────────────────────────────────────────
+      { campaignId: campaign.id, userId: organizer.id, action: "CANVASS_LIST_CREATED", entityType: "canvass_list", entityId: walkList.id, createdAt: daysAgo(24), after: { name: "Elm Street Block — Round 1" } },
+      { campaignId: campaign.id, userId: organizer.id, action: "CANVASS_ASSIGNMENT_CREATED", entityType: "canvass_assignment", entityId: assignment.id, createdAt: daysAgo(23), after: { canvasserId: canvasser1.id, listName: "Elm Street Block — Round 1" } },
+      // ── Password reset ────────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: canvasser2.id, action: "PASSWORD_RESET_REQUESTED", entityType: "user", entityId: canvasser2.id, createdAt: daysAgo(14) },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "PASSWORD_RESET_COMPLETED", entityType: "user", entityId: canvasser2.id, createdAt: daysAgo(14) },
+      // ── Donor management ─────────────────────────────────────────────────
+      { campaignId: campaign.id, userId: canvasser1.id, action: "DONOR_PROSPECT_CREATED", entityType: "donor", entityId: people[0].id, createdAt: daysAgo(1), after: { name: "Patricia Wallace", status: "interested" } },
+      { campaignId: campaign.id, userId: manager.id, action: "DONOR_PLEDGE_RECORDED", entityType: "donor", entityId: people[14].id, createdAt: daysAgo(10), after: { name: "Raj Patel", amount: 250, paymentMethod: "cheque" } },
+      // ── Misc logins (round out to 60+) ────────────────────────────────────
+      { campaignId: campaign.id, userId: finance.id, action: "LOGIN", entityType: "user", entityId: finance.id, createdAt: daysAgo(12) },
+      { campaignId: campaign.id, userId: volCoord.id, action: "LOGIN", entityType: "user", entityId: volCoord.id, createdAt: daysAgo(9) },
+      { campaignId: campaign.id, userId: cochair.id, action: "LOGIN", entityType: "user", entityId: cochair.id, createdAt: daysAgo(8) },
+      { campaignId: campaign.id, userId: finance.id, action: "LOGOUT", entityType: "user", entityId: finance.id, createdAt: daysAgo(12) },
+      { campaignId: campaign.id, userId: volCoord.id, action: "LOGOUT", entityType: "user", entityId: volCoord.id, createdAt: daysAgo(9) },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[8].id, createdAt: hoursAgo(6), after: { outcome: "contacted", supportLevel: "strong_yes", signRequest: true } },
+      { campaignId: campaign.id, userId: canvasser1.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[9].id, createdAt: hoursAgo(6), after: { outcome: "contacted", supportLevel: "soft_yes" } },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[10].id, createdAt: hoursAgo(5), after: { outcome: "not_home", needsFollowUp: true } },
+      { campaignId: campaign.id, userId: canvasser2.id, action: "CANVASS_RESPONSE_SAVED", entityType: "canvass_response", entityId: people[11].id, createdAt: hoursAgo(5), after: { outcome: "contacted", supportLevel: "strong_yes", signRequest: true, volunteerInterest: true } },
+      { campaignId: campaign.id, userId: manager.id, action: "FOLLOW_UP_CREATED", entityType: "task", entityId: people[8].id, createdAt: hoursAgo(4), after: { title: "Confirm sign location for Fatima Al-Hassan" } },
+      // ── Seed marker ───────────────────────────────────────────────────────
+      { userId: manager.id, action: "seed", entityType: "campaign", entityId: campaign.id, after: { note: "Database seeded for development" } },
+    ],
   });
-  console.log("  ✓ Audit log");
+  console.log("  ✓ Audit log: 60+ entries");
 
   console.log("\n✅ Seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createAuditLog } from "@/lib/audit";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { SupportLevel } from "@/types";
 
@@ -66,6 +67,18 @@ export async function GET() {
       tags, supportLevel, p.notes.length,
       p.createdAt.toISOString().slice(0, 10),
     ]);
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "EXPORT_VOTER_LIST",
+    entityType: "export",
+    details: {
+      rowCount: people.length,
+      userRole: session.user.activeRole ?? null,
+      format: "csv",
+    },
   });
 
   const csv = [headers, ...rows].join("\r\n");

@@ -77,6 +77,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
               id: true,
               firstName: true,
               lastName: true,
+              pollNumber: true,
               household: {
                 select: {
                   address: {

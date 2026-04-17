@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewVolunteers } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { createAuditLog } from "@/lib/audit";
 import type { Role } from "@/types";
 
 export async function GET() {
@@ -13,6 +14,13 @@ export async function GET() {
   if (!activeRole || !canViewVolunteers(activeRole as Role)) {
     return new Response("Forbidden", { status: 403 });
   }
+
+  // Re-verify the user still has an active membership in this campaign.
+  const membership = await db.campaignMembership.findFirst({
+    where: { userId: session.user.id, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!membership) return new Response("Forbidden", { status: 403 });
 
   // Get all people whose most recent canvass response includes volunteerInterest: true
   const responses = await db.canvassResponse.findMany({
@@ -75,6 +83,18 @@ export async function GET() {
       p.email ?? "",
       r.respondedAt.toISOString().split("T")[0],
     ];
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "EXPORT_VOLUNTEERS",
+    entityType: "export",
+    details: {
+      rowCount: responses.length,
+      userRole: activeRole,
+      format: "csv",
+    },
   });
 
   const csv = [headers, ...rows].map(csvRow).join("\n");

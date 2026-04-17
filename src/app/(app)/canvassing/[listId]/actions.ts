@@ -289,11 +289,12 @@ export async function previewFilter(
   listId: string,
   filters: FilterParams
 ): Promise<{ error?: string; count?: number; sample?: string[] }> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user.activeCampaignId) return { error: "Not authenticated." };
+  const auth = await requireListManager(listId);
+  if ("error" in auth) return auth;
+  const { campaignId } = auth;
 
   const result = await previewPeopleFilter({
-    campaignId: session.user.activeCampaignId,
+    campaignId,
     listId,
     streetName: filters.streetName,
     postalCode: filters.postalCode,

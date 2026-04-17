@@ -16,6 +16,7 @@ export interface RowFields {
   phoneMobile: string;
   email: string;
   birthYear: string;
+  pollNumber: string;
 }
 
 export const MANDATORY_FIELDS: (keyof RowFields)[] = [
@@ -41,6 +42,7 @@ export const FIELD_LABELS: Record<keyof RowFields, string> = {
   phoneMobile:  "Phone (mobile)",
   email:        "Email",
   birthYear:    "Birth year",
+  pollNumber:   "Poll #",
 };
 
 export type RowStatus = "ready" | "flagged" | "approved" | "rejected";
@@ -128,6 +130,7 @@ export function parseCsvToReviewRows(text: string): {
       phoneMobile:  getField(raw, "mobile", "cell", "cellphone", "mobilephon", "phone_mobile", "phonemobile"),
       email:        getField(raw, "email", "emailaddress", "email_address"),
       birthYear:    getField(raw, "birthyear", "birth_year", "dob", "yearofbirth"),
+      pollNumber:   getField(raw, "pollnumber", "poll_number", "poll", "pollno", "poll_no"),
     };
 
     const missingOnParse = MANDATORY_FIELDS.filter((f) => !fields[f]);

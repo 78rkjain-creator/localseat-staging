@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit";
+import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
+import { generateVerificationToken } from "@/lib/verification";
 import bcrypt from "bcryptjs";
 import type { Role as AppRole } from "@/types";
 
@@ -84,7 +87,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, firstName, lastName, phoneHome, phoneMobile, role: roleInput } = body as Record<string, string | undefined>;
+  const { email, firstName, lastName, phoneHome, phoneMobile, role: roleInput, skipVerification: skipVerificationRaw } = body as Record<string, string | boolean | undefined>;
+  const skipVerification = skipVerificationRaw === true || skipVerificationRaw === "true";
 
   if (!email || !firstName || !lastName || !roleInput) {
     // phoneHome is intentionally excluded — it is optional
@@ -108,23 +112,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = (email as string).trim().toLowerCase();
 
   // Find or create the user
   let user = await db.user.findUnique({ where: { email: normalizedEmail } });
 
+  const isNewUser = !user;
+
   if (!user) {
     const passwordHash = bcrypt.hashSync("password", 12);
-    const normalizedPhone = phoneHome?.trim() || null;
-    const normalizedPhoneMobile = phoneMobile?.trim() || null;
+    const normalizedPhone = (phoneHome as string | undefined)?.trim() || null;
+    const normalizedPhoneMobile = (phoneMobile as string | undefined)?.trim() || null;
     user = await db.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: (firstName as string).trim(),
+        lastName: (lastName as string).trim(),
         ...(normalizedPhone !== null && { phoneHome: normalizedPhone }),
         ...(normalizedPhoneMobile !== null && { phoneMobile: normalizedPhoneMobile }),
+        // Mark verified immediately if the manager chose to skip verification
+        ...(skipVerification && { emailVerified: new Date() }),
       },
     });
   }
@@ -156,7 +164,37 @@ export async function POST(req: NextRequest) {
           createdAt: true,
         },
       },
+      campaign: { select: { name: true } },
     },
+  });
+
+  // Email: welcome if skipping verification, verification email otherwise.
+  // Only send to NEW users — existing users already have their email status.
+  if (isNewUser) {
+    if (skipVerification) {
+      void sendWelcomeEmail({
+        name: `${membership.user.firstName} ${membership.user.lastName}`,
+        email: membership.user.email,
+        campaignName: membership.campaign.name,
+        role: membership.role,
+      });
+    } else {
+      const verificationToken = await generateVerificationToken(user.id);
+      void sendVerificationEmail({
+        name: `${membership.user.firstName} ${membership.user.lastName}`,
+        email: membership.user.email,
+        token: verificationToken,
+      });
+    }
+  }
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "MEMBER_ADDED",
+    entityType: "campaign_membership",
+    entityId: membership.id,
+    details: { targetUserId: user.id, email: normalizedEmail, role },
   });
 
   return NextResponse.json(

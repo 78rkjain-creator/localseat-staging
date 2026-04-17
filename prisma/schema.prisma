@@ -46,6 +46,12 @@ enum OutreachChannel {
   other
 }
 
+enum AddressChangeStatus {
+  pending
+  approved
+  rejected
+}
+
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
@@ -76,6 +82,7 @@ model Campaign {
   volunteerShifts  VolunteerShift[]
   auditLogs        AuditLog[]
   tasks            Task[]
+  addressChangeRequests AddressChangeRequest[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -91,8 +98,16 @@ model User {
   lastName     String
   phoneHome    String?
   phoneMobile  String?
-  isActive      Boolean   @default(true)
-  platformRole  String?
+  isActive                  Boolean   @default(true)
+  platformRole              String?
+  emailVerified             DateTime?
+  verificationToken         String?   @unique
+  verificationTokenExpiry   DateTime?
+  passwordResetToken        String?   @unique
+  passwordResetTokenExpiry  DateTime?
+  termsAcceptedAt           DateTime?
+  termsSignedName           String?
+  termsVersion              String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -105,6 +120,8 @@ model User {
   outreachLogs         OutreachLog[]
   auditLogs            AuditLog[]
   donorsCreated        Donor[]
+  addressChangeRequests AddressChangeRequest[] @relation("AddressChangeRequests")
+  addressChangeReviews  AddressChangeRequest[] @relation("AddressChangeReviews")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -186,6 +203,8 @@ model Person {
   birthYear    Int?
   supportLevel String?
   gender       String?
+  pollNumber   String?
+  importSource String?
   // Tracks data import source / quality notes for deduplication
   sourceNotes String?
   createdAt   DateTime  @default(now())
@@ -202,6 +221,7 @@ model Person {
   linkedDonors       Donor[]
   volunteerRecords   VolunteerRecord[]
   tasks              Task[]
+  addressChangeRequests AddressChangeRequest[]
 
   @@index([campaignId, deletedAt])
   @@index([lastName])
@@ -361,6 +381,9 @@ model CanvassResponse {
   assignment CanvassAssignment @relation(fields: [assignmentId], references: [id])
   person     Person            @relation(fields: [personId], references: [id])
 
+  // One response per person per assignment — prevents duplicate submissions from
+  // network retries or offline queue re-syncs. Use upsert when saving.
+  @@unique([assignmentId, personId])
   @@index([assignmentId])
   @@index([personId])
   @@map("canvass_responses")
@@ -521,6 +544,37 @@ enum VolunteerAttendanceStatus {
   pending
   attended
   no_show
+}
+
+// ─── Address Change Request ───────────────────────────────────────────────────
+// Canvassers and field staff submit address corrections.
+// Campaign managers / field organizers review and approve or reject.
+
+model AddressChangeRequest {
+  id                String              @id @default(cuid())
+  campaignId        String
+  requestedByUserId String
+  reviewedByUserId  String?
+  personId          String
+  // JSON array of person IDs to move (may be subset of the household)
+  affectedPersonIds String[]
+  // Snapshot of the old address for audit purposes
+  oldAddressId      String?
+  // New address data as submitted
+  newAddressData    Json
+  status            AddressChangeStatus @default(pending)
+  createdAt         DateTime            @default(now())
+  reviewedAt        DateTime?
+  deletedAt         DateTime?
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  requestedBy User     @relation("AddressChangeRequests", fields: [requestedByUserId], references: [id])
+  reviewedBy  User?    @relation("AddressChangeReviews", fields: [reviewedByUserId], references: [id])
+  person      Person   @relation(fields: [personId], references: [id])
+
+  @@index([campaignId, status])
+  @@index([personId])
+  @@map("address_change_requests")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

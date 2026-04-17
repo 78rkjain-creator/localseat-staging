@@ -11,6 +11,7 @@ import {
   canCanvass,
   canViewTeam,
   canViewVolunteers,
+  canReviewAddressChanges,
 } from "@/lib/permissions";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 
@@ -85,7 +86,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     ...(role && canViewAllPeople(role)
       ? [
           {
-            href: "/people",
+            href: "/voter-list",
             label: "Voter List",
             icon: (
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
@@ -98,7 +99,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     ...(role && canViewVoterList(role)
       ? [
           {
-            href: "/voter-list",
+            href: "/voter-import",
             label: "Import & Data Management",
             icon: (
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
@@ -173,6 +174,19 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             icon: (
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
+    ...(role && canReviewAddressChanges(role)
+      ? [
+          {
+            href: "/address-changes",
+            label: "Address Changes",
+            icon: (
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             ),
           },
