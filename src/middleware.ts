@@ -15,6 +15,16 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
+    // Authenticated users visiting /login are sent to the right landing page
+    // rather than being served the login form.
+    if (pathname === "/login" && token) {
+      const platformRole = (token as { platformRole?: string | null }).platformRole;
+      if (platformRole === "super_user" || platformRole === "super_admin") {
+        return NextResponse.redirect(new URL("/admin", req.url));
+      }
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+
     // Canvasser deny-list — redirect to /canvassing for any disallowed route.
     const role = (token as { activeRole?: string | null } | null)?.activeRole ?? null;
     if (role === "canvasser") {
