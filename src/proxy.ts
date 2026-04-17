@@ -92,7 +92,8 @@ export default withAuth(
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
           pathname.startsWith("/icons") ||
-          pathname === "/manifest.json"
+          pathname === "/manifest.json" ||
+          pathname === "/sw.js"
         ) {
           return true;
         }
@@ -131,6 +132,6 @@ export const config = {
      * - favicon.ico
      * - public folder files (icons, manifest)
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.json).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.json|sw\\.js).*)",
   ],
 };
