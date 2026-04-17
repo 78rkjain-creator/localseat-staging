@@ -151,21 +151,19 @@ export function CanvassScreen({
       setSwDebug("SW not supported");
       return;
     }
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
-      console.error("[CanvassScreen] Service worker registration failed:", err);
-      setSwFailure(true);
-    });
-    navigator.serviceWorker.getRegistration("/").then((reg) => {
-      if (reg) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => {
+        console.log("[CanvassScreen] SW registered:", reg.scope);
         setSwDebug(
           `SW registered — scope: ${reg.scope} — state: ${reg.active?.state ?? "no active worker"}`
         );
-      } else {
-        setSwDebug("SW not registered");
-      }
-    }).catch((err) => {
-      setSwDebug(`SW error: ${err.message}`);
-    });
+      })
+      .catch((err) => {
+        console.error("[CanvassScreen] SW registration failed:", err.message, err);
+        setSwFailure(true);
+        setSwDebug(`SW error: ${err.message}`);
+      });
   }, []);
 
   const current = entries[currentIndex];
