@@ -146,7 +146,7 @@ export function CanvassScreen({
   // offline-capable surface in LocalSeat).
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
         console.error("[CanvassScreen] Service worker registration failed:", err);
         setSwFailure(true);
       });
