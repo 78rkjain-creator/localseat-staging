@@ -141,16 +141,31 @@ export function CanvassScreen({
 
   // Fix 10: track SW registration failure so we can warn the canvasser.
   const [swFailure, setSwFailure] = useState(false);
+  // TEMP DEBUG: shows SW registration state on-screen for mobile diagnostics.
+  const [swDebug, setSwDebug] = useState("checking...");
 
   // Register the service worker once on mount (canvassing is the primary
   // offline-capable surface in LocalSeat).
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
-        console.error("[CanvassScreen] Service worker registration failed:", err);
-        setSwFailure(true);
-      });
+    if (!("serviceWorker" in navigator)) {
+      setSwDebug("SW not supported");
+      return;
     }
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => {
+      console.error("[CanvassScreen] Service worker registration failed:", err);
+      setSwFailure(true);
+    });
+    navigator.serviceWorker.getRegistration("/").then((reg) => {
+      if (reg) {
+        setSwDebug(
+          `SW registered — scope: ${reg.scope} — state: ${reg.active?.state ?? "no active worker"}`
+        );
+      } else {
+        setSwDebug("SW not registered");
+      }
+    }).catch((err) => {
+      setSwDebug(`SW error: ${err.message}`);
+    });
   }, []);
 
   const current = entries[currentIndex];
@@ -405,6 +420,9 @@ export function CanvassScreen({
           </p>
         </div>
       )}
+
+      {/* TEMP DEBUG — remove after SW issue is diagnosed */}
+      <p style={{ fontSize: 11, color: "#888", padding: "2px 8px" }}>{swDebug}</p>
 
       {/* ── Header ── compact, ~44px ── */}
       <header className="flex-none bg-white border-b border-slate-200 px-4 flex items-center gap-3 h-[44px]">
