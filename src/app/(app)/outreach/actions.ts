@@ -210,7 +210,7 @@ export async function importOutreachResults(
     campaignId: string;
     personId: string;
     userId: string;
-    channel: string;
+    channel: OutreachChannel;
     date: Date;
     outcome: string | null;
     notes: string | null;
@@ -244,7 +244,7 @@ export async function importOutreachResults(
       campaignId,
       personId,
       userId: session.user.id,
-      channel: row.channel,
+      channel: row.channel as OutreachChannel,
       date: row.date ? new Date(row.date) : new Date(),
       outcome: row.outcome?.trim() || null,
       notes: row.notes?.trim() || null,
