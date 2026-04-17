@@ -36,10 +36,10 @@ const VOL_AND_ABOVE: Role[] = [...FIELD_AND_ABOVE, Role.volunteer_coordinator];
 
 // ── Team ──────────────────────────────────────────────────────────────────────
 
-// candidate, campaign_manager, field_organizer can view the team page.
-// Below campaign_manager the view is read-only (enforced in the UI layer).
+// candidate, campaign_manager, field_organizer, and co_chair can view the team page.
+// co_chair is read-only (enforced via isReadOnly). finance_lead has no team access.
 export function canViewTeam(role: Role): boolean {
-  return FIELD_AND_ABOVE.includes(role);
+  return FIELD_AND_ABOVE.includes(role) || role === Role.co_chair;
 }
 
 // Only candidate and campaign_manager may add or remove team members.
@@ -54,13 +54,15 @@ export function canAssignCampaignManager(role: Role): boolean {
 
 // ── Donors ────────────────────────────────────────────────────────────────────
 
-// Donor records are restricted to senior leadership only.
+// Donor records: senior leadership + finance_lead + co_chair (read-only).
+// finance_lead exists specifically to manage donor tracking without full campaign access.
 export function canViewDonors(role: Role): boolean {
-  return FULL_ACCESS.includes(role);
+  return FULL_ACCESS.includes(role) || role === Role.finance_lead || role === Role.co_chair;
 }
 
+// Donation amounts are sensitive — finance_lead sees them, co_chair does not.
 export function canViewDonorAmounts(role: Role): boolean {
-  return FULL_ACCESS.includes(role);
+  return FULL_ACCESS.includes(role) || role === Role.finance_lead;
 }
 
 // ── Walk lists and canvassing ─────────────────────────────────────────────────
@@ -75,17 +77,17 @@ export function canAssignCanvassers(role: Role): boolean {
   return FIELD_AND_ABOVE.includes(role);
 }
 
-// Every role may access the canvassing workflow.
+// Most roles can access the canvassing workflow. finance_lead is excluded —
+// their access is limited to donor records only.
 export function canCanvass(role: Role): boolean {
-  return [
+  return ([
     Role.candidate,
     Role.campaign_manager,
     Role.field_organizer,
     Role.volunteer_coordinator,
     Role.canvasser,
     Role.co_chair,
-    Role.finance_lead,
-  ].includes(role);
+  ] as Role[]).includes(role);
 }
 
 // ── Volunteers ────────────────────────────────────────────────────────────────
@@ -106,8 +108,9 @@ export function canViewVolunteers(role: Role): boolean {
 // ── Follow-ups ────────────────────────────────────────────────────────────────
 
 // Viewing the follow-up queue (canvassers see only their own tasks — query layer).
+// co_chair can view all follow-ups (read-only).
 export function canViewFollowUps(role: Role): boolean {
-  return VOL_AND_ABOVE.includes(role) || role === Role.canvasser;
+  return VOL_AND_ABOVE.includes(role) || role === Role.canvasser || role === Role.co_chair;
 }
 
 // Assigning, completing, and managing all follow-up tasks.
@@ -117,8 +120,9 @@ export function canManageFollowUps(role: Role): boolean {
 
 // ── People / voter list ───────────────────────────────────────────────────────
 
+// co_chair can view all people (read-only). finance_lead cannot.
 export function canViewAllPeople(role: Role): boolean {
-  return FIELD_AND_ABOVE.includes(role);
+  return FIELD_AND_ABOVE.includes(role) || role === Role.co_chair;
 }
 
 export function canManageVoterList(role: Role): boolean {
@@ -133,22 +137,29 @@ export function canManageCampaign(role: Role): boolean {
 
 // ── Data export ───────────────────────────────────────────────────────────────
 
+// finance_lead can export donor data specifically. co_chair can export general data.
 export function canExportData(role: Role): boolean {
-  return FULL_ACCESS.includes(role);
+  return FULL_ACCESS.includes(role) || role === Role.finance_lead || role === Role.co_chair;
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-// All roles with a rank at or above canvasser may access the dashboard.
+// All roles at or above canvasser, plus co_chair and finance_lead (who have rank
+// below canvasser but still need dashboard access for their respective views).
 export function canViewDashboard(role: Role): boolean {
-  return ROLE_RANK[role] >= ROLE_RANK[Role.canvasser];
+  return (
+    ROLE_RANK[role] >= ROLE_RANK[Role.canvasser] ||
+    role === Role.co_chair ||
+    role === Role.finance_lead
+  );
 }
 
 // ── Special flags ─────────────────────────────────────────────────────────────
 
-// No roles in the current hierarchy are purely read-only.
-export function isReadOnly(_role: Role): boolean {
-  return false;
+// co_chair has broad read access but cannot modify campaign data.
+// All write actions must separately check canManage* before proceeding.
+export function isReadOnly(role: Role): boolean {
+  return role === Role.co_chair;
 }
 
 export function isCanvasser(role: Role): boolean {

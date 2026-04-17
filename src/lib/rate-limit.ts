@@ -1,14 +1,12 @@
-// In-memory login rate limiter, keyed by email address (lowercased).
+// WARNING: This rate limiter uses in-memory storage.
+// It resets on every server restart and does not work correctly
+// across multiple server instances (e.g. Vercel, Railway with replicas).
+// Before scaling to multiple instances, replace with a Redis-backed
+// implementation using ioredis or Upstash.
 //
 // Keying by email rather than IP means a single account cannot be
 // brute-forced from multiple IPs, and legitimate users on shared IPs
 // (e.g. a campaign office) are not blocked by a colleague's failed attempts.
-//
-// NOTE: This store lives in the Node.js process heap and resets on every
-// server restart. That is acceptable for beta — a determined attacker who
-// knows the server restarts can work around it. For production, replace this
-// with a Redis-backed store (e.g. Upstash) so limits survive restarts and
-// work across multiple server instances.
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
