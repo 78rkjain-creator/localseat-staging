@@ -15,34 +15,24 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Temporary debug log — remove after diagnosing redirect loop
-    console.log("[middleware]", pathname, "| token:", token
-      ? JSON.stringify({
-          id: (token as { id?: string }).id,
-          emailVerified: (token as { emailVerified?: boolean }).emailVerified,
-          activeCampaignId: (token as { activeCampaignId?: string | null }).activeCampaignId,
-          activeRole: (token as { activeRole?: string | null }).activeRole,
-          platformRole: (token as { platformRole?: string | null }).platformRole,
-          membershipsCount: Array.isArray((token as { memberships?: unknown[] }).memberships)
-            ? (token as { memberships: unknown[] }).memberships.length
-            : "n/a",
-        })
-      : "null"
-    );
-
-    // Authenticated users visiting /login are sent to the right landing page
-    // rather than being served the login form.
+    // Authenticated users visiting /login are sent to the right landing page.
     if (pathname === "/login" && token) {
-      const platformRole = (token as { platformRole?: string | null }).platformRole;
+      const platformRole = token.platformRole;
       if (platformRole === "super_user" || platformRole === "super_admin") {
         return NextResponse.redirect(new URL("/admin", req.url));
       }
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
+    // Public routes have no token — nothing more to check.
+    if (!token) {
+      return NextResponse.next();
+    }
+
+    // All token property access below this point is safe (token is non-null).
+
     // Canvasser deny-list — redirect to /canvassing for any disallowed route.
-    const role = (token as { activeRole?: string | null } | null)?.activeRole ?? null;
-    if (role === "canvasser") {
+    if (token.activeRole === "canvasser") {
       const allowed = CANVASSER_ALLOW_PREFIXES.some((prefix) =>
         pathname.startsWith(prefix)
       );
@@ -51,21 +41,18 @@ export default withAuth(
       }
     }
 
-    // /admin routes require a platform role of super_user or super_admin
+    // /admin routes require a platform role of super_user or super_admin.
     if (pathname.startsWith("/admin")) {
-      if (!token) {
-        return NextResponse.redirect(new URL("/login", req.url));
-      }
-      const platformRole = (token as { platformRole?: string | null }).platformRole;
+      const { platformRole } = token;
       if (platformRole !== "super_user" && platformRole !== "super_admin") {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
       return NextResponse.next();
     }
 
-    // Platform users (super_user, super_admin) bypass campaign
-    // onboarding and go straight to /admin
-    const platformRole = (token as { platformRole?: string | null }).platformRole;
+    // Platform users (super_user, super_admin) bypass campaign onboarding
+    // and go straight to /admin.
+    const { platformRole } = token;
     if (platformRole === "super_user" || platformRole === "super_admin") {
       if (!pathname.startsWith("/admin")) {
         return NextResponse.redirect(new URL("/admin", req.url));
@@ -73,7 +60,7 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    // Email verification gate — skip for verification-related and auth paths
+    // Email verification gate — skip for verification-related and auth paths.
     const skipVerificationCheck =
       pathname.startsWith("/verify-email") ||
       pathname === "/resend-verification" ||
@@ -81,12 +68,10 @@ export default withAuth(
       pathname.startsWith("/api/auth") ||
       pathname.startsWith("/onboarding/choose-plan");
 
-    if (token && !skipVerificationCheck) {
-      const emailVerified = (token as { emailVerified?: boolean }).emailVerified;
-      const verificationExpiry = (token as { verificationTokenExpiry?: string | null }).verificationTokenExpiry;
-
+    if (!skipVerificationCheck) {
+      const { emailVerified, verificationTokenExpiry } = token;
       if (!emailVerified) {
-        if (verificationExpiry && new Date(verificationExpiry) < new Date()) {
+        if (verificationTokenExpiry && new Date(verificationTokenExpiry) < new Date()) {
           return NextResponse.redirect(new URL("/account-expired", req.url));
         }
         return NextResponse.redirect(new URL("/verify-email/pending", req.url));
@@ -94,20 +79,18 @@ export default withAuth(
     }
 
     // Authenticated users with no active campaign selected:
-    // - Already at a campaign-selection page → let them through
-    // - Has existing memberships but none active → pick a campaign
-    // - No memberships at all → create a campaign
-    if (token && !token.activeCampaignId) {
+    // - Already at a campaign-selection page → let them through.
+    // - Has existing memberships but none active → pick a campaign.
+    // - No memberships at all → create a campaign.
+    if (!token.activeCampaignId) {
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
         pathname === "/select-campaign";
 
       if (!atCampaignGate) {
         const hasMemberships =
-          Array.isArray((token as { memberships?: unknown[] }).memberships) &&
-          (token as { memberships: unknown[] }).memberships.length > 0;
+          Array.isArray(token.memberships) && token.memberships.length > 0;
         const dest = hasMemberships ? "/select-campaign" : "/onboarding/create-campaign";
-        console.log("[middleware] no activeCampaignId — redirecting to", dest, "| hasMemberships:", hasMemberships);
         return NextResponse.redirect(new URL(dest, req.url));
       }
     }
@@ -117,43 +100,54 @@ export default withAuth(
   {
     callbacks: {
       // authorized is evaluated before the middleware function above.
-      // Return true to run the middleware function; false redirects to signIn page.
+      // Return true to run the middleware function; false redirects to signIn.
       authorized({ token, req }) {
         const pathname = req.nextUrl.pathname;
 
-        // Public routes — always accessible
+        // Public paths — always allow, no token required.
         if (
           pathname === "/login" ||
           pathname === "/register" ||
           pathname === "/verify-email" ||
           pathname === "/resend-verification" ||
           pathname === "/account-expired" ||
+          pathname === "/reset-password" ||
+          pathname === "/sw.js" ||
+          pathname === "/manifest.json" ||
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
-          pathname.startsWith("/icons") ||
-          pathname === "/manifest.json" ||
-          pathname === "/sw.js"
+          pathname.startsWith("/icons")
         ) {
           return true;
         }
 
-        // Verification pending requires auth but no campaign
+        // No token — not authenticated, redirect to login.
+        if (!token) {
+          return false;
+        }
+
+        // All token property access below this line is safe.
+
+        // Verification pending requires auth but no campaign.
         if (pathname === "/verify-email/pending") {
-          return !!token;
+          return true;
         }
 
-        // Onboarding requires auth but not an active campaign
-        if (pathname === "/onboarding/create-campaign") {
-          return !!token;
+        // Onboarding and campaign selection require auth but not an active campaign.
+        if (
+          pathname === "/onboarding/create-campaign" ||
+          pathname === "/select-campaign"
+        ) {
+          return true;
         }
 
-        // Admin routes require auth but not a campaign
+        // Admin routes require auth (platform-role check happens in middleware fn).
         if (pathname.startsWith("/admin")) {
-          return !!token;
+          return true;
         }
 
-        // All other app routes require a valid token
-        return !!token;
+        // All other app routes require a valid token.
+        return true;
       },
     },
     pages: {
