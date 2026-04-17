@@ -31,13 +31,27 @@ export default withAuth(
 
     // All token property access below this point is safe (token is non-null).
 
+    console.log(
+      "[middleware]", pathname,
+      "| role:", token.activeRole,
+      "| platformRole:", token.platformRole,
+      "| activeCampaignId:", token.activeCampaignId,
+      "| emailVerified:", token.emailVerified,
+      "| memberships:", token.memberships?.length ?? 0,
+    );
+
+    function redirect(dest: string) {
+      console.log("[middleware] redirect", pathname, "→", dest);
+      return NextResponse.redirect(new URL(dest, req.url));
+    }
+
     // Canvasser deny-list — redirect to /canvassing for any disallowed route.
     if (token.activeRole === "canvasser") {
       const allowed = CANVASSER_ALLOW_PREFIXES.some((prefix) =>
         pathname.startsWith(prefix)
       );
       if (!allowed) {
-        return NextResponse.redirect(new URL("/canvassing", req.url));
+        return redirect("/canvassing");
       }
     }
 
@@ -45,7 +59,7 @@ export default withAuth(
     if (pathname.startsWith("/admin")) {
       const { platformRole } = token;
       if (platformRole !== "super_user" && platformRole !== "super_admin") {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+        return redirect("/dashboard");
       }
       return NextResponse.next();
     }
@@ -55,7 +69,7 @@ export default withAuth(
     const { platformRole } = token;
     if (platformRole === "super_user" || platformRole === "super_admin") {
       if (!pathname.startsWith("/admin")) {
-        return NextResponse.redirect(new URL("/admin", req.url));
+        return redirect("/admin");
       }
       return NextResponse.next();
     }
@@ -72,9 +86,9 @@ export default withAuth(
       const { emailVerified, verificationTokenExpiry } = token;
       if (!emailVerified) {
         if (verificationTokenExpiry && new Date(verificationTokenExpiry) < new Date()) {
-          return NextResponse.redirect(new URL("/account-expired", req.url));
+          return redirect("/account-expired");
         }
-        return NextResponse.redirect(new URL("/verify-email/pending", req.url));
+        return redirect("/verify-email/pending");
       }
     }
 
@@ -91,7 +105,7 @@ export default withAuth(
         const hasMemberships =
           Array.isArray(token.memberships) && token.memberships.length > 0;
         const dest = hasMemberships ? "/select-campaign" : "/onboarding/create-campaign";
-        return NextResponse.redirect(new URL(dest, req.url));
+        return redirect(dest);
       }
     }
 
