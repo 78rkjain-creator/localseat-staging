@@ -270,7 +270,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
               </ul>
             )}
 
-            {!readOnly && <AddNoteForm personId={person.id} campaignId={activeCampaignId} />}
+            {!readOnly && <AddNoteForm personId={person.id} />}
           </Card>
 
           {/* Activity timeline */}

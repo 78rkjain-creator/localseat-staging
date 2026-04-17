@@ -17,12 +17,11 @@ interface PersonResult {
 }
 
 interface Props {
-  campaignId: string;
   open: boolean;
   onClose: () => void;
 }
 
-export function LogEntryModal({ campaignId, open, onClose }: Props) {
+export function LogEntryModal({ open, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PersonResult[]>([]);
   const [selected, setSelected] = useState<PersonResult | null>(null);
@@ -42,7 +41,7 @@ export function LogEntryModal({ campaignId, open, onClose }: Props) {
     if (selected) setSelected(null);
     if (value.trim().length < 2) { setResults([]); return; }
     startSearch(async () => {
-      const found = await searchPeople(campaignId, value);
+      const found = await searchPeople(value);
       setResults(found);
     });
   }

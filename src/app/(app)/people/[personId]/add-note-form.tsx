@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 
 interface AddNoteFormProps {
   personId: string;
-  campaignId: string;
 }
 
-export function AddNoteForm({ personId, campaignId }: AddNoteFormProps) {
+export function AddNoteForm({ personId }: AddNoteFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -20,7 +19,7 @@ export function AddNoteForm({ personId, campaignId }: AddNoteFormProps) {
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const result = await addNote(personId, campaignId, formData);
+      const result = await addNote(personId, formData);
       if (result.error) {
         setError(result.error);
       } else {

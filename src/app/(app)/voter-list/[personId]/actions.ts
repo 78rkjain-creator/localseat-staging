@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canManageVoterList } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeBirthYear, sanitizeEnum } from "@/lib/sanitize";
 import type { SupportLevel } from "@/types";
+import { Role } from "@prisma/client";
 
 const SUPPORT_LEVEL_VALUES: SupportLevel[] = [
   "strong_yes", "soft_yes", "undecided", "soft_no", "strong_no", "not_home",
@@ -33,7 +35,12 @@ export async function updatePerson(
     return { error: "Not authenticated." };
   }
 
-  const campaignId = session.user.activeCampaignId;
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "Permission denied." };
+  }
+
+  const campaignId = activeCampaignId;
 
   const existing = await db.person.findFirst({
     where: { id: input.personId, campaignId, deletedAt: null },
@@ -67,14 +74,12 @@ export async function updatePerson(
 
 export async function addNote(
   personId: string,
-  campaignId: string,
   formData: FormData
 ): Promise<{ error?: string }> {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "Not authenticated." };
-  if (session.user.activeCampaignId !== campaignId) {
-    return { error: "Access denied." };
-  }
+  const campaignId = session.user.activeCampaignId;
+  if (!campaignId) return { error: "No active campaign." };
 
   const body = (formData.get("body") as string | null)?.trim();
   if (!body || body.length === 0) {

@@ -8,6 +8,7 @@ import { createAuditLog } from "@/lib/audit";
 import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
 import { generateVerificationToken } from "@/lib/verification";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import type { Role as AppRole } from "@/types";
 
 // ── GET /api/team ─────────────────────────────────────────────────────────────
@@ -119,8 +120,10 @@ export async function POST(req: NextRequest) {
 
   const isNewUser = !user;
 
+  let tempPassword: string | undefined;
   if (!user) {
-    const passwordHash = bcrypt.hashSync("password", 12);
+    tempPassword = crypto.randomBytes(12).toString("base64url");
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
     const normalizedPhone = (phoneHome as string | undefined)?.trim() || null;
     const normalizedPhoneMobile = (phoneMobile as string | undefined)?.trim() || null;
     user = await db.user.create({
@@ -177,6 +180,7 @@ export async function POST(req: NextRequest) {
         email: membership.user.email,
         campaignName: membership.campaign.name,
         role: membership.role,
+        tempPassword,
       });
     } else {
       const verificationToken = await generateVerificationToken(user.id);

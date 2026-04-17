@@ -160,6 +160,13 @@ export async function removeVolunteerFromShift(
 ): Promise<{ error?: string }> {
   const auth = await requireVolunteerAccess();
   if ("error" in auth) return auth;
+  const { campaignId } = auth;
+
+  const shift = await db.volunteerShift.findFirst({
+    where: { id: shiftId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!shift) return { error: "Shift not found." };
 
   await db.volunteerShiftAttendee.updateMany({
     where: { shiftId, recordId, deletedAt: null },
@@ -179,6 +186,13 @@ export async function markAttendance(
 ): Promise<{ error?: string }> {
   const auth = await requireVolunteerAccess();
   if ("error" in auth) return auth;
+  const { campaignId } = auth;
+
+  const shift = await db.volunteerShift.findFirst({
+    where: { id: shiftId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!shift) return { error: "Shift not found." };
 
   await db.volunteerShiftAttendee.updateMany({
     where: { shiftId, recordId },

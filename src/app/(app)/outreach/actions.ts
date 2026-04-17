@@ -64,10 +64,13 @@ export async function logOutreach(
 // ── Person search (for log entry modal) ───────────────────────────────────
 
 export async function searchPeople(
-  campaignId: string,
   query: string
 ): Promise<{ id: string; firstName: string; lastName: string; address: string }[]> {
   if (!query.trim() || query.trim().length < 2) return [];
+
+  const session = await getServerSession(authOptions);
+  const campaignId = session?.user?.activeCampaignId;
+  if (!campaignId) return [];
 
   const term = query.trim();
   const people = await db.person.findMany({

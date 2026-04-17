@@ -63,7 +63,7 @@ export default async function OutreachPage({ searchParams }: PageProps) {
           </p>
         </div>
         {isManager && !readOnly && (
-          <OutreachToolbar campaignId={activeCampaignId} />
+          <OutreachToolbar />
         )}
       </div>
 

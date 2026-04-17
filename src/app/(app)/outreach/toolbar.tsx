@@ -11,10 +11,10 @@ const CHANNELS = Object.entries(OUTREACH_CHANNEL_LABELS) as [OutreachChannel, st
 const SUPPORT_LEVELS = Object.entries(SUPPORT_LEVEL_LABELS) as [SupportLevel, string][];
 
 interface Props {
-  campaignId: string;
+  // campaignId removed — server actions now derive it from the session
 }
 
-export function OutreachToolbar({ campaignId }: Props) {
+export function OutreachToolbar({}: Props) {
   const router = useRouter();
   const [showLogModal, setShowLogModal] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -189,7 +189,6 @@ export function OutreachToolbar({ campaignId }: Props) {
       </div>
 
       <LogEntryModal
-        campaignId={campaignId}
         open={showLogModal}
         onClose={() => { setShowLogModal(false); router.refresh(); }}
       />

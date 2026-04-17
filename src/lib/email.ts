@@ -44,10 +44,11 @@ export async function sendWelcomeEmail(params: {
   email: string;
   campaignName?: string;
   role?: string;
+  tempPassword?: string;
 }): Promise<void> {
   if (!smtpConfigured()) return;
 
-  const { name, email, campaignName, role } = params;
+  const { name, email, campaignName, role, tempPassword } = params;
   const loginUrl = `${appUrl()}/login`;
   const roleLabel = formatRole(role);
 
@@ -60,7 +61,13 @@ export async function sendWelcomeEmail(params: {
         Your account is ready. Sign in to create or join a campaign.
        </p>`;
 
-  const tempPasswordNote = role
+  const tempPasswordNote = tempPassword
+    ? `<div style="margin:0 0 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Temporary password</p>
+        <p style="margin:0 0 10px;font-size:16px;font-weight:700;color:#0f172a;font-family:monospace,monospace;letter-spacing:0.04em;">${tempPassword}</p>
+        <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5;">Sign in with this password and change it after your first login.</p>
+       </div>`
+    : role
     ? `<p style="margin:0 0 24px;color:#475569;line-height:1.6;">
         Use the temporary password provided by your campaign manager and change it after your first login.
        </p>`
