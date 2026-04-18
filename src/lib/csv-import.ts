@@ -45,7 +45,7 @@ export const FIELD_LABELS: Record<keyof RowFields, string> = {
   pollNumber:   "Poll #",
 };
 
-export type RowStatus = "ready" | "flagged" | "approved" | "rejected";
+export type RowStatus = "ready" | "flagged" | "approved" | "rejected" | "duplicate";
 
 export interface ReviewRow {
   id: number;
@@ -53,6 +53,8 @@ export interface ReviewRow {
   fields: RowFields;
   missingOnParse: (keyof RowFields)[];
   status: RowStatus;
+  /** Name of the existing person this row likely duplicates, if detected. */
+  duplicateOf?: string;
 }
 
 // ── Parsing helpers ────────────────────────────────────────────────────────

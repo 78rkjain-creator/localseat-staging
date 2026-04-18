@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { importVoterRows } from "./actions";
+import { importVoterRows, checkDuplicatesForImport } from "./actions";
 import type { VoterCsvRow } from "./actions";
 import {
   parseCsvToReviewRows,
@@ -33,9 +33,12 @@ interface VoterImportModalProps {
 export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
+  const [sourceDescription, setSourceDescription] = useState("");
+  const [sourceError, setSourceError] = useState<string | null>(null);
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [result, setResult] = useState<{
     matched: number;
     created: number;
@@ -46,6 +49,8 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
   function handleClose() {
     if (fileRef.current) fileRef.current.value = "";
     setStep("upload");
+    setSourceDescription("");
+    setSourceError(null);
     setReviewRows([]);
     setFileError(null);
     setSubmitError(null);
@@ -57,6 +62,14 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     const file = e.target.files?.[0];
     setFileError(null);
     setReviewRows([]);
+
+    if (!sourceDescription.trim()) {
+      setSourceError("Enter a source description before selecting a file.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setSourceError(null);
+
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith(".csv") && file.type !== "text/csv") {
@@ -77,7 +90,43 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
       return;
     }
 
-    setReviewRows(rows);
+    // Check for duplicates against existing records before showing review step
+    setIsCheckingDuplicates(true);
+    try {
+      const csvRows: VoterCsvRow[] = rows.map((r) => ({
+        firstName:    r.fields.firstName,
+        lastName:     r.fields.lastName,
+        streetNumber: r.fields.streetNumber,
+        streetName:   r.fields.streetName,
+        unitNumber:   r.fields.unitNumber,
+        city:         r.fields.city,
+        province:     r.fields.province,
+        postalCode:   r.fields.postalCode,
+        phoneHome:    r.fields.phoneHome,
+        phoneMobile:  r.fields.phoneMobile,
+        email:        r.fields.email,
+        birthYear:    r.fields.birthYear,
+      }));
+
+      const duplicates = await checkDuplicatesForImport(csvRows);
+      const dupMap = new Map(duplicates.map((d) => [d.rowIndex, d.matchedName]));
+
+      const markedRows: ReviewRow[] = rows.map((row, idx) => {
+        const matchedName = dupMap.get(idx);
+        if (matchedName && row.status === "ready") {
+          return { ...row, status: "duplicate" as RowStatus, duplicateOf: matchedName };
+        }
+        return row;
+      });
+
+      setReviewRows(markedRows);
+    } catch {
+      // If the duplicate check fails, proceed without warnings
+      setReviewRows(rows);
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+
     setStep("review");
   }
 
@@ -108,6 +157,8 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
       prev.map((r) => {
         if (r.id !== rowId) return r;
         const missing = getMissingFields(r.fields);
+        // Restore to duplicate status if it had a duplicateOf, otherwise ready/flagged
+        if (r.duplicateOf) return { ...r, status: "duplicate" as RowStatus };
         return { ...r, status: (missing.length === 0 ? "ready" : "flagged") as RowStatus };
       })
     );
@@ -138,7 +189,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     }
 
     startSubmit(async () => {
-      const res = await importVoterRows(toImport);
+      const res = await importVoterRows(toImport, sourceDescription.trim());
       if (res.error) {
         setSubmitError(res.error);
       } else {
@@ -152,11 +203,12 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     });
   }
 
-  const readyCount    = reviewRows.filter((r) => r.status === "ready").length;
-  const flaggedCount  = reviewRows.filter((r) => r.status === "flagged").length;
-  const approvedCount = reviewRows.filter((r) => r.status === "approved").length;
-  const rejectedCount = reviewRows.filter((r) => r.status === "rejected").length;
-  const importCount   = readyCount + approvedCount;
+  const readyCount     = reviewRows.filter((r) => r.status === "ready").length;
+  const flaggedCount   = reviewRows.filter((r) => r.status === "flagged").length;
+  const duplicateCount = reviewRows.filter((r) => r.status === "duplicate").length;
+  const approvedCount  = reviewRows.filter((r) => r.status === "approved").length;
+  const rejectedCount  = reviewRows.filter((r) => r.status === "rejected").length;
+  const importCount    = readyCount + approvedCount;
 
   return (
     <Modal
@@ -191,14 +243,46 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">Select file</label>
+            <label className="text-sm font-medium text-slate-700">
+              Source description <span className="text-red-500">*</span>
+            </label>
             <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-              className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+              type="text"
+              value={sourceDescription}
+              onChange={(e) => { setSourceDescription(e.target.value); setSourceError(null); }}
+              placeholder="e.g. Rogers phone directory April 2026, 2022 municipal voter list"
+              className={[
+                "h-10 w-full rounded-xl border px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent",
+                sourceError ? "border-red-300 bg-red-50" : "border-slate-200",
+              ].join(" ")}
             />
+            {sourceError && (
+              <p className="text-xs text-red-600">{sourceError}</p>
+            )}
+            <p className="text-xs text-slate-400">
+              Recorded against every imported record so you can trace where each entry came from.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">Select file</label>
+            {isCheckingDuplicates ? (
+              <div className="flex items-center gap-2 py-2 text-sm text-slate-500">
+                <svg className="animate-spin h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Checking for duplicates…
+              </div>
+            ) : (
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+              />
+            )}
           </div>
 
           {fileError && (
@@ -216,10 +300,11 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
       {step === "review" && (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <SummaryPill count={readyCount}    label="ready"       color="green" />
-            {flaggedCount  > 0 && <SummaryPill count={flaggedCount}  label="need review" color="amber" />}
-            {approvedCount > 0 && <SummaryPill count={approvedCount} label="approved"    color="blue"  />}
-            {rejectedCount > 0 && <SummaryPill count={rejectedCount} label="rejected"    color="slate" />}
+            <SummaryPill count={readyCount}     label="ready"             color="green" />
+            {flaggedCount   > 0 && <SummaryPill count={flaggedCount}   label="need review"       color="amber" />}
+            {duplicateCount > 0 && <SummaryPill count={duplicateCount} label="possible duplicate" color="orange" />}
+            {approvedCount  > 0 && <SummaryPill count={approvedCount}  label="approved"           color="blue"  />}
+            {rejectedCount  > 0 && <SummaryPill count={rejectedCount}  label="rejected"           color="slate" />}
           </div>
 
           {flaggedCount > 0 && (
@@ -227,6 +312,15 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               <p className="text-sm text-amber-800">
                 <strong>{flaggedCount}</strong> row{flaggedCount !== 1 ? "s" : ""} have missing mandatory fields.
                 Fill in the highlighted cells, then approve or reject each row.
+              </p>
+            </div>
+          )}
+
+          {duplicateCount > 0 && (
+            <div className="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3">
+              <p className="text-sm text-orange-800">
+                <strong>{duplicateCount}</strong> row{duplicateCount !== 1 ? "s" : ""} may already exist in your voter list.
+                Review each one and choose to skip or import anyway.
               </p>
             </div>
           )}
@@ -279,9 +373,12 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               Back
             </Button>
             <div className="flex-1" />
-            {flaggedCount > 0 && (
+            {(flaggedCount > 0 || duplicateCount > 0) && (
               <p className="text-xs text-amber-600">
-                {flaggedCount} row{flaggedCount !== 1 ? "s" : ""} still need review
+                {[
+                  flaggedCount  > 0 ? `${flaggedCount} row${flaggedCount !== 1 ? "s" : ""} need review` : "",
+                  duplicateCount > 0 ? `${duplicateCount} possible duplicate${duplicateCount !== 1 ? "s" : ""}` : "",
+                ].filter(Boolean).join(" · ")}
               </p>
             )}
             <Button
@@ -339,15 +436,18 @@ function ReviewRowComponent({
   onReject: () => void;
   onUndo: () => void;
 }) {
-  const isEditable  = row.status === "flagged" || row.status === "approved";
-  const isRejected  = row.status === "rejected";
-  const isApproved  = row.status === "approved";
-  const isReady     = row.status === "ready";
+  const isDuplicate  = row.status === "duplicate";
+  const isEditable   = row.status === "flagged" || row.status === "approved";
+  const isRejected   = row.status === "rejected";
+  const isApproved   = row.status === "approved";
+  const isReady      = row.status === "ready";
   const currentMissing = getMissingFields(row.fields);
-  const canApprove  = row.status === "flagged" && currentMissing.length === 0;
+  const canApprove   = row.status === "flagged" && currentMissing.length === 0;
 
   const rowBg = isRejected
     ? "bg-slate-50 opacity-50"
+    : isDuplicate
+    ? "bg-orange-50/50"
     : row.status === "flagged"
     ? "bg-amber-50/40"
     : isApproved
@@ -386,10 +486,18 @@ function ReviewRowComponent({
       })}
 
       <td className="px-3 py-2 whitespace-nowrap">
-        {isReady    && <StatusBadge label="Ready"    color="green" />}
-        {row.status === "flagged" && <StatusBadge label="Review"   color="amber" />}
-        {isApproved && <StatusBadge label="Approved" color="blue"  />}
-        {isRejected && <StatusBadge label="Rejected" color="slate" />}
+        {isReady      && <StatusBadge label="Ready"    color="green"  />}
+        {isDuplicate  && (
+          <div className="flex flex-col gap-0.5">
+            <StatusBadge label="Duplicate?" color="orange" />
+            <span className="text-[10px] text-orange-600 leading-tight max-w-[120px] truncate" title={`Possible duplicate of ${row.duplicateOf}`}>
+              of {row.duplicateOf}
+            </span>
+          </div>
+        )}
+        {row.status === "flagged" && <StatusBadge label="Review"   color="amber"  />}
+        {isApproved   && <StatusBadge label="Approved" color="blue"   />}
+        {isRejected   && <StatusBadge label="Rejected" color="slate"  />}
       </td>
 
       <td className="px-3 py-2 whitespace-nowrap">
@@ -416,6 +524,22 @@ function ReviewRowComponent({
             </button>
           </div>
         )}
+        {isDuplicate && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onApprove}
+              className="text-xs px-2 py-1 rounded-lg font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+            >
+              Import anyway
+            </button>
+            <button
+              onClick={onReject}
+              className="text-xs px-2 py-1 rounded-lg font-medium bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors"
+            >
+              Skip
+            </button>
+          </div>
+        )}
         {(isApproved || isRejected) && (
           <button
             onClick={onUndo}
@@ -431,12 +555,13 @@ function ReviewRowComponent({
 
 function SummaryPill({
   count, label, color,
-}: { count: number; label: string; color: "green" | "amber" | "blue" | "slate" }) {
+}: { count: number; label: string; color: "green" | "amber" | "orange" | "blue" | "slate" }) {
   const styles = {
-    green: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    amber: "bg-amber-50 text-amber-700 border-amber-200",
-    blue:  "bg-blue-50 text-blue-700 border-blue-200",
-    slate: "bg-slate-100 text-slate-500 border-slate-200",
+    green:  "bg-emerald-50 text-emerald-700 border-emerald-200",
+    amber:  "bg-amber-50 text-amber-700 border-amber-200",
+    orange: "bg-orange-50 text-orange-700 border-orange-200",
+    blue:   "bg-blue-50 text-blue-700 border-blue-200",
+    slate:  "bg-slate-100 text-slate-500 border-slate-200",
   };
   return (
     <span className={["inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border", styles[color]].join(" ")}>
@@ -445,12 +570,13 @@ function SummaryPill({
   );
 }
 
-function StatusBadge({ label, color }: { label: string; color: "green" | "amber" | "blue" | "slate" }) {
+function StatusBadge({ label, color }: { label: string; color: "green" | "amber" | "orange" | "blue" | "slate" }) {
   const styles = {
-    green: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    blue:  "bg-blue-50 text-blue-700",
-    slate: "bg-slate-100 text-slate-500",
+    green:  "bg-emerald-50 text-emerald-700",
+    amber:  "bg-amber-50 text-amber-700",
+    orange: "bg-orange-50 text-orange-700",
+    blue:   "bg-blue-50 text-blue-700",
+    slate:  "bg-slate-100 text-slate-500",
   };
   return (
     <span className={["inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium", styles[color]].join(" ")}>

@@ -50,8 +50,93 @@ export interface VoterImportResult {
 
 // ── importVoterRows ───────────────────────────────────────────────────────
 
-export async function importVoterRows(
+// ── checkDuplicatesForImport ──────────────────────────────────────────────
+// Fetches all existing persons for the campaign once, builds a lookup map,
+// then checks each incoming row by name+address and phone number in memory.
+// Returns the indices of rows that match existing records.
+
+export async function checkDuplicatesForImport(
   rows: VoterCsvRow[]
+): Promise<{ rowIndex: number; matchedName: string }[]> {
+  const auth = await requireVoterListManager();
+  if ("error" in auth) return [];
+  const { campaignId } = auth;
+
+  const existing = await db.person.findMany({
+    where: { campaignId, deletedAt: null },
+    select: {
+      firstName: true,
+      lastName: true,
+      phoneHome: true,
+      phoneMobile: true,
+      household: {
+        select: {
+          address: {
+            select: { streetNumber: true, streetName: true, postalCode: true },
+          },
+        },
+      },
+    },
+  });
+
+  // Build two lookup maps: name+address → display name, phone → display name
+  const byAddress = new Map<string, string>();
+  const byPhone   = new Map<string, string>();
+
+  for (const p of existing) {
+    const addr = p.household?.address;
+    const displayName = `${p.firstName} ${p.lastName}`;
+
+    if (addr) {
+      const key = [
+        p.firstName.toLowerCase(),
+        p.lastName.toLowerCase(),
+        addr.streetNumber.toLowerCase(),
+        addr.streetName.toLowerCase(),
+        addr.postalCode.toLowerCase().replace(/\s/g, ""),
+      ].join("|");
+      byAddress.set(key, displayName);
+    }
+
+    const ph = sanitizePhone(p.phoneHome ?? "");
+    const pm = sanitizePhone(p.phoneMobile ?? "");
+    if (ph) byPhone.set(ph, displayName);
+    if (pm) byPhone.set(pm, displayName);
+  }
+
+  const results: { rowIndex: number; matchedName: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const firstName   = row.firstName.trim().toLowerCase();
+    const lastName    = row.lastName.trim().toLowerCase();
+    const streetNumber = row.streetNumber.trim().toLowerCase();
+    const streetName  = row.streetName.trim().toLowerCase();
+    const postalCode  = row.postalCode.trim().replace(/\s/g, "").toLowerCase();
+
+    const addrKey = [firstName, lastName, streetNumber, streetName, postalCode].join("|");
+    let matchedName = byAddress.get(addrKey);
+
+    if (!matchedName) {
+      const ph = sanitizePhone(row.phoneHome);
+      const pm = sanitizePhone(row.phoneMobile);
+      if (ph) matchedName = byPhone.get(ph);
+      if (!matchedName && pm) matchedName = byPhone.get(pm);
+    }
+
+    if (matchedName) {
+      results.push({ rowIndex: i, matchedName });
+    }
+  }
+
+  return results;
+}
+
+// ── importVoterRows ───────────────────────────────────────────────────────
+
+export async function importVoterRows(
+  rows: VoterCsvRow[],
+  importSource: string
 ): Promise<VoterImportResult> {
   const auth = await requireVoterListManager();
   if ("error" in auth) return auth;
@@ -161,7 +246,7 @@ export async function importVoterRows(
             phoneMobile:  phoneMobile ?? undefined,
             email:        email ?? undefined,
             birthYear:    birthYear ?? undefined,
-            sourceNotes:  "voter-list-import",
+            importSource: importSource.trim() || "voter-list-import",
           },
         });
 
