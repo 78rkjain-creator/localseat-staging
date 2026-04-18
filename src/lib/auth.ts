@@ -55,24 +55,6 @@ export const authOptions: NextAuthOptions = {
     maxAge: 43200, // 12 hours
   },
 
-  // Pin the session cookie name and attributes explicitly so they are
-  // consistent regardless of what NEXTAUTH_URL resolves to at runtime.
-  // Without this, NextAuth derives the cookie name from NEXTAUTH_URL (using
-  // "secure" prefix for https:// URLs), which can create a mismatch when
-  // the server-side URL differs from the browser's origin (e.g. during
-  // local mobile testing via LAN IP).
-  cookies: {
-    sessionToken: {
-      name: "next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "strict" as const,
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
-  },
-
   pages: {
     signIn: "/login",
     error: "/login",
