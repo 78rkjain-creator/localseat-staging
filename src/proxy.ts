@@ -11,9 +11,14 @@ import { NextResponse } from "next/server";
 // to /canvassing so they can't access voter data, donors, team, etc.
 const CANVASSER_ALLOW_PREFIXES = [
   "/canvassing",
+  "/dashboard",
+  "/follow-ups",
+  "/outreach",
   "/select-campaign",
   "/onboarding",
   "/account",
+  "/verify-email",   // needed so unverified canvassers can complete verification
+  "/api/auth",       // NextAuth internal routes (session refresh, signout, etc.)
 ];
 
 export default withAuth(
