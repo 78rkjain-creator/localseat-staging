@@ -6,7 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register } from "./actions";
-import { TERMS_V1_1_HTML } from "@/lib/terms";
+import { TERMS_V1_3_HTML } from "@/lib/terms";
 
 export default function RegisterPage() {
   const [firstName, setFirstName] = useState("");
@@ -243,7 +243,7 @@ export default function RegisterPage() {
               >
                 <div
                   // eslint-disable-next-line react/no-danger
-                  dangerouslySetInnerHTML={{ __html: TERMS_V1_1_HTML }}
+                  dangerouslySetInnerHTML={{ __html: TERMS_V1_3_HTML }}
                 />
               </div>
 
