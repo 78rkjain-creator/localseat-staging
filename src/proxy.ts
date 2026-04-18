@@ -1,3 +1,9 @@
+// IMPORTANT: This file MUST be named proxy.ts — do NOT rename it to middleware.ts.
+// Next.js 16 uses proxy.ts as the auth/routing proxy convention.
+// middleware.ts is deprecated in Next.js 16 (see: nextjs.org/docs/messages/middleware-to-proxy).
+// Every other resource online will tell you to use middleware.ts — ignore them for this project.
+// Renaming this file will break authentication and all route protection silently.
+
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
