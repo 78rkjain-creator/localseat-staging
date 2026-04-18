@@ -42,17 +42,7 @@ export default withAuth(
 
     // All token property access below this point is safe (token is non-null).
 
-    console.log(
-      "[middleware]", pathname,
-      "| role:", token.activeRole,
-      "| platformRole:", token.platformRole,
-      "| activeCampaignId:", token.activeCampaignId,
-      "| emailVerified:", token.emailVerified,
-      "| memberships:", token.memberships?.length ?? 0,
-    );
-
     function redirect(dest: string) {
-      console.log("[middleware] redirect", pathname, "→", dest);
       return NextResponse.redirect(new URL(dest, req.url));
     }
 
@@ -148,19 +138,10 @@ export default withAuth(
 
         // No token — not authenticated, redirect to login.
         if (!token) {
-          console.log("[proxy] authorized: no token for", pathname);
           return false;
         }
 
         // All token property access below this line is safe.
-
-        console.log(
-          "[proxy] authorized:",
-          pathname,
-          "| verified:", token.emailVerified,
-          "| campaignId:", token.activeCampaignId,
-          "| role:", token.activeRole,
-        );
 
         // Verification pending requires auth but no campaign.
         if (pathname === "/verify-email/pending") {
