@@ -148,10 +148,19 @@ export default withAuth(
 
         // No token — not authenticated, redirect to login.
         if (!token) {
+          console.log("[proxy] authorized: no token for", pathname);
           return false;
         }
 
         // All token property access below this line is safe.
+
+        console.log(
+          "[proxy] authorized:",
+          pathname,
+          "| verified:", token.emailVerified,
+          "| campaignId:", token.activeCampaignId,
+          "| role:", token.activeRole,
+        );
 
         // Verification pending requires auth but no campaign.
         if (pathname === "/verify-email/pending") {
