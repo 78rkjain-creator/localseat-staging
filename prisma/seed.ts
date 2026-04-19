@@ -364,9 +364,9 @@ async function main() {
       completedCount: 24,
     },
     {
-      name:           "Maple Avenue North",
-      description:    "Maple Avenue north end canvass",
-      street:         "Maple Avenue",
+      name:           "Walnut Avenue West",
+      description:    "Walnut Avenue west side canvass",
+      street:         "Walnut Avenue",
       canvasser:      kevinLafleur,
       totalEntries:   35,
       completedCount: 14,
