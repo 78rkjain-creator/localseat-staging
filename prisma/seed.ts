@@ -818,6 +818,60 @@ async function main() {
   await db.auditLog.createMany({ data: auditRows });
   console.log(`  ✓ Audit log: ${auditRows.length} entries`);
 
+  // ── Address change requests ───────────────────────────────────────────────
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  const [elmAcr, mapleAcr, birchAcr] = await Promise.all([
+    db.person.findMany({
+      where: { campaignId: campaign.id, household: { address: { streetName: "Elm Street" } } },
+      take: 1,
+      include: { household: true },
+    }),
+    db.person.findMany({
+      where: { campaignId: campaign.id, household: { address: { streetName: "Maple Avenue" } } },
+      take: 2,
+      include: { household: true },
+    }),
+    db.person.findMany({
+      where: { campaignId: campaign.id, household: { address: { streetName: "Birch Lane" } } },
+      take: 1,
+      include: { household: true },
+    }),
+  ]);
+
+  await db.addressChangeRequest.createMany({
+    data: [
+      {
+        campaignId:        campaign.id,
+        requestedByUserId: priyaNair.id,
+        personId:          elmAcr[0].id,
+        affectedPersonIds: [elmAcr[0].id],
+        oldAddressId:      elmAcr[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "45", streetName: "Oak Drive",      city: "Greenfield", province: "ON", postalCode: "K1B 2A1" },
+        createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
+      },
+      {
+        campaignId:        campaign.id,
+        requestedByUserId: kevinLafleur.id,
+        personId:          mapleAcr[0].id,
+        affectedPersonIds: [mapleAcr[0].id, mapleAcr[1].id],
+        oldAddressId:      mapleAcr[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "88", streetName: "Cedar Boulevard", city: "Greenfield", province: "ON", postalCode: "K1B 2B2" },
+        createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
+      },
+      {
+        campaignId:        campaign.id,
+        requestedByUserId: amyZhang.id,
+        personId:          birchAcr[0].id,
+        affectedPersonIds: [birchAcr[0].id],
+        oldAddressId:      birchAcr[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "12", streetName: "Willow Court",    city: "Greenfield", province: "ON", postalCode: "K1D 4A1" },
+        createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
+      },
+    ],
+  });
+  console.log("  ✓ Address change requests: 3 pending");
+
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
   console.log("  superuser             → superuser@localseat.io");
