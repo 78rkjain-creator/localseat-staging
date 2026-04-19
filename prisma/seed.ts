@@ -93,6 +93,7 @@ async function main() {
   const HASH = await bcrypt.hash("password", 12);
 
   // ── Cleanup (FK-safe order) ───────────────────────────────────────────────
+  // DemoRegistration is intentionally excluded from cleanup — lead data is preserved across resets
   await db.$transaction([
     db.auditLog.deleteMany(),
     db.volunteerShiftAttendee.deleteMany(),

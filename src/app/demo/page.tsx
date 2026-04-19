@@ -29,6 +29,7 @@ export default function DemoPage() {
   const [phone,        setPhone]        = useState("");
   const [municipality, setMunicipality] = useState("");
   const [officeType,   setOfficeType]   = useState("");
+  const [consented,    setConsented]    = useState(false);
   const [error,        setError]        = useState<string | null>(null);
   const [loading,      setLoading]      = useState(false);
 
@@ -190,13 +191,26 @@ export default function DemoPage() {
               </div>
             )}
 
-            <Button type="submit" size="lg" fullWidth loading={loading} className="mt-1">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consented}
+                onChange={(e) => setConsented(e.target.checked)}
+                className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+              />
+              <span className="text-xs text-slate-600 leading-relaxed">
+                I consent to LocalSeat.io and its partners contacting me about campaign management tools, product updates, and related services. You can unsubscribe at any time.
+              </span>
+            </label>
+
+            <Button type="submit" size="lg" fullWidth loading={loading} disabled={!consented} className="mt-1">
               Start your demo
             </Button>
 
             <p className="text-xs text-center text-slate-400 leading-relaxed">
-              We&apos;ll use your information to follow up about LocalSeat.io.<br />
-              We never share your data.
+              By starting your demo, you agree to be contacted by LocalSeat.io and our partners.
+              We will never sell your personal information to third parties.{" "}
+              <a href="/privacy" className="underline hover:text-slate-600">See our Privacy Policy.</a>
             </p>
           </form>
         </div>
