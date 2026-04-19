@@ -22,7 +22,8 @@ export function DemoBanner({ currentEmail }: DemoBannerProps) {
   const [switching, setSwitching] = useState(false);
   const [open,      setOpen]      = useState(false);
 
-  const current = DEMO_ROLES.find((r) => r.email === currentEmail) ?? DEMO_ROLES[0];
+  const current = DEMO_ROLES.find((r) => r.email === currentEmail)
+    ?? { label: "Demo", name: "Demo Login", email: currentEmail };
 
   async function switchRole(email: string) {
     if (email === currentEmail || switching) return;

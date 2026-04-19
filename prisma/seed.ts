@@ -171,7 +171,14 @@ async function main() {
     create: { email: "superuser@localseat.io", passwordHash: HASH, firstName: "Super", lastName: "User", isActive: true, platformRole: "super_user", emailVerified: VERIFIED },
     update: { passwordHash: HASH, platformRole: "super_user", emailVerified: VERIFIED },
   });
-  console.log("  ✓ Users: 13 (including platform superuser)");
+
+  // Demo entry-point account — upsert so repeated seeds don't fail
+  const demoUser = await db.user.upsert({
+    where:  { email: "demo@localseat.io" },
+    create: { email: "demo@localseat.io", passwordHash: HASH, firstName: "Demo", lastName: "Login", isActive: true, emailVerified: VERIFIED },
+    update: { passwordHash: HASH, emailVerified: VERIFIED },
+  });
+  console.log("  ✓ Users: 14 (including platform superuser and demo account)");
 
   // ── Campaign memberships ──────────────────────────────────────────────────
   await db.campaignMembership.createMany({
@@ -188,9 +195,10 @@ async function main() {
       { userId: kevinLafleur.id, campaignId: campaign.id, role: "canvasser"            },
       { userId: amyZhang.id,     campaignId: campaign.id, role: "canvasser"            },
       { userId: tomOkonkwo.id,   campaignId: campaign.id, role: "canvasser"            },
+      { userId: demoUser.id,      campaignId: campaign.id, role: "candidate"            },
     ],
   });
-  console.log("  ✓ Campaign memberships: 12");
+  console.log("  ✓ Campaign memberships: 13");
 
   // ── Tags ──────────────────────────────────────────────────────────────────
   await db.tag.createMany({
@@ -875,6 +883,7 @@ async function main() {
 
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
+  console.log("  demo_entry            → demo@localseat.io");
   console.log("  superuser             → superuser@localseat.io");
   console.log("  candidate             → alex.chen@example.com");
   console.log("  campaign_manager      → maria.santos@example.com");

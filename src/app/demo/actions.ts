@@ -53,6 +53,7 @@ export async function registerDemo(data: DemoFormData): Promise<{ error?: string
       municipality: municipality || null,
       officeType:   officeType || null,
       ip,
+      loginAs:      "demo@localseat.io",
     },
   });
 

@@ -45,9 +45,9 @@ export default function DemoPage() {
         return;
       }
 
-      // Auto-login as demo candidate
+      // Auto-login as dedicated demo entry-point account
       const signInResult = await signIn("credentials", {
-        email:    "alex.chen@example.com",
+        email:    "demo@localseat.io",
         password: "password",
         redirect: false,
       });
