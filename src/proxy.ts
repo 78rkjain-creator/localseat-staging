@@ -123,6 +123,7 @@ export default withAuth(
         if (
           pathname === "/login" ||
           pathname === "/register" ||
+          pathname === "/demo" ||
           pathname === "/verify-email" ||
           pathname === "/resend-verification" ||
           pathname === "/account-expired" ||

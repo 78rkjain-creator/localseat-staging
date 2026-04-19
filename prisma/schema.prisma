@@ -577,6 +577,24 @@ model AddressChangeRequest {
   @@map("address_change_requests")
 }
 
+// ─── Demo Registration ────────────────────────────────────────────────────────
+// Captures lead information from the public demo landing page.
+// No campaign or user FK — intentionally standalone.
+
+model DemoRegistration {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  municipality String?
+  officeType   String?
+  createdAt    DateTime @default(now())
+  ipAddress    String?
+
+  @@map("demo_registrations")
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
