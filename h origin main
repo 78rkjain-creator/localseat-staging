@@ -1,0 +1,5 @@
+[33md04cb96[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m fix middleware — activate src/middleware.ts, retire dead root middleware.ts
+[33mac8a9d4[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix SW registration — allow sw.js through auth proxy
+[33mcddadc1[m fix SW registration — remove explicit scope, add error logging
+[33m63fa36f[m temp: add SW debug info to canvassing screen
+[33mfc060fa[m fix service worker registration on production
