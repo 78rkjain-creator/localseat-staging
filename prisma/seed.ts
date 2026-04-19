@@ -16,7 +16,6 @@ import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChanne
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
-const HASH = bcrypt.hashSync("password", 12);
 const VERIFIED = new Date();
 
 // ── Cultural name pools ───────────────────────────────────────────────────────
@@ -90,6 +89,8 @@ function phoneMobile(personIdx: number): string | null {
 
 async function main() {
   console.log("🌱 Seeding database...");
+
+  const HASH = await bcrypt.hash("password", 12);
 
   // ── Cleanup (FK-safe order) ───────────────────────────────────────────────
   await db.$transaction([
