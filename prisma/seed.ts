@@ -12,7 +12,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient, SupportLevel, CanvassOutcome } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -445,6 +445,165 @@ async function main() {
     );
   }
   console.log(`  ✓ Walk lists: 4 | Canvass responses: ${totalResponses}`);
+
+  // ── Follow-up tasks ───────────────────────────────────────────────────────
+  const FOLLOW_UP_NOTES = [
+    "Call back after 6pm",
+    "Wants to volunteer",
+    "Request for lawn sign",
+    "Follow up on noise complaint concern",
+    "Interested in donating",
+    "Wants candidate to visit street",
+    "Needs sign removal after election",
+    "Strong supporter — ask to bring friends",
+  ];
+
+  const followUpPersons = await db.person.findMany({
+    where: { campaignId: campaign.id },
+    take: 30,
+    skip: 10,
+  });
+
+  const followUpAssignees = [jamesOkafor, sarahKim, priyaNair, kevinLafleur];
+  const nowMs          = Date.now();
+  const THREE_WEEKS_MS = 21 * 24 * 60 * 60 * 1000;
+  const TWO_WEEKS_MS   = 14 * 24 * 60 * 60 * 1000;
+
+  await db.task.createMany({
+    data: followUpPersons.map((p, i) => {
+      const isCompleted = i >= 15;
+      const assignee    = followUpAssignees[i % followUpAssignees.length];
+      const createdAt   = new Date(nowMs - Math.random() * THREE_WEEKS_MS);
+      const completedAt = isCompleted
+        ? new Date(nowMs - Math.random() * TWO_WEEKS_MS)
+        : null;
+      return {
+        campaignId: campaign.id,
+        personId:   p.id,
+        assignedTo: assignee.id,
+        title:      FOLLOW_UP_NOTES[i % FOLLOW_UP_NOTES.length],
+        notes:      FOLLOW_UP_NOTES[i % FOLLOW_UP_NOTES.length],
+        completed:  isCompleted,
+        createdAt,
+        ...(completedAt ? { completedAt } : {}),
+      };
+    }),
+  });
+  console.log("  ✓ Follow-up tasks: 30 (15 open, 15 completed)");
+
+  // ── Donor prospects ───────────────────────────────────────────────────────
+  // Status distribution: 8 interested · 5 pledged · 4 received · 3 thanked
+  // "thanked" maps to received + thankYouSent: true (no separate enum value)
+  const donorPersons = await db.person.findMany({
+    where: { campaignId: campaign.id },
+    take: 20,
+    skip: 50,
+  });
+
+  const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
+
+  const DONOR_NOTES: (string | null)[] = [
+    null, null, null, null, null, null, null, null,    // 8 interested
+    "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door", // 5 pledged
+    "E-transfer received", "E-transfer received", "Cheque by mail", "Cheque by mail",              // 4 received
+    "E-transfer received", "Cheque by mail", "E-transfer received",                                // 3 thanked
+  ];
+
+  await db.donor.createMany({
+    data: donorPersons.map((p, i) => {
+      const isReceived = i >= 13;
+      const isThanked  = i >= 17;
+      const status     = i < 8  ? DonorStatus.interested
+                       : i < 13 ? DonorStatus.pledged
+                       :           DonorStatus.received;
+      const createdAt  = new Date(nowMs - Math.random() * FOUR_WEEKS_MS);
+      const amount     = 50 + Math.floor(Math.random() * 701); // $50–$750
+      return {
+        campaignId:    campaign.id,
+        firstName:     p.firstName,
+        lastName:      p.lastName,
+        ...(p.phoneHome ? { phoneHome: p.phoneHome } : {}),
+        linkedPersonId: p.id,
+        createdById:   danWu.id,
+        status,
+        amount,
+        ...(isReceived ? { donationDate: createdAt } : {}),
+        thankYouSent:  isThanked,
+        ...(isThanked  ? { thankYouDate: new Date(nowMs - Math.random() * 7 * 24 * 60 * 60 * 1000) } : {}),
+        ...(DONOR_NOTES[i] ? { notes: DONOR_NOTES[i]! } : {}),
+        createdAt,
+      };
+    }),
+  });
+  console.log("  ✓ Donor prospects: 20 (8 interested, 5 pledged, 4 received, 3 thanked)");
+
+  // ── Volunteer shifts ──────────────────────────────────────────────────────
+  // Dates relative to today 2026-04-19 (Sunday):
+  //   Shift 1 — last Saturday Apr 18 (already happened → attended)
+  //   Shift 2 — next Tuesday  Apr 21 (pending)
+  //   Shift 3 — next Saturday Apr 25
+  //   Shift 4 — following Sat May 02
+  //   Shift 5 — Saturday before election Oct 24
+  const SHIFT_DEFS = [
+    { name: "Saturday Canvass — Elm Street", date: new Date("2026-04-18T00:00:00Z"), startTime: "09:00", endTime: "13:00", maxVolunteers:  8 },
+    { name: "Phone Banking Evening",         date: new Date("2026-04-21T00:00:00Z"), startTime: "18:00", endTime: "21:00", maxVolunteers:  6 },
+    { name: "Sign Installation",             date: new Date("2026-04-25T00:00:00Z"), startTime: "10:00", endTime: "14:00", maxVolunteers: 10 },
+    { name: "Voter Contact Blitz",           date: new Date("2026-05-02T00:00:00Z"), startTime: "09:00", endTime: "12:00", maxVolunteers:  8 },
+    { name: "Final Push Canvass",            date: new Date("2026-10-24T00:00:00Z"), startTime: "08:00", endTime: "17:00", maxVolunteers: 15 },
+  ];
+
+  const shifts = await Promise.all(
+    SHIFT_DEFS.map((s) =>
+      db.volunteerShift.create({
+        data: {
+          campaignId:    campaign.id,
+          name:          s.name,
+          date:          s.date,
+          startTime:     s.startTime,
+          endTime:       s.endTime,
+          maxVolunteers: s.maxVolunteers,
+        },
+      })
+    )
+  );
+
+  // Volunteer records: use 5 voters who were canvassed
+  const volPersons = await db.person.findMany({
+    where: { campaignId: campaign.id },
+    take: 5,
+    skip: 100,
+  });
+
+  const volRecords = await Promise.all(
+    volPersons.map((p) =>
+      db.volunteerRecord.create({
+        data: {
+          campaignId: campaign.id,
+          personId:   p.id,
+          status:     "committed",
+        },
+      })
+    )
+  );
+
+  // Shift 1 (past): 4 volunteers, attended
+  // Shift 2 (upcoming): 3 volunteers, pending
+  await db.volunteerShiftAttendee.createMany({
+    data: [
+      ...volRecords.slice(0, 4).map((r) => ({
+        shiftId:  shifts[0].id,
+        recordId: r.id,
+        status:   "attended" as const,
+      })),
+      ...volRecords.slice(0, 3).map((r) => ({
+        shiftId:  shifts[1].id,
+        recordId: r.id,
+        status:   "pending" as const,
+      })),
+    ],
+  });
+
+  console.log("  ✓ Volunteer shifts: 5 (4 attended shift 1, 3 pending shift 2)");
 
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
