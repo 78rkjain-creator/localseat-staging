@@ -12,7 +12,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -326,6 +326,125 @@ async function main() {
 
   await db.person.createMany({ data: personRows });
   console.log(`  ✓ Placeholder voters: ${personRows.length}`);
+
+  // ── Walk lists, assignments, entries, canvass responses ───────────────────
+  const NOTE_POOL = [
+    "Very supportive, wants sign",
+    "Concerned about traffic",
+    "Moving next month",
+    "Already voted advance",
+    "Wants to volunteer",
+    "Not interested",
+    "Will consider",
+    "Requested more info",
+  ];
+
+  function randomRespondedAt(): Date {
+    const d = new Date(Date.now() - Math.random() * 21 * 24 * 60 * 60 * 1000);
+    d.setHours(9 + Math.floor(Math.random() * 11), Math.floor(Math.random() * 60), 0, 0);
+    return d;
+  }
+
+  const WALK_LIST_DEFS = [
+    {
+      name:           "Elm Street Block — Round 1",
+      description:    "Initial door knock on Elm Street between 14 and 32",
+      street:         "Elm Street",
+      canvasser:      priyaNair,
+      totalEntries:   40,
+      completedCount: 24,
+    },
+    {
+      name:           "Maple Avenue North",
+      description:    "Maple Avenue north end canvass",
+      street:         "Maple Avenue",
+      canvasser:      kevinLafleur,
+      totalEntries:   35,
+      completedCount: 14,
+    },
+    {
+      name:           "Oak Drive Circuit",
+      description:    "Full Oak Drive sweep",
+      street:         "Oak Drive",
+      canvasser:      amyZhang,
+      totalEntries:   45,
+      completedCount:  9,
+    },
+    {
+      name:           "Cedar Boulevard Run",
+      description:    "Cedar Boulevard first pass",
+      street:         "Cedar Boulevard",
+      canvasser:      tomOkonkwo,
+      totalEntries:   30,
+      completedCount:  0,
+    },
+  ];
+
+  let totalResponses = 0;
+
+  for (let listIdx = 0; listIdx < WALK_LIST_DEFS.length; listIdx++) {
+    const def = WALK_LIST_DEFS[listIdx];
+    // Fetch persons from this street (capped at totalEntries)
+    const streetPersons = await db.person.findMany({
+      where: {
+        campaignId: campaign.id,
+        household:  { address: { streetName: def.street } },
+      },
+      take: def.totalEntries,
+    });
+
+    const canvassList = await db.canvassList.create({
+      data: {
+        campaignId:  campaign.id,
+        name:        def.name,
+        description: def.description,
+      },
+    });
+
+    const assignment = await db.canvassAssignment.create({
+      data: {
+        canvassListId: canvassList.id,
+        canvasserId:   def.canvasser.id,
+      },
+    });
+
+    await db.canvassListEntry.createMany({
+      data: streetPersons.map((p) => ({
+        canvassListId: canvassList.id,
+        personId:      p.id,
+        addedById:     jamesOkafor.id,
+      })),
+    });
+
+    const completedPersons = streetPersons.slice(0, def.completedCount);
+    if (completedPersons.length > 0) {
+      await db.canvassResponse.createMany({
+        data: completedPersons.map((p, ri) => {
+          const sl      = p.supportLevel as SupportLevel | null;
+          const outcome = sl === "not_home"
+            ? CanvassOutcome.not_home
+            : CanvassOutcome.contacted;
+          const note    = ri % 10 < 3
+            ? NOTE_POOL[(listIdx * 3 + ri) % NOTE_POOL.length]
+            : undefined;
+          return {
+            assignmentId: assignment.id,
+            personId:     p.id,
+            outcome,
+            ...(sl && sl !== "not_home" ? { supportLevel: sl as SupportLevel } : {}),
+            respondedAt:  randomRespondedAt(),
+            ...(note ? { notes: note } : {}),
+          };
+        }),
+      });
+      totalResponses += completedPersons.length;
+    }
+
+    console.log(
+      `  ✓ "${def.name}": ${streetPersons.length} entries, ${completedPersons.length} responses`
+    );
+  }
+  console.log(`  ✓ Walk lists: 4 | Canvass responses: ${totalResponses}`);
 
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
