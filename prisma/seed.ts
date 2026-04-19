@@ -12,7 +12,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -604,6 +604,219 @@ async function main() {
   });
 
   console.log("  ✓ Volunteer shifts: 5 (4 attended shift 1, 3 pending shift 2)");
+
+  // ── Outreach log ──────────────────────────────────────────────────────────
+  const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000;
+
+  function randomOutreachDate(): Date {
+    return new Date(nowMs - Math.random() * SIX_WEEKS_MS);
+  }
+
+  function outreachOutcome(sl: string | null): string {
+    if (sl === "strong_yes" || sl === "soft_yes") return "positive";
+    if (sl === "undecided") return "neutral";
+    if (sl === "soft_no" || sl === "strong_no") return "negative";
+    if (sl === "not_home") return "not_home";
+    return "contacted";
+  }
+
+  // Part 1: one entry per canvass response (door knock record)
+  const canvassResponses = await db.canvassResponse.findMany({
+    include: { assignment: true },
+  });
+
+  await db.outreachLog.createMany({
+    data: canvassResponses.map((r) => ({
+      campaignId: campaign.id,
+      personId:   r.personId,
+      userId:     r.assignment.canvasserId,
+      channel:    OutreachChannel.door_knock,
+      date:       r.respondedAt,
+      outcome:    outreachOutcome(r.supportLevel),
+      ...(r.notes ? { notes: r.notes } : {}),
+    })),
+  });
+
+  // Part 2: 100 manual entries (phone, door, email, event)
+  const manualPersons = await db.person.findMany({
+    where: { campaignId: campaign.id },
+    take: 100,
+    skip: 200,
+  });
+
+  const fieldUsers = [jamesOkafor, sarahKim, mariaSantos, priyaNair, kevinLafleur, amyZhang, tomOkonkwo];
+
+  const PHONE_NOTES = [
+    "Reached, very supportive",
+    "Left voicemail",
+    "Discussed housing concerns",
+    "Spoke about transit plans",
+    "Requested callback",
+  ];
+  const DOOR_NOTES = [
+    "Resident not home",
+    "Spoke at door briefly",
+    "Left flyer",
+    "Positive conversation",
+    "Spoke with tenant, not owner",
+  ];
+  const EMAIL_NOTES = [
+    "Replied with support",
+    "No response yet",
+    "Asked about platform positions",
+    "Forwarded to neighbours",
+    "Requested more information",
+  ];
+  const EVENT_NOTES = [
+    "Met at community meeting",
+    "Spoke at school council event",
+    "Connected at local library",
+    "Met at farmers market",
+    "Approached at neighbourhood cafe",
+  ];
+
+  const PHONE_OUTCOMES = ["positive", "voicemail", "no_answer", "neutral", "not_home"];
+  const DOOR_OUTCOMES  = ["positive", "not_home", "neutral", "negative", "positive"];
+  const EMAIL_OUTCOMES = ["positive", "neutral", "no_response", "positive", "neutral"];
+
+  const manualRows: {
+    campaignId: string;
+    personId:   string;
+    userId:     string;
+    channel:    OutreachChannel;
+    date:       Date;
+    outcome:    string;
+    notes:      string;
+  }[] = [];
+
+  for (let i = 0; i < 40 && i < manualPersons.length; i++) {
+    manualRows.push({
+      campaignId: campaign.id,
+      personId:   manualPersons[i].id,
+      userId:     fieldUsers[i % fieldUsers.length].id,
+      channel:    OutreachChannel.phone_call,
+      date:       randomOutreachDate(),
+      outcome:    PHONE_OUTCOMES[i % PHONE_OUTCOMES.length],
+      notes:      PHONE_NOTES[i % PHONE_NOTES.length],
+    });
+  }
+
+  for (let i = 40; i < 70 && i < manualPersons.length; i++) {
+    manualRows.push({
+      campaignId: campaign.id,
+      personId:   manualPersons[i].id,
+      userId:     fieldUsers[i % fieldUsers.length].id,
+      channel:    OutreachChannel.door_knock,
+      date:       randomOutreachDate(),
+      outcome:    DOOR_OUTCOMES[i % DOOR_OUTCOMES.length],
+      notes:      DOOR_NOTES[i % DOOR_NOTES.length],
+    });
+  }
+
+  for (let i = 70; i < 90 && i < manualPersons.length; i++) {
+    manualRows.push({
+      campaignId: campaign.id,
+      personId:   manualPersons[i].id,
+      userId:     [mariaSantos, jamesOkafor, sarahKim][i % 3].id,
+      channel:    OutreachChannel.email,
+      date:       randomOutreachDate(),
+      outcome:    EMAIL_OUTCOMES[i % EMAIL_OUTCOMES.length],
+      notes:      EMAIL_NOTES[i % EMAIL_NOTES.length],
+    });
+  }
+
+  for (let i = 90; i < 100 && i < manualPersons.length; i++) {
+    manualRows.push({
+      campaignId: campaign.id,
+      personId:   manualPersons[i].id,
+      userId:     [alexChen, mariaSantos, jamesOkafor][i % 3].id,
+      channel:    OutreachChannel.in_person,
+      date:       randomOutreachDate(),
+      outcome:    "positive",
+      notes:      EVENT_NOTES[i % EVENT_NOTES.length],
+    });
+  }
+
+  await db.outreachLog.createMany({ data: manualRows });
+  console.log(
+    `  ✓ Outreach log: ${canvassResponses.length + manualRows.length} entries ` +
+    `(${canvassResponses.length} from canvass, ${manualRows.length} manual)`
+  );
+
+  // ── Audit log ─────────────────────────────────────────────────────────────
+  function randomAuditDate(): Date {
+    return new Date(nowMs - Math.random() * SIX_WEEKS_MS);
+  }
+
+  const auditRows: {
+    campaignId?: string;
+    userId?:     string;
+    action:      string;
+    entityType:  string;
+    entityId:    string;
+    before?:     object;
+    after?:      object;
+    createdAt:   Date;
+  }[] = [];
+
+  const allFieldUsers  = [jamesOkafor, sarahKim, priyaNair, kevinLafleur];
+  const canvassersOnly = [priyaNair, kevinLafleur, amyZhang, tomOkonkwo];
+  const loginUsers     = [alexChen, mariaSantos, jamesOkafor, sarahKim, priyaNair, kevinLafleur, amyZhang, tomOkonkwo];
+
+  // 15 LOGIN
+  for (let i = 0; i < 15; i++) {
+    const u = loginUsers[i % loginUsers.length];
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "LOGIN",                    entityType: "user",                    entityId: u.id,          createdAt: randomAuditDate() });
+  }
+  // 10 CANVASS_RESPONSE_SAVED
+  for (let i = 0; i < 10; i++) {
+    const u = canvassersOnly[i % canvassersOnly.length];
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "CANVASS_RESPONSE_SAVED",   entityType: "canvass_response",        entityId: campaign.id,   createdAt: randomAuditDate() });
+  }
+  // 8 FOLLOW_UP_CREATED
+  for (let i = 0; i < 8; i++) {
+    const u = allFieldUsers[i % allFieldUsers.length];
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_CREATED",        entityType: "task",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+  }
+  // 8 FOLLOW_UP_COMPLETED
+  for (let i = 0; i < 8; i++) {
+    const u = allFieldUsers[i % allFieldUsers.length];
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_COMPLETED",      entityType: "task",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+  }
+  // 8 NOTE_ADDED
+  for (let i = 0; i < 8; i++) {
+    const u = [jamesOkafor, sarahKim, mariaSantos, priyaNair][i % 4];
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "NOTE_ADDED",               entityType: "note",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+  }
+  // 8 VOTER_LIST_IMPORTED
+  for (let i = 0; i < 8; i++) {
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "VOTER_LIST_IMPORTED", entityType: "voter_list",          entityId: campaign.id,   createdAt: randomAuditDate(), after: { count: 50 + i * 20 } });
+  }
+  // 6 MEMBER_ADDED
+  for (let i = 0; i < 6; i++) {
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "MEMBER_ADDED",   entityType: "campaign_membership",     entityId: campaign.id,   createdAt: randomAuditDate() });
+  }
+  // 5 ROLE_CHANGED
+  for (let i = 0; i < 5; i++) {
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "ROLE_CHANGED",   entityType: "campaign_membership",     entityId: campaign.id,   createdAt: randomAuditDate(), before: { role: "canvasser" }, after: { role: "field_organizer" } });
+  }
+  // 5 EXPORT_VOTER_LIST
+  for (let i = 0; i < 5; i++) {
+    const u = [mariaSantos, jamesOkafor, sarahKim][i % 3];
+    auditRows.push({ campaignId: campaign.id, userId: u.id,           action: "EXPORT_VOTER_LIST", entityType: "voter_list",           entityId: campaign.id,   createdAt: randomAuditDate(), after: { format: "csv", rows: 100 + i * 50 } });
+  }
+  // 4 ADDRESS_CHANGE_APPROVED
+  for (let i = 0; i < 4; i++) {
+    auditRows.push({ campaignId: campaign.id, userId: jamesOkafor.id, action: "ADDRESS_CHANGE_APPROVED", entityType: "address_change_request", entityId: campaign.id, createdAt: randomAuditDate() });
+  }
+  // 3 PASSWORD_RESET_REQUESTED (no campaignId — user-level event)
+  for (let i = 0; i < 3; i++) {
+    const u = [priyaNair, kevinLafleur, amyZhang][i];
+    auditRows.push({ userId: u.id, action: "PASSWORD_RESET_REQUESTED", entityType: "user", entityId: u.id, createdAt: randomAuditDate() });
+  }
+
+  await db.auditLog.createMany({ data: auditRows });
+  console.log(`  ✓ Audit log: ${auditRows.length} entries`);
 
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
