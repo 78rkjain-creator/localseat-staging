@@ -26,6 +26,11 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
+    // Demo site: redirect root to /demo (works for both authed and unauthed visitors).
+    if (process.env.DEMO_MODE === "true" && pathname === "/") {
+      return NextResponse.redirect(new URL("/demo", req.url));
+    }
+
     // Authenticated users visiting /login are sent to the right landing page.
     if (pathname === "/login" && token) {
       const platformRole = token.platformRole;
@@ -121,6 +126,7 @@ export default withAuth(
 
         // Public paths — always allow, no token required.
         if (
+          pathname === "/" ||          // demo site redirects root → /demo in middleware
           pathname === "/login" ||
           pathname === "/register" ||
           pathname === "/demo" ||
