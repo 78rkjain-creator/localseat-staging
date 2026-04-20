@@ -31,8 +31,8 @@ export default function CreateCampaignPage() {
       }
       // Refresh the JWT token with the new campaign membership
       await update({ refreshMemberships: true, activeCampaignId: result?.campaignId });
-      // Hard navigate — ensures the browser sends the updated cookie before RSC
-      window.location.href = "/dashboard";
+      // Hard navigate — ensures the browser sends the updated cookie before the next page loads
+      window.location.href = `/onboarding/choose-plan?campaignId=${result?.campaignId}`;
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
