@@ -17,6 +17,7 @@ const FEATURES = [
 const OFFICE_OPTIONS = [
   { value: "",                     label: "Select an office…" },
   { value: "Ward Councillor",      label: "Ward Councillor" },
+  { value: "Regional Councillor",  label: "Regional Councillor" },
   { value: "Mayor",                label: "Mayor" },
   { value: "School Board Trustee", label: "School Board Trustee" },
   { value: "Other",                label: "Other" },

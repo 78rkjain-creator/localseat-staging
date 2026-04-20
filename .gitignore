@@ -42,4 +42,4 @@ next-env.d.ts
 
 # Local TypeScript check output
 tsc_output.txt
-demo/
+/demo/
