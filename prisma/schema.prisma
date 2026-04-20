@@ -610,6 +610,22 @@ model DemoRegistration {
   @@map("demo_registrations")
 }
 
+// ─── Contact Submission ───────────────────────────────────────────────────────
+
+model ContactSubmission {
+  id        String    @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String
+  topic     String?
+  message   String
+  ipAddress String?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@map("contact_submissions")
+}
+
 // ─── Platform Settings ────────────────────────────────────────────────────────
 
 model PlatformSettings {

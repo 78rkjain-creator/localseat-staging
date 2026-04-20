@@ -406,3 +406,93 @@ export async function sendVerificationEmail(params: {
     console.error("[email] Failed to send verification email:", err);
   }
 }
+
+// ── Contact notification email ────────────────────────────────────────────────
+
+export async function sendContactNotificationEmail(params: {
+  firstName: string;
+  lastName:  string;
+  email:     string;
+  topic?:    string;
+  message:   string;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { firstName, lastName, email, topic, message } = params;
+  const subject = `New contact: ${topic || "General"} — ${firstName} ${lastName}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#f97316;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">New contact form submission</p>
+    </div>
+
+    <div style="padding:32px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;width:110px;vertical-align:top;">
+            <span style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Name</span>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;vertical-align:top;">
+            <span style="font-size:14px;color:#0f172a;font-weight:500;">${firstName} ${lastName}</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;vertical-align:top;">
+            <span style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Email</span>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;vertical-align:top;">
+            <a href="mailto:${email}" style="font-size:14px;color:#f97316;text-decoration:none;">${email}</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;vertical-align:top;">
+            <span style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Topic</span>
+          </td>
+          <td style="padding:10px 0;vertical-align:top;">
+            <span style="font-size:14px;color:#0f172a;">${topic || "General"}</span>
+          </td>
+        </tr>
+      </table>
+
+      <div>
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Message</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+          <p style="margin:0;font-size:14px;color:#334155;line-height:1.7;white-space:pre-wrap;">${message}</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        Replying to this email will go directly to ${email}.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from:     fromWelcome(),
+      to:       "info@localseat.io",
+      replyTo:  email,
+      subject,
+      html,
+    });
+    console.log(`[email] Contact notification sent for ${email}`);
+  } catch (err) {
+    console.error("[email] Failed to send contact notification email:", err);
+  }
+}
