@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isSuperUser } from "@/lib/permissions";
+import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/types";
 import type { Role } from "@/types";
 import Link from "next/link";
@@ -11,7 +11,10 @@ import {
   reactivateCampaign,
   deleteCampaign,
   restoreCampaign,
+  getCampaignOverride,
+  getCampaignEffectiveLimits,
 } from "./actions";
+import { OverridePanel } from "./override-panel";
 
 async function getCampaignDetail(campaignId: string) {
   const [campaign, voterCount, responseCount, donorCount, listCount] =
@@ -98,7 +101,16 @@ export default async function AdminCampaignDetailPage({
 
   if (!campaign) notFound();
 
-  const callerIsSuperUser = isSuperUser(session.user.platformRole);
+  const callerIsSuperUser  = isSuperUser(session.user.platformRole);
+  const callerIsSuperAdmin = isSuperAdmin(session.user.platformRole);
+
+  // Load override data only for admins — both actions guard internally
+  const [initialOverride, initialEffectiveLimits] = callerIsSuperAdmin
+    ? await Promise.all([
+        getCampaignOverride(campaignId),
+        getCampaignEffectiveLimits(campaignId),
+      ])
+    : [null, null];
 
   const deactivateAction = deactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
   const reactivateAction = reactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
@@ -301,6 +313,17 @@ export default async function AdminCampaignDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Override panel — super_user and super_admin only */}
+      {callerIsSuperAdmin && initialEffectiveLimits && (
+        <OverridePanel
+          campaignId={campaignId}
+          campaignPlan={campaign.plan}
+          planActivated={campaign.planActivated}
+          initialOverride={initialOverride}
+          initialEffectiveLimits={initialEffectiveLimits}
+        />
+      )}
     </div>
   );
 }
