@@ -102,6 +102,7 @@ SMTP_USER="info@localseat.io"
 SMTP_PASS="<password>"
 SMTP_FROM_WELCOME="hello@localseat.io"
 SMTP_FROM_APPROVALS="approvals@localseat.io"
+NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
 ```
 
 **Production VPS (/var/www/localseat/.env)**
@@ -111,6 +112,7 @@ NEXTAUTH_SECRET="<generated secret>"
 NEXTAUTH_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
 SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM_WELCOME, SMTP_FROM_APPROVALS
+NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
 ```
 
 **Demo VPS (/var/www/demo/.env)**
@@ -122,6 +124,7 @@ DEMO_MODE="true"
 PRODUCTION_API_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
 SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM_WELCOME, SMTP_FROM_APPROVALS
+NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
 ```
 
 **Staging (Vercel)**
@@ -130,6 +133,7 @@ DATABASE_URL="<Neon connection string>"
 NEXTAUTH_SECRET="<staging secret>"
 NEXTAUTH_URL="https://localseat-staging.vercel.app"
 SMTP vars same as above
+NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
 ```
 
 ---
@@ -333,6 +337,22 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Daily 3am reset via cron (preserves DemoRegistration records)
 - 1500 voters, full campaign team, walk lists, donors, volunteers
 
+### Tier & Pricing Foundation
+
+- PlanTier enum on Campaign: starter | campaign | election | demo
+- plan, planActivated, amountPaid, planLockedAt fields added to Campaign model
+- PlatformSettings model — generic key/value store for pricing and limits per tier
+- CampaignOverride model — per-campaign limit exceptions with internal notes and audit fields
+- src/lib/plan-limits.ts — resolves effective limits by merging tier defaults, campaign overrides, and demo bypass logic
+- Limit enforcement wired at four points: voter import, add person at door, team invite, donor creation
+- /admin/settings — super_user can edit tier pricing, labels, and limits live from DB; super_admin is read-only
+- Campaign override panel added to /admin/campaigns/[id] — accessible to super_user and super_admin only
+- /onboarding/choose-plan — dev tier selector loads pricing live from PlatformSettings
+- NEXT_PUBLIC_STRIPE_ENABLED=false enables dev mode — plan selected without payment
+- When NEXT_PUBLIC_STRIPE_ENABLED=true, choose-plan buttons show "Coming soon" until Stripe is wired
+- Demo campaigns bypass all limit checks regardless of overrides
+- All plan selections and override changes are audit logged
+
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts
 - canvasser-route-protection.test.ts
@@ -352,8 +372,9 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 | Marketing site at localseat.io | Medium |
 | Operations guide document | Small |
 | Text messaging (Telnyx + Stripe + approval + CRTC) | Large |
-| Admin platform settings page | Medium |
-| Stripe payment integration on choose-plan page | Large |
+| Admin platform settings page | Medium — Done |
+| Stripe payment integration on choose-plan page | Dev tier selector done. Stripe wiring is the remaining step. |
+| Update HANDOFF.md at end of each session | Small — ongoing |
 | Map-based turf cutting (Leaflet + OpenStreetMap) | Large |
 | Demo instance isolation — Option 3 (unique DB per visitor) | Large |
 
@@ -379,14 +400,14 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 
 ```
 /prisma
-  schema.prisma
+  schema.prisma        (includes PlatformSettings, CampaignOverride, PlanTier enum)
   seed.ts
 /src
   /app
     /(auth)/login, /register, /verify-email, /resend-verification, /account-expired, /reset-password
     /(app)/dashboard, /voter-list, /voter-import, /canvassing, /follow-ups
              /outreach, /donors, /volunteers, /team, /campaigns, /account, /address-changes
-    /admin/campaigns, /users, /audit-log, /export, /demo-leads, /account
+    /admin/campaigns, /users, /audit-log, /export, /demo-leads, /account, /settings
     /onboarding/choose-plan, /create-campaign
     /demo
     /api/demo-leads
@@ -394,7 +415,7 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
     email.ts, verification.ts, audit.ts, audit-descriptions.ts
     address-changes.ts, people.ts, canvassing.ts, outreach.ts, activity.ts
-    offline-queue.ts, terms.ts
+    offline-queue.ts, terms.ts, plan-limits.ts
   /hooks/useOfflineSync.ts
   /components/layout/demo-banner.tsx
   proxy.ts
