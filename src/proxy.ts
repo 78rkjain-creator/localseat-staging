@@ -139,6 +139,7 @@ export default withAuth(
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
           pathname === "/api/demo-leads" ||
+          pathname === "/api/contact" ||
           pathname.startsWith("/icons")
         ) {
           return true;
