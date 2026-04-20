@@ -138,6 +138,7 @@ export default withAuth(
           pathname === "/manifest.json" ||
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
+          pathname === "/api/demo-leads" ||
           pathname.startsWith("/icons")
         ) {
           return true;
