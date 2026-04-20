@@ -60,3 +60,36 @@ export function recordFailedAttempt(email: string): void {
 export function resetAttempts(email: string): void {
   store.delete(normaliseKey(email));
 }
+
+// ── Generic key-based rate limiter ────────────────────────────────────────────
+// Separate store so it doesn't interfere with auth attempt tracking.
+
+interface RateLimitWindow {
+  count: number;
+  windowStart: number;
+}
+
+const genericStore = new Map<string, RateLimitWindow>();
+
+/**
+ * Returns true if the request is within the allowed rate.
+ * @param key       Arbitrary string key (e.g. IP address)
+ * @param max       Max requests allowed per window
+ * @param windowMs  Window duration in milliseconds
+ */
+export function rateLimitByKey(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = genericStore.get(key);
+
+  if (!entry || now - entry.windowStart >= windowMs) {
+    genericStore.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+
+  if (entry.count >= max) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}

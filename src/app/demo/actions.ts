@@ -11,10 +11,11 @@ interface DemoFormData {
   phone:        string;
   municipality: string;
   officeType:   string;
+  consented:    boolean;
 }
 
 export async function registerDemo(data: DemoFormData): Promise<{ error?: string }> {
-  const { firstName, lastName, email, phone, municipality, officeType } = data;
+  const { firstName, lastName, email, phone, municipality, officeType, consented } = data;
 
   if (!firstName.trim() || !lastName.trim() || !email.trim()) {
     return { error: "First name, last name, and email are required." };
@@ -25,11 +26,18 @@ export async function registerDemo(data: DemoFormData): Promise<{ error?: string
     return { error: "Please enter a valid email address." };
   }
 
+  if (!consented) {
+    return { error: "Please check the consent box to continue." };
+  }
+
   // Resolve client IP for lead context
   const headerList = await headers();
   const forwarded = headerList.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? headerList.get("x-real-ip") ?? "unknown";
 
+  const source = "demo.localseat.io";
+
+  // Save locally (demo database)
   await db.demoRegistration.create({
     data: {
       firstName:    firstName.trim(),
@@ -38,6 +46,8 @@ export async function registerDemo(data: DemoFormData): Promise<{ error?: string
       phone:        phone.trim() || null,
       municipality: municipality.trim() || null,
       officeType:   officeType || null,
+      consented,
+      source,
       ipAddress:    ip,
     },
   });
@@ -51,11 +61,47 @@ export async function registerDemo(data: DemoFormData): Promise<{ error?: string
       lastName,
       email:        email.trim().toLowerCase(),
       municipality: municipality || null,
-      officeType:   officeType || null,
+      officeType:   officeType   || null,
+      consented,
+      source,
       ip,
       loginAs:      "demo@localseat.io",
     },
   });
+
+  // Fire webhook to production — fail silently so demo always works
+  try {
+    const productionUrl = process.env.PRODUCTION_API_URL;
+    const webhookSecret = process.env.DEMO_WEBHOOK_SECRET;
+
+    if (productionUrl && webhookSecret) {
+      const res = await fetch(`${productionUrl}/api/demo-leads`, {
+        method:  "POST",
+        headers: {
+          "Content-Type":    "application/json",
+          "x-webhook-secret": webhookSecret,
+        },
+        body: JSON.stringify({
+          firstName:    firstName.trim(),
+          lastName:     lastName.trim(),
+          email:        email.trim().toLowerCase(),
+          phone:        phone.trim() || null,
+          municipality: municipality.trim() || null,
+          officeType:   officeType || null,
+          consented,
+          source,
+        }),
+        // Don't hold up the response longer than 5 seconds
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!res.ok) {
+        console.error("[demo-webhook] Production webhook returned", res.status);
+      }
+    }
+  } catch (err) {
+    console.error("[demo-webhook] Failed to reach production webhook:", err);
+  }
 
   return {};
 }

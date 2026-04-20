@@ -582,15 +582,18 @@ model AddressChangeRequest {
 // No campaign or user FK — intentionally standalone.
 
 model DemoRegistration {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   firstName    String
   lastName     String
   email        String
   phone        String?
   municipality String?
   officeType   String?
-  createdAt    DateTime @default(now())
+  consented    Boolean   @default(false)
+  source       String?
+  createdAt    DateTime  @default(now())
   ipAddress    String?
+  emailedAt    DateTime?
 
   @@map("demo_registrations")
 }

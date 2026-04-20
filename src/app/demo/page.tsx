@@ -39,7 +39,7 @@ export default function DemoPage() {
     setLoading(true);
 
     try {
-      const result = await registerDemo({ firstName, lastName, email, phone, municipality, officeType });
+      const result = await registerDemo({ firstName, lastName, email, phone, municipality, officeType, consented });
       if (result.error) {
         setError(result.error);
         setLoading(false);
