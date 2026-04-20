@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { canViewDonorAmounts, canViewDonors } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeAmount, sanitizeDate, sanitizeEnum } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
+import { isDonorTrackingEnabled } from "@/lib/plan-limits";
 import type { DonorStatus, PaymentMethod, Role } from "@/types";
 
 const DONOR_STATUS_VALUES: DonorStatus[] = ["interested", "pledged", "received"];
@@ -60,6 +61,11 @@ export async function addDonor(
 
   const status = sanitizeEnum(input.status, DONOR_STATUS_VALUES);
   if (!status) return { error: "Invalid donor status." };
+
+  const donorEnabled = await isDonorTrackingEnabled(campaignId);
+  if (!donorEnabled) {
+    return { error: "Donor tracking is not available on the Starter plan." };
+  }
 
   const donor = await db.donor.create({
     data: {

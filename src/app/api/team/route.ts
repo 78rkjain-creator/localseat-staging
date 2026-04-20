@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
+import { canAddRole } from "@/lib/plan-limits";
 import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
 import { generateVerificationToken } from "@/lib/verification";
 import bcrypt from "bcryptjs";
@@ -151,6 +152,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "This user is already a member of the campaign" },
       { status: 409 }
+    );
+  }
+
+  // Plan limit check for the role being assigned
+  const currentRoleCount = await db.campaignMembership.count({
+    where: { campaignId: activeCampaignId, role, deletedAt: null },
+  });
+  const roleAllowed = await canAddRole(activeCampaignId, role, currentRoleCount);
+  if (!roleAllowed) {
+    const roleLabel = role.replace(/_/g, " ");
+    return NextResponse.json(
+      { error: `Your current plan does not support additional ${roleLabel} accounts. Upgrade to add more team members.` },
+      { status: 403 }
     );
   }
 

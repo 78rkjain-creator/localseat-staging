@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { canAddConstituent } from "@/lib/plan-limits";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 
 // ── Save canvass response ─────────────────────────────────────────────────
@@ -244,6 +245,13 @@ export async function addPersonAtDoor(input: {
     select: { id: true },
   });
   if (!assignment) return { error: "Assignment not found." };
+
+  // Plan limit check
+  const currentCount = await db.person.count({ where: { campaignId: activeCampaignId, deletedAt: null } });
+  const allowed = await canAddConstituent(activeCampaignId, currentCount);
+  if (!allowed) {
+    return { error: "Constituent limit reached. Contact your campaign manager." };
+  }
 
   // Look up the field-entry system tag (tags are global, not campaign-scoped).
   // If the tag is missing (seed data not run or tag deleted) we refuse rather

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
 import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
+import { canAddConstituent } from "@/lib/plan-limits";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -147,6 +148,13 @@ export async function importVoterRows(
   }
   if (rows.length > 2000) {
     return { error: "Maximum 2,000 rows per import." };
+  }
+
+  // Plan limit check: count current constituents + batch size
+  const currentCount = await db.person.count({ where: { campaignId, deletedAt: null } });
+  const allowed = await canAddConstituent(campaignId, currentCount + rows.length - 1);
+  if (!allowed) {
+    return { error: "This campaign has reached its constituent limit for the current plan. Upgrade to import more records." };
   }
 
   let matched = 0;
