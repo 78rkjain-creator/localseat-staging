@@ -50,6 +50,80 @@ export async function createCanvassList(
   redirect(`/canvassing/${list.id}`);
 }
 
+// ── Create turf walk list ─────────────────────────────────────────────────
+
+export async function createTurfCanvassList(data: {
+  name: string;
+  description?: string;
+  polygon: object;
+  addressIds: string[];
+}): Promise<{ error?: string; listId?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageWalkLists(activeRole as Role)) {
+    return { error: "You don't have permission to create walk lists." };
+  }
+
+  const name = data.name.trim();
+  if (!name) return { error: "Name is required." };
+  if (name.length > 120) return { error: "Name is too long." };
+  if (data.addressIds.length === 0) return { error: "No addresses selected." };
+
+  // Find all people linked to the selected addresses via Household
+  const people = await db.person.findMany({
+    where: {
+      campaignId: activeCampaignId,
+      deletedAt: null,
+      household: {
+        addressId: { in: data.addressIds },
+        deletedAt: null,
+      },
+    },
+    select: { id: true },
+  });
+
+  const list = await db.canvassList.create({
+    data: {
+      campaignId: activeCampaignId,
+      name,
+      description: data.description?.trim() || null,
+      turfPolygon: data.polygon,
+      turfCreatedAt: new Date(),
+    },
+  });
+
+  if (people.length > 0) {
+    await db.canvassListEntry.createMany({
+      data: people.map((p) => ({
+        canvassListId: list.id,
+        personId: p.id,
+        addedById: session.user.id,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "CANVASS_LIST_CREATED",
+    entityType: "canvass_list",
+    entityId: list.id,
+    details: {
+      name,
+      source: "turf_map",
+      addressCount: data.addressIds.length,
+      personCount: people.length,
+    },
+  });
+
+  revalidatePath("/canvassing");
+  return { listId: list.id };
+}
+
 // ── Assign canvasser ──────────────────────────────────────────────────────
 
 export async function assignCanvasser(

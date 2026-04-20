@@ -317,13 +317,15 @@ model Task {
 // ─── Canvass List ─────────────────────────────────────────────────────────────
 
 model CanvassList {
-  id          String    @id @default(cuid())
-  campaignId  String
-  name        String
-  description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id             String    @id @default(cuid())
+  campaignId     String
+  name           String
+  description    String?
+  turfPolygon    Json?     // GeoJSON polygon from map-based turf cutting; null for manual/CSV lists
+  turfCreatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   campaign    Campaign            @relation(fields: [campaignId], references: [id])
   assignments CanvassAssignment[]
