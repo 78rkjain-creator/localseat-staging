@@ -88,7 +88,7 @@ export default withAuth(
       pathname.startsWith("/api/auth") ||
       pathname.startsWith("/onboarding/choose-plan");
 
-    if (!skipVerificationCheck) {
+    if (!skipVerificationCheck && process.env.SKIP_EMAIL_VERIFICATION !== "true") {
       const { emailVerified, verificationTokenExpiry } = token;
       if (!emailVerified) {
         if (verificationTokenExpiry && new Date(verificationTokenExpiry) < new Date()) {
