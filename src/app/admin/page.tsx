@@ -2,20 +2,31 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import Link from "next/link";
+import { isSuperAdmin } from "@/lib/permissions";
 
 async function getPlatformStats() {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
   const [
     totalCampaigns,
     totalUsers,
     totalCanvassResponses,
     totalDonors,
     totalPeople,
+    totalLeads,
+    unemailedLeads,
+    recentLeads,
   ] = await Promise.all([
     db.campaign.count(),
     db.user.count(),
     db.canvassResponse.count(),
     db.donor.count(),
     db.person.count(),
+    db.demoRegistration.count(),
+    db.demoRegistration.count({ where: { emailedAt: null } }),
+    db.demoRegistration.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
   ]);
 
   return {
@@ -24,6 +35,9 @@ async function getPlatformStats() {
     totalCanvassResponses,
     totalDonors,
     totalPeople,
+    totalLeads,
+    unemailedLeads,
+    recentLeads,
   };
 }
 
@@ -50,6 +64,7 @@ export default async function AdminDashboardPage() {
   if (!session?.user.platformRole) redirect("/dashboard");
 
   const stats = await getPlatformStats();
+  const canSeeLeads = isSuperAdmin(session.user.platformRole);
 
   return (
     <div className="px-6 py-8 max-w-5xl mx-auto">
@@ -87,6 +102,41 @@ export default async function AdminDashboardPage() {
           description="All donor records across all campaigns"
         />
       </div>
+
+      {canSeeLeads && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Demo Leads
+          </h2>
+          <Link
+            href="/admin/demo-leads"
+            className="block bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:border-brand-200 hover:shadow-md transition-all group"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <p className="text-sm font-semibold text-slate-700 group-hover:text-brand-600 transition-colors">
+                Demo Registrations
+              </p>
+              <svg className="h-4 w-4 text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-2xl font-bold text-slate-900 tabular-nums">{stats.totalLeads.toLocaleString()}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Total leads</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-amber-600 tabular-nums">{stats.unemailedLeads.toLocaleString()}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Not emailed</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-brand-600 tabular-nums">{stats.recentLeads.toLocaleString()}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Last 7 days</p>
+              </div>
+            </div>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
