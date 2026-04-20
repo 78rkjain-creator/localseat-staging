@@ -376,6 +376,7 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 | Stripe payment integration on choose-plan page | Dev tier selector done. Stripe wiring is the remaining step. |
 | Update HANDOFF.md at end of each session | Small — ongoing |
 | Map-based turf cutting (Leaflet + OpenStreetMap) | Large |
+| Automated PostgreSQL backup to external storage (Backblaze B2 + rclone + cron) | Small |
 | Demo instance isolation — Option 3 (unique DB per visitor) | Large |
 
 ### Defined — Ready to Build When Scheduled
