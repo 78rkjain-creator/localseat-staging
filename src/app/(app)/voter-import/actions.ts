@@ -8,6 +8,7 @@ import { canManageVoterList } from "@/lib/permissions";
 import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
+import { geocodeNewAddresses } from "@/lib/geocoding";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -160,6 +161,7 @@ export async function importVoterRows(
   let matched = 0;
   let created = 0;
   let skipped = 0;
+  const newAddressIds: string[] = [];
 
   await db.$transaction(
     async (tx) => {
@@ -228,6 +230,7 @@ export async function importVoterRows(
             data: { campaignId, streetNumber, streetName, unitNumber, city, province, postalCode },
             select: { id: true },
           });
+          newAddressIds.push(address.id);
         }
 
         // 3. Find or create household
@@ -263,6 +266,11 @@ export async function importVoterRows(
     },
     { timeout: 60_000 }
   );
+
+  // Fire and forget — geocode newly created addresses in the background
+  if (newAddressIds.length > 0) {
+    geocodeNewAddresses(campaignId, newAddressIds).catch(console.error);
+  }
 
   revalidatePath("/voter-import");
 

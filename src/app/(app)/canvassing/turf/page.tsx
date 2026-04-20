@@ -16,7 +16,9 @@ export default async function TurfPage() {
     redirect("/canvassing");
   }
 
-  const [geocodedAddresses, ungeocodedCount] = await Promise.all([
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  const [geocodedAddresses, ungeocodedCount, recentUngeocodedCount] = await Promise.all([
     db.address.findMany({
       where: {
         campaignId: activeCampaignId,
@@ -43,7 +45,17 @@ export default async function TurfPage() {
         lat: null,
       },
     }),
+    db.address.count({
+      where: {
+        campaignId: activeCampaignId,
+        deletedAt: null,
+        lat: null,
+        createdAt: { gte: thirtyMinutesAgo },
+      },
+    }),
   ]);
+
+  const geocodingInProgress = recentUngeocodedCount > 0;
 
   return (
     <TurfMapClient
@@ -60,6 +72,7 @@ export default async function TurfPage() {
       }>}
       campaignId={activeCampaignId}
       ungeocodedCount={ungeocodedCount}
+      geocodingInProgress={geocodingInProgress}
     />
   );
 }

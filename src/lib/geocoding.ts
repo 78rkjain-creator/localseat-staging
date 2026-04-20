@@ -66,6 +66,48 @@ export async function geocodeAddress(
   }
 }
 
+// ── geocodeNewAddresses ────────────────────────────────────────────────────
+// Background geocoding for addresses created during a voter CSV import.
+// Called fire-and-forget after importVoterRows completes.
+// Filters to ungeocoded IDs belonging to the campaign, then processes
+// sequentially with delay. Logs progress to server console. Never throws.
+
+export async function geocodeNewAddresses(
+  campaignId: string,
+  addressIds: string[]
+): Promise<void> {
+  if (addressIds.length === 0) return;
+
+  try {
+    const ungeocoded = await db.address.findMany({
+      where: { id: { in: addressIds }, campaignId, lat: null },
+      select: { id: true },
+    });
+
+    if (ungeocoded.length === 0) return;
+
+    console.log(`[geocoding] Background geocoding started — ${ungeocoded.length} new address(es)`);
+
+    for (let i = 0; i < ungeocoded.length; i++) {
+      const { id } = ungeocoded[i];
+      const result = await geocodeAddress(id);
+      console.log(
+        `[geocoding] ${i + 1}/${ungeocoded.length} ${id}: ${
+          result ? `${result.lat.toFixed(5)},${result.lng.toFixed(5)}` : "failed"
+        }`
+      );
+
+      if (i < ungeocoded.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, BETWEEN_REQUESTS_MS));
+      }
+    }
+
+    console.log("[geocoding] Background geocoding complete");
+  } catch (err) {
+    console.error("[geocoding] Error in geocodeNewAddresses:", err);
+  }
+}
+
 // ── geocodeAddressesForCanvassList ─────────────────────────────────────────
 // Geocodes all un-geocoded addresses for people on a walk list.
 // Processes sequentially with a delay to respect Mapbox rate limits.

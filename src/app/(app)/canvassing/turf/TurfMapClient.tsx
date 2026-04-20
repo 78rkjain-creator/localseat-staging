@@ -22,6 +22,7 @@ interface Props {
   addresses: AddressPoint[];
   campaignId: string;
   ungeocodedCount: number;
+  geocodingInProgress: boolean;
 }
 
 // ── Point-in-polygon (ray casting) ─────────────────────────────────────────
@@ -47,7 +48,7 @@ function addressLabel(a: AddressPoint): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function TurfMapClient({ addresses, campaignId, ungeocodedCount }: Props) {
+export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodingInProgress }: Props) {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +63,15 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount }: Props)
   const [description, setDesc]  = useState("");
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Auto-refresh every 30s while geocoding is in progress
+  useEffect(() => {
+    if (!geocodingInProgress) return;
+    const timer = setTimeout(() => {
+      window.location.reload();
+    }, 30_000);
+    return () => clearTimeout(timer);
+  }, [geocodingInProgress]);
 
   // Centroid of geocoded addresses, or Toronto fallback
   const center: [number, number] =
@@ -218,19 +228,31 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount }: Props)
       {/* Ungeocoded warning */}
       {ungeocodedCount > 0 && !warningDismissed && (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex-shrink-0">
-          <span>
-            <strong>{ungeocodedCount}</strong> address{ungeocodedCount !== 1 ? "es" : ""} in your campaign
-            haven&apos;t been mapped yet and won&apos;t appear on this map.
-          </span>
-          <button
-            onClick={() => setWarningDismissed(true)}
-            className="flex-shrink-0 text-amber-600 hover:text-amber-800 transition-colors"
-            aria-label="Dismiss"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {geocodingInProgress ? (
+            <span className="flex items-center gap-2">
+              <svg className="h-4 w-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Map data is being prepared for your recent import. This usually takes a few minutes — the map will update automatically.
+            </span>
+          ) : (
+            <span>
+              <strong>{ungeocodedCount}</strong> address{ungeocodedCount !== 1 ? "es" : ""} in your campaign
+              haven&apos;t been mapped yet and won&apos;t appear on this map.
+            </span>
+          )}
+          {!geocodingInProgress && (
+            <button
+              onClick={() => setWarningDismissed(true)}
+              className="flex-shrink-0 text-amber-600 hover:text-amber-800 transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 
