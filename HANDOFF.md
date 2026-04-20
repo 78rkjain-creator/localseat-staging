@@ -337,6 +337,26 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Daily 3am reset via cron (preserves DemoRegistration records)
 - 1500 voters, full campaign team, walk lists, donors, volunteers
 
+### Marketing Site
+
+- localseat.io live on Hostinger VPS
+- nginx config at /etc/nginx/sites-available/localseat-marketing
+- Files served from /var/www/marketing (on VPS only, not in repo)
+- SSL via certbot, auto-renews, expires 2026-07-19
+- Pages: index.html (homepage), about.html, privacy.html, terms.html, security.html, contact.html
+- All CTAs wired to app.localseat.io/register and demo.localseat.io
+- Clean URLs work: /about, /privacy, /terms, /security, /contact
+
+### Contact Form Backend
+
+- ContactSubmission model in schema.prisma with @@map("contact_submissions")
+- Migration: 20260420155334_add_contact_submission
+- /api/contact — POST only, rate limited 10 req/hr/IP, validates firstName/lastName/email/message, persists to DB, fires sendContactNotificationEmail, audit logs CONTACT_FORM_SUBMITTED
+- /api/contact/[id]/read — PATCH, sets readAt, requires super_user or super_admin session
+- /admin/contact-submissions — list view with unread dot indicator, detail panel, mark-as-read on open
+- Contact Form link added to admin sidebar (visible to both super_user and super_admin)
+- sendContactNotificationEmail added to src/lib/email.ts — fires to info@localseat.io, reply-to set to submitter's address
+
 ### Tier & Pricing Foundation
 
 - PlanTier enum on Campaign: starter | campaign | election | demo
@@ -352,6 +372,9 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - When NEXT_PUBLIC_STRIPE_ENABLED=true, choose-plan buttons show "Coming soon" until Stripe is wired
 - Demo campaigns bypass all limit checks regardless of overrides
 - All plan selections and override changes are audit logged
+- Terms updated to v1.4 effective April 20, 2026 — CURRENT_TERMS_VERSION = "1.4"
+- Section 4.4 changed from 90-day post-campaign deletion to indefinite retention with deletion on request (info@localseat.io, confirmed within 30 days)
+- Existing users on v1.3 or earlier will be prompted to re-accept on next login
 
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts
@@ -369,7 +392,7 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 
 | Item | Effort |
 |---|---|
-| Marketing site at localseat.io | Medium |
+| Marketing site at localseat.io | Medium — Done |
 | Operations guide document | Small |
 | Text messaging (Telnyx + Stripe + approval + CRTC) | Large |
 | Admin platform settings page | Medium — Done |
@@ -409,9 +432,12 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     /(app)/dashboard, /voter-list, /voter-import, /canvassing, /follow-ups
              /outreach, /donors, /volunteers, /team, /campaigns, /account, /address-changes
     /admin/campaigns, /users, /audit-log, /export, /demo-leads, /account, /settings
+    /admin/contact-submissions
     /onboarding/choose-plan, /create-campaign
     /demo
     /api/demo-leads
+    /api/contact (POST — public)
+    /api/contact/[id]/read (PATCH — super_user or super_admin)
   /lib
     auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
     email.ts, verification.ts, audit.ts, audit-descriptions.ts
@@ -422,6 +448,7 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
   proxy.ts
   /__tests__/
 /public/sw.js
+/var/www/marketing/         (VPS only — index.html, about.html, privacy.html, terms.html, security.html, contact.html)
 ```
 
 ---
