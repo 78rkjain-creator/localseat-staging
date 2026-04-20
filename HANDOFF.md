@@ -60,9 +60,11 @@ A lightweight Canada-focused municipal campaign CRM and canvassing platform. Bui
 
 1. All development work → `git push staging main`
 2. Vercel auto-deploys staging on every push
-3. When ready for production → `git push origin main` (force if needed)
-4. SSH into VPS and run `/var/www/localseat/deploy.sh`
-5. Demo site pulls from localseat-staging repo — deploy with:
+3. **TEST on staging (https://localseat-staging.vercel.app) before every production deploy**
+4. Only push to production after staging passes
+5. `git push origin main` → SSH into VPS and run `cd /var/www/localseat && ./deploy.sh`
+6. **Never push directly to production without testing on staging first**
+7. Demo site pulls from localseat-staging repo — deploy with:
 
 ```
 cd /var/www/demo
@@ -200,6 +202,10 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - All export routes need `export const dynamic = 'force-dynamic'` for Vercel compatibility
 - Pre-push git hook runs `npm run typecheck` — fix all TypeScript errors before pushing
 - `npm run typecheck` must pass before every push to avoid failed Vercel builds
+- `NEXT_PUBLIC_MAPBOX_TOKEN` required in all three environments (local `.env`, production `/var/www/localseat/.env`, Vercel staging env vars)
+- Mapbox packages installed: `mapbox-gl`, `@mapbox/mapbox-gl-draw`, `@types/mapbox-gl`, `@types/mapbox__mapbox-gl-draw`
+- Geocoding is on-demand only — triggered at voter CSV import and when walk lists are created from turf cutting
+- Addresses without lat/lng are invisible on the map — warning banner shown to managers
 
 ---
 
@@ -376,6 +382,23 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Section 4.4 changed from 90-day post-campaign deletion to indefinite retention with deletion on request (info@localseat.io, confirmed within 30 days)
 - Existing users on v1.3 or earlier will be prompted to re-accept on next login
 
+### Map-Based Turf Cutting
+
+- src/lib/geocoding.ts — `geocodeAddress(addressId)` and `geocodeAddressesForCanvassList(canvassListId)`
+- Mapbox Geocoding API, `country=ca`, cached on Address record (lat/lng already set = no API call)
+- Sequential geocoding with 600ms delay to respect rate limits
+- `geocodeNewAddresses(campaignId, addressIds)` — fire-and-forget triggered after voter CSV import completes
+- Migration: 20260420201655_add_turf_polygon_to_canvass_list — adds `turfPolygon Json?` and `turfCreatedAt DateTime?` to CanvassList
+- /canvassing/turf — map-based turf cutting page, managers only
+- TurfMapClient — Mapbox GL JS + MapboxDraw, polygon-only draw, ray-cast point-in-polygon (no turf.js), orange circle markers, side panel with address preview and walk list creation
+- `createTurfCanvassList` server action — creates CanvassList with turfPolygon, bulk-creates CanvassListEntries for all people at selected addresses
+- "Draw turf" button added to /canvassing page, managers only
+- /canvassing/[listId]/map — walk list map view, accessible to managers and assigned canvassers
+- ListMapClient — colour-coded markers by support level then outcome, click → popup with name/address/support level/outcome/"View record" link, bottom-left legend, summary bar (total/contacted/not home/remaining)
+- Auto-refresh every 30s on turf page when geocoding is in progress (heuristic: ungeocoded addresses created in last 30 minutes)
+- Warning banner when ungeocoded addresses exist; spinner + "being prepared" message while in progress
+- "Map view" button added to /canvassing/[listId] page, visible to all roles
+
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts
 - canvasser-route-protection.test.ts
@@ -398,9 +421,21 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 | Admin platform settings page | Medium — Done |
 | Stripe payment integration on choose-plan page | Dev tier selector done. Stripe wiring is the remaining step. |
 | Update HANDOFF.md at end of each session | Small — ongoing |
-| Map-based turf cutting (Leaflet + OpenStreetMap) | Large |
+| Map-based turf cutting (Mapbox GL JS + MapboxDraw) | Large — Done |
 | Automated PostgreSQL backup to external storage (Backblaze B2 + rclone + cron) | Small |
 | Demo instance isolation — Option 3 (unique DB per visitor) | Large |
+
+### Roadmap Priority Order
+
+1. Stripe payment integration (in progress — dev tier selector done, Stripe wiring remaining)
+2. Telnyx SMS broadcast (decided, not built)
+3. Two-factor authentication (2FA)
+4. Events + public RSVP flows → feeds volunteer roster
+5. Custom canvass survey fields
+6. Simple automation rules (soft yes → auto follow-up)
+7. Public volunteer signup / petition pages → feeds CRM
+8. Automated PostgreSQL backups (Backblaze B2 + rclone)
+9. Demo instance isolation (unique DB per visitor)
 
 ### Defined — Ready to Build When Scheduled
 
@@ -443,6 +478,9 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     email.ts, verification.ts, audit.ts, audit-descriptions.ts
     address-changes.ts, people.ts, canvassing.ts, outreach.ts, activity.ts
     offline-queue.ts, terms.ts, plan-limits.ts
+    geocoding.ts
+  /app/(app)/canvassing/turf/page.tsx, TurfMapClient.tsx
+  /app/(app)/canvassing/[listId]/map/page.tsx, ListMapClient.tsx
   /hooks/useOfflineSync.ts
   /components/layout/demo-banner.tsx
   proxy.ts
@@ -463,3 +501,5 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 6. Staging: https://localseat-staging.vercel.app
 7. Provide prompts for the VS Code Claude plugin — not raw source code
 8. All new development goes to localseat-staging repo first
+9. **Always test on staging before deploying to production** — https://localseat-staging.vercel.app
+10. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
