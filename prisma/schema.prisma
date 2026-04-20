@@ -52,6 +52,13 @@ enum AddressChangeStatus {
   rejected
 }
 
+enum PlanTier {
+  starter
+  campaign
+  election
+  demo
+}
+
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
@@ -66,10 +73,14 @@ model Campaign {
   province     String   @default("ON")
   year         Int
   electionDate DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  isActive       Boolean   @default(true)
+  plan           PlanTier  @default(starter)
+  planActivated  Boolean   @default(true)
+  amountPaid     Int?
+  planLockedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   memberships   CampaignMembership[]
   people        Person[]
@@ -83,6 +94,7 @@ model Campaign {
   auditLogs        AuditLog[]
   tasks            Task[]
   addressChangeRequests AddressChangeRequest[]
+  override              CampaignOverride?
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -596,6 +608,38 @@ model DemoRegistration {
   emailedAt    DateTime?
 
   @@map("demo_registrations")
+}
+
+// ─── Platform Settings ────────────────────────────────────────────────────────
+
+model PlatformSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("platform_settings")
+}
+
+// ─── Campaign Override ────────────────────────────────────────────────────────
+
+model CampaignOverride {
+  id                   String   @id @default(cuid())
+  campaignId           String   @unique
+  campaign             Campaign @relation(fields: [campaignId], references: [id])
+  canvasserLimit       Int?
+  constituentLimit     Int?
+  extraCanvassers      Int?
+  coChairLimit         Int?
+  fieldOrganizerLimit  Int?
+  donorTrackingEnabled Boolean?
+  notesInternal        String?
+  grantedBy            String?
+  grantedAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("campaign_overrides")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

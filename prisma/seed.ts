@@ -114,8 +114,10 @@ async function main() {
     db.household.deleteMany(),
     db.address.deleteMany(),
     db.campaignMembership.deleteMany(),
+    db.campaignOverride.deleteMany(),
     db.campaign.deleteMany(),
     db.user.deleteMany(),
+    db.platformSettings.deleteMany(),
   ]);
   console.log("  ✓ Cleaned up existing data");
 
@@ -132,7 +134,9 @@ async function main() {
       province:     "ON",
       year:         2026,
       electionDate: new Date("2026-10-26T00:00:00.000Z"),
-      isActive:     true,
+      isActive:      true,
+      plan:          process.env.DEMO_MODE === "true" ? "demo" : "election",
+      planActivated: true,
     },
   });
   console.log(`  ✓ Campaign: ${campaign.name}`);
@@ -898,6 +902,41 @@ async function main() {
   console.log("  canvasser             → kevin.lafleur@example.com");
   console.log("  canvasser             → amy.zhang@example.com");
   console.log("  canvasser             → tom.okonkwo@example.com");
+
+  // ── Platform Settings ─────────────────────────────────────────────────────
+  const SETTINGS: { key: string; value: string }[] = [
+    { key: "starter_price",                   value: "149"      },
+    { key: "campaign_price",                  value: "349"      },
+    { key: "election_price",                  value: "699"      },
+    { key: "starter_label",                   value: "Starter"  },
+    { key: "campaign_label",                  value: "Campaign" },
+    { key: "election_label",                  value: "Election" },
+    { key: "starter_constituent_limit",       value: "2500"     },
+    { key: "campaign_constituent_limit",      value: "15000"    },
+    { key: "election_constituent_limit",      value: "0"        },
+    { key: "starter_canvasser_limit",         value: "3"        },
+    { key: "campaign_canvasser_limit",        value: "0"        },
+    { key: "election_canvasser_limit",        value: "0"        },
+    { key: "starter_campaign_manager_limit",  value: "1"        },
+    { key: "campaign_campaign_manager_limit", value: "0"        },
+    { key: "election_campaign_manager_limit", value: "0"        },
+    { key: "starter_cochair_limit",           value: "0"        },
+    { key: "campaign_cochair_limit",          value: "2"        },
+    { key: "election_cochair_limit",          value: "0"        },
+    { key: "starter_field_organizer_limit",   value: "1"        },
+    { key: "campaign_field_organizer_limit",  value: "0"        },
+    { key: "election_field_organizer_limit",  value: "0"        },
+  ];
+
+  for (let i = 0; i < SETTINGS.length; i++) {
+    const s = SETTINGS[i];
+    await db.platformSettings.upsert({
+      where:  { key: s.key },
+      create: { key: s.key, value: s.value },
+      update: { value: s.value },
+    });
+  }
+  console.log(`  ✓ Platform settings: ${SETTINGS.length} entries`);
 }
 
 main()
