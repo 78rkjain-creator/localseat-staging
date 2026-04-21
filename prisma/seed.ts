@@ -222,26 +222,26 @@ async function main() {
   }
 
   const STREETS: StreetDef[] = [
-    // ── Neighbourhood 1: Downtown East (4 × 35 = 140) ──────────────────────
-    { name: "2nd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5712, baseLng: -80.9401, latStep: 0.000015, lngStep: 0 },
-    { name: "3rd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5698, baseLng: -80.9388, latStep: 0.000015, lngStep: 0 },
-    { name: "4th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5684, baseLng: -80.9375, latStep: 0.000015, lngStep: 0 },
-    { name: "5th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5670, baseLng: -80.9362, latStep: 0.000015, lngStep: 0 },
-    // ── Neighbourhood 2: East Side Residential (4 × 35 = 140) ──────────────
-    { name: "6th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5656, baseLng: -80.9348, latStep: 0.000015, lngStep: 0 },
-    { name: "7th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5642, baseLng: -80.9335, latStep: 0.000015, lngStep: 0 },
-    { name: "8th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5628, baseLng: -80.9322, latStep: 0.000015, lngStep: 0 },
-    { name: "9th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5614, baseLng: -80.9308, latStep: 0.000015, lngStep: 0 },
-    // ── Neighbourhood 3: West Side (3 × 35 + 1 × 34 = 139) ─────────────────
-    { name: "2nd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5712, baseLng: -80.9488, latStep: 0.000015, lngStep: 0 },
-    { name: "3rd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5698, baseLng: -80.9502, latStep: 0.000015, lngStep: 0 },
-    { name: "4th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5684, baseLng: -80.9515, latStep: 0.000015, lngStep: 0 },
-    { name: "5th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5670, baseLng: -80.9529, latStep: 0.000015, lngStep: 0 },
-    // ── Neighbourhood 4: North End (4 × 34 = 136) ──────────────────────────
-    { name: "10th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5756, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
-    { name: "11th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5770, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
-    { name: "12th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5784, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
-    { name: "13th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5798, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
+    // ── Neighbourhood 1: Downtown East — avenues run N-S, lat increments per house ──
+    { name: "2nd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5580, baseLng: -80.9401, latStep: 0.00012, lngStep: 0 },
+    { name: "3rd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5580, baseLng: -80.9375, latStep: 0.00012, lngStep: 0 },
+    { name: "4th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5580, baseLng: -80.9348, latStep: 0.00012, lngStep: 0 },
+    { name: "5th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5580, baseLng: -80.9322, latStep: 0.00012, lngStep: 0 },
+    // ── Neighbourhood 2: East Side Residential — avenues run N-S ───────────
+    { name: "6th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5580, baseLng: -80.9295, latStep: 0.00012, lngStep: 0 },
+    { name: "7th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5580, baseLng: -80.9268, latStep: 0.00012, lngStep: 0 },
+    { name: "8th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5580, baseLng: -80.9242, latStep: 0.00012, lngStep: 0 },
+    { name: "9th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5580, baseLng: -80.9215, latStep: 0.00012, lngStep: 0 },
+    // ── Neighbourhood 3: West Side — avenues run N-S ────────────────────────
+    { name: "2nd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5580, baseLng: -80.9468, latStep: 0.00012, lngStep: 0 },
+    { name: "3rd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5580, baseLng: -80.9495, latStep: 0.00012, lngStep: 0 },
+    { name: "4th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5580, baseLng: -80.9522, latStep: 0.00012, lngStep: 0 },
+    { name: "5th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5580, baseLng: -80.9548, latStep: 0.00012, lngStep: 0 },
+    // ── Neighbourhood 4: North End — streets run E-W, lng increments per house ──
+    { name: "10th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5756, baseLng: -80.9548, latStep: 0, lngStep: 0.00018 },
+    { name: "11th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5770, baseLng: -80.9548, latStep: 0, lngStep: 0.00018 },
+    { name: "12th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5784, baseLng: -80.9548, latStep: 0, lngStep: 0.00018 },
+    { name: "13th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5798, baseLng: -80.9548, latStep: 0, lngStep: 0.00018 },
   ];
 
   function hhSize(idx: number): number {
