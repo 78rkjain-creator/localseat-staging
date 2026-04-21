@@ -59,6 +59,14 @@ enum PlanTier {
   demo
 }
 
+enum WardStatus {
+  not_checked
+  inside
+  outside
+  outside_accepted
+  pending_review
+}
+
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
@@ -73,6 +81,8 @@ model Campaign {
   province     String   @default("ON")
   year         Int
   electionDate DateTime?
+  wardBoundary      Json?
+  wardBoundarySetAt DateTime?
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(starter)
   planActivated  Boolean   @default(true)
@@ -219,6 +229,7 @@ model Person {
   importSource String?
   // Tracks data import source / quality notes for deduplication
   sourceNotes String?
+  wardStatus  WardStatus @default(not_checked)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

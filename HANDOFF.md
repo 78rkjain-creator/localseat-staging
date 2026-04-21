@@ -206,6 +206,10 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Mapbox packages installed: `mapbox-gl`, `@mapbox/mapbox-gl-draw`, `@types/mapbox-gl`, `@types/mapbox__mapbox-gl-draw`
 - Geocoding is on-demand only — triggered at voter CSV import and when walk lists are created from turf cutting
 - Addresses without lat/lng are invisible on the map — warning banner shown to managers
+- **Demo seed is fully pre-geocoded** — do NOT run geocode-demo.ts after a normal reseed; coordinates are already baked into the seed
+- Only run scripts/geocode-demo.ts if new addresses are added to the seed without coordinates
+- `NEXT_PUBLIC_MAPBOX_TOKEN` must be set in /var/www/demo/.env **without quotes** — use `NEXT_PUBLIC_MAPBOX_TOKEN=pk.xxx` not `NEXT_PUBLIC_MAPBOX_TOKEN="pk.xxx"`
+- Demo site requires `npm run build` after any code change — unlike production which uses deploy.sh
 
 ---
 
@@ -342,6 +346,10 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Demo banner with role switcher (DEMO_MODE=true)
 - Daily 3am reset via cron (preserves DemoRegistration records)
 - 1500 voters, full campaign team, walk lists, donors, volunteers
+- localseat-staging repo is the source for the demo VPS
+- To update demo code: push to localseat-staging repo, then `git pull + npm run build + pm2 restart` on /var/www/demo
+- The two repos (localseat.io and localseat-staging) must be kept in sync manually — seed changes and code changes both need to be copied across
+- Daily 3am reseed cron will now produce a fully geocoded map instantly (all 555 addresses pre-geocoded in seed)
 
 ### Marketing Site
 
@@ -398,6 +406,15 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Auto-refresh every 30s on turf page when geocoding is in progress (heuristic: ungeocoded addresses created in last 30 minutes)
 - Warning banner when ungeocoded addresses exist; spinner + "being prepared" message while in progress
 - "Map view" button added to /canvassing/[listId] page, visible to all roles
+- All 555 Owen Sound seed addresses now have pre-baked lat/lng coordinates in `GEOCODED_COORDS` constant in prisma/seed.ts
+- Future reseeds produce a fully geocoded map instantly — no geocoding script needed
+- scripts/geocode-demo.ts — one-time bulk geocoding script (100ms delay, self-contained, no @/ imports)
+- scripts/export-geocoded-coords.ts — exports geocoded coords from DB as TypeScript object for baking back into seed
+- ListMapClient.tsx flex layout fixed — map container uses `w-full h-full` inside `flex-1 min-h-0 flex flex-col` parent
+- Both map clients use `height: 100dvh, paddingTop: 64px` on outer wrapper
+- mapbox-gl CSS imported statically from npm package (`mapbox-gl/dist/mapbox-gl.css`)
+- @mapbox/mapbox-gl-draw CSS imported statically from npm package (`@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css`)
+- Geocoding script delay updated to 100ms for bulk operations
 
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts
@@ -452,6 +469,8 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 - Rate limiter resets on server restart (needs Redis for production scale)
 - Offline queue is per-device only
 - Demo site shares one database — multiple simultaneous users see each other's changes (deferred to Option 3)
+- localseat-staging and localseat.io repos can drift out of sync — always copy seed.ts and key shared files when making changes that affect both
+- Staging (Vercel/Neon) does not run migrations automatically — must be applied manually with `prisma migrate deploy` against the Neon DATABASE_URL whenever new migrations are added
 
 ---
 
@@ -485,6 +504,8 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
   /components/layout/demo-banner.tsx
   proxy.ts
   /__tests__/
+/scripts/geocode-demo.ts
+/scripts/export-geocoded-coords.ts
 /public/sw.js
 /var/www/marketing/         (VPS only — index.html, about.html, privacy.html, terms.html, security.html, contact.html)
 ```
@@ -503,3 +524,8 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 8. All new development goes to localseat-staging repo first
 9. **Always test on staging before deploying to production** — https://localseat-staging.vercel.app
 10. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
+11. If staging DB schema is out of sync (e.g. after pulling new migrations), apply them with:
+    ```
+    $env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy
+    ```
+    Get the Neon URL from Vercel → localseat-staging → Settings → Environment Variables → DATABASE_URL
