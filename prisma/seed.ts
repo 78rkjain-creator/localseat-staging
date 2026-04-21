@@ -262,8 +262,8 @@ async function main() {
       city:         "Owen Sound",
       province:     "ON",
       postalCode:   street.postalCode,
-      lat:          street.baseLat + i * street.latStep,
-      lng:          street.baseLng + i * street.lngStep,
+      lat:          null,
+      lng:          null,
     }))
   );
 
