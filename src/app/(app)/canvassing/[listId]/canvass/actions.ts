@@ -5,6 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
+import { isPointInWard, campaignHasWard } from "@/lib/ward";
+import { WardStatus } from "@prisma/client";
+import type { Polygon } from "geojson";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 
 // ── Save canvass response ─────────────────────────────────────────────────
@@ -220,9 +223,12 @@ export async function addPersonAtDoor(input: {
   assignmentId: string;
   firstName: string;
   lastName: string;
+  /** ID of the address the canvasser is currently standing at. Used for ward check. */
+  addressId?: string;
 }): Promise<{
   error?: string;
   person?: { id: string; firstName: string; lastName: string; entryId: string };
+  outsideWard?: boolean;
 }> {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "Not authenticated." };
@@ -264,9 +270,36 @@ export async function addPersonAtDoor(input: {
     return { error: "System setup incomplete: 'field-entry' tag not found. Please contact your campaign manager." };
   }
 
+  // Ward boundary check — runs once before the transaction (read-only)
+  let wardStatus: WardStatus = WardStatus.not_checked;
+  let outsideWard = false;
+
+  if (input.addressId) {
+    const [address, campaign] = await Promise.all([
+      db.address.findFirst({
+        where: { id: input.addressId, campaignId: activeCampaignId, deletedAt: null },
+        select: { lat: true, lng: true },
+      }),
+      db.campaign.findUnique({
+        where: { id: activeCampaignId },
+        select: { wardBoundary: true },
+      }),
+    ]);
+
+    if (campaign && campaignHasWard(campaign) && address?.lat !== null && address?.lng !== null && address?.lat !== undefined && address?.lng !== undefined) {
+      const boundary = campaign.wardBoundary as unknown as Polygon;
+      if (isPointInWard(address.lat, address.lng, boundary)) {
+        wardStatus = WardStatus.inside;
+      } else {
+        wardStatus = WardStatus.outside_accepted;
+        outsideWard = true;
+      }
+    }
+  }
+
   const result = await db.$transaction(async (tx) => {
     const person = await tx.person.create({
-      data: { firstName, lastName, campaignId: activeCampaignId },
+      data: { firstName, lastName, campaignId: activeCampaignId, wardStatus },
     });
 
     await tx.personTag.create({
@@ -281,6 +314,7 @@ export async function addPersonAtDoor(input: {
   });
 
   return {
+    outsideWard,
     person: {
       id: result.person.id,
       firstName: result.person.firstName,

@@ -129,6 +129,14 @@ export function CanvassScreen({
   const [addError, setAddError] = useState<string | null>(null);
   const [isAddingPerson, startAddTransition] = useTransition();
 
+  // Outside ward warning — shown after addPersonAtDoor returns outsideWard: true
+  const [outsideWardWarning, setOutsideWardWarning] = useState(false);
+  useEffect(() => {
+    if (!outsideWardWarning) return;
+    const timer = setTimeout(() => setOutsideWardWarning(false), 4000);
+    return () => clearTimeout(timer);
+  }, [outsideWardWarning]);
+
   // Refs so async transitions always see current values
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
@@ -304,9 +312,17 @@ export function CanvassScreen({
     setAddError(null);
 
     startAddTransition(async () => {
-      const result = await addPersonAtDoor({ listId, assignmentId, firstName, lastName });
+      const result = await addPersonAtDoor({
+        listId,
+        assignmentId,
+        firstName,
+        lastName,
+        addressId: current?.person.address?.id ?? undefined,
+      });
       if (result.error) { setAddError(result.error); return; }
       if (!result.person) return;
+
+      if (result.outsideWard) setOutsideWardWarning(true);
 
       const newEntry: LocalEntry = {
         entryId: result.person.entryId,
@@ -407,6 +423,28 @@ export function CanvassScreen({
           <p className="text-xs text-amber-800">
             Offline caching unavailable — stay connected to save responses.
           </p>
+        </div>
+      )}
+
+      {/* Outside ward warning — auto-dismisses after 4 seconds */}
+      {outsideWardWarning && (
+        <div className="flex-none bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
+          <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-xs text-amber-800 flex-1">
+            This address is outside your ward boundary. The record has been saved.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOutsideWardWarning(false)}
+            className="flex-shrink-0 text-amber-500 hover:text-amber-700 transition-colors"
+            aria-label="Dismiss"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 

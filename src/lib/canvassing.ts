@@ -310,12 +310,15 @@ export async function getCanvassingQueue(
               select: {
                 address: {
                   select: {
+                    id: true,
                     streetNumber: true,
                     streetName: true,
                     unitNumber: true,
                     city: true,
                     province: true,
                     postalCode: true,
+                    lat: true,
+                    lng: true,
                   },
                 },
                 people: {
