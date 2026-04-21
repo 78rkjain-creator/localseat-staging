@@ -105,11 +105,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
         ]
       : [-79.3832, 43.6532];
 
-  console.log("[ListMap] total entries:", entries.length, "geocoded:", geocoded.length, "center:", center);
-
   useEffect(() => {
-    console.log("[ListMap] useEffect firing, token:", !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
-    console.log("[ListMap] container ref:", mapContainer.current);
     if (!mapContainer.current) return;
 
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -123,7 +119,6 @@ export function ListMapClient({ entries, listId, listName }: Props) {
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
     ]).then(([mapboxgl]) => {
-      console.log("[ListMap] mapboxgl loaded, container:", mapContainer.current, "dimensions:", mapContainer.current?.offsetWidth, "x", mapContainer.current?.offsetHeight);
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
@@ -230,7 +225,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px", background: "rgba(255,0,0,0.1)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100dvh - 64px)" }}>
       {/* Summary bar */}
       <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-6">
         <Link
@@ -263,7 +258,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
 
       {/* Map */}
       <div className="relative flex-1 min-h-0" style={{ overflow: "hidden" }}>
-        <div ref={mapContainer} className="absolute inset-0" style={{ zIndex: 1, background: "#e5e3df" }} />
+        <div ref={mapContainer} className="absolute inset-0" style={{ zIndex: 1 }} />
 
         {/* Legend */}
         <div className="absolute bottom-8 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
