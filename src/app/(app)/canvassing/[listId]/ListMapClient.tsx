@@ -257,8 +257,8 @@ export function ListMapClient({ entries, listId, listName }: Props) {
       </div>
 
       {/* Map */}
-      <div className="relative flex-1 min-h-0" style={{ overflow: "hidden" }}>
-        <div ref={mapContainer} className="absolute inset-0" style={{ zIndex: 1 }} />
+      <div className="relative flex-1 min-h-0 flex flex-col" style={{ overflow: "hidden" }}>
+        <div ref={mapContainer} className="w-full h-full" style={{ zIndex: 1 }} />
 
         {/* Legend */}
         <div className="absolute bottom-8 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
