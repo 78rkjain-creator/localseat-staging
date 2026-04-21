@@ -18,7 +18,7 @@ export default async function TurfPage() {
 
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-  const [geocodedAddresses, ungeocodedCount, recentUngeocodedCount] = await Promise.all([
+  const [geocodedAddresses, ungeocodedCount, recentUngeocodedCount, geocodedCount, totalCount] = await Promise.all([
     db.address.findMany({
       where: {
         campaignId: activeCampaignId,
@@ -53,6 +53,12 @@ export default async function TurfPage() {
         createdAt: { gte: thirtyMinutesAgo },
       },
     }),
+    db.address.count({
+      where: { campaignId: activeCampaignId, deletedAt: null, lat: { not: null } },
+    }),
+    db.address.count({
+      where: { campaignId: activeCampaignId, deletedAt: null },
+    }),
   ]);
 
   const geocodingInProgress = recentUngeocodedCount > 0;
@@ -72,6 +78,8 @@ export default async function TurfPage() {
       }>}
       campaignId={activeCampaignId}
       ungeocodedCount={ungeocodedCount}
+      geocodedCount={geocodedCount}
+      totalCount={totalCount}
       geocodingInProgress={geocodingInProgress}
     />
   );

@@ -22,6 +22,8 @@ interface Props {
   addresses: AddressPoint[];
   campaignId: string;
   ungeocodedCount: number;
+  geocodedCount: number;
+  totalCount: number;
   geocodingInProgress: boolean;
 }
 
@@ -48,7 +50,7 @@ function addressLabel(a: AddressPoint): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodingInProgress }: Props) {
+export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodedCount, totalCount, geocodingInProgress }: Props) {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,10 +137,69 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodin
           trash: true,
         },
         defaultMode: "simple_select",
+        styles: [
+          // Filled polygon
+          {
+            id: "gl-draw-polygon-fill",
+            type: "fill",
+            filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
+            paint: {
+              "fill-color": "#F26522",
+              "fill-opacity": 0.15,
+            },
+          },
+          // Polygon outline
+          {
+            id: "gl-draw-polygon-stroke",
+            type: "line",
+            filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: {
+              "line-color": "#F26522",
+              "line-width": 3,
+              "line-opacity": 1,
+            },
+          },
+          // Vertex points
+          {
+            id: "gl-draw-polygon-and-line-vertex-active",
+            type: "circle",
+            filter: ["all", ["==", "meta", "vertex"], ["==", "$type", "Point"]],
+            paint: {
+              "circle-radius": 7,
+              "circle-color": "#ffffff",
+              "circle-stroke-color": "#F26522",
+              "circle-stroke-width": 2.5,
+            },
+          },
+          // Midpoint handles
+          {
+            id: "gl-draw-polygon-midpoint",
+            type: "circle",
+            filter: ["all", ["==", "$type", "Point"], ["==", "meta", "midpoint"]],
+            paint: {
+              "circle-radius": 4,
+              "circle-color": "#F26522",
+              "circle-opacity": 0.6,
+            },
+          },
+          // Active line while drawing
+          {
+            id: "gl-draw-line-active",
+            type: "line",
+            filter: ["all", ["==", "$type", "LineString"], ["==", "active", "true"]],
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: {
+              "line-color": "#F26522",
+              "line-width": 2.5,
+              "line-dasharray": [4, 2],
+            },
+          },
+        ],
       });
 
       drawRef.current = draw;
-      map.addControl(draw);
+      map.addControl(draw, "top-right");
 
       map.on("load", () => {
         // Add address points source
@@ -223,10 +284,14 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodin
   const hasSelected = selectedAddresses.length > 0;
   const canSave     = hasPoly && hasSelected && name.trim().length > 0 && !saving;
 
+  const unmappedCount = totalCount - geocodedCount;
+  const hasBanner     = geocodingInProgress || (unmappedCount > 0 && !warningDismissed);
+  const mapHeight     = hasBanner ? "calc(100vh - 64px - 52px)" : "calc(100vh - 64px)";
+
   return (
     <div className="flex flex-col h-screen">
       {/* Ungeocoded warning */}
-      {ungeocodedCount > 0 && !warningDismissed && (
+      {(geocodingInProgress || unmappedCount > 0) && !warningDismissed && (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex-shrink-0">
           {geocodingInProgress ? (
             <span className="flex items-center gap-2">
@@ -234,11 +299,11 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodin
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              Map data is being prepared for your recent import. This usually takes a few minutes — the map will update automatically.
+              Map data is being prepared — {geocodedCount} of {totalCount} addresses geocoded. The map will update automatically.
             </span>
           ) : (
             <span>
-              <strong>{ungeocodedCount}</strong> address{ungeocodedCount !== 1 ? "es" : ""} in your campaign
+              <strong>{unmappedCount}</strong> address{unmappedCount !== 1 ? "es" : ""} in your campaign
               haven&apos;t been mapped yet and won&apos;t appear on this map.
             </span>
           )}
@@ -262,7 +327,7 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodin
         <div
           ref={mapContainer}
           className="flex-1"
-          style={{ minHeight: 0 }}
+          style={{ minHeight: 0, height: mapHeight }}
         />
 
         {/* Side panel */}
