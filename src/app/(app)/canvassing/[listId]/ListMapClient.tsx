@@ -228,7 +228,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+    <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px" }}>
       {/* Summary bar */}
       <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-6">
         <Link

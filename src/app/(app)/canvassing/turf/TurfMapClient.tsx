@@ -288,11 +288,9 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
   const canSave     = hasPoly && hasSelected && name.trim().length > 0 && !saving;
 
   const unmappedCount = totalCount - geocodedCount;
-  const hasBanner     = geocodingInProgress || (unmappedCount > 0 && !warningDismissed);
-  const mapHeight     = hasBanner ? "calc(100vh - 64px - 52px)" : "calc(100vh - 64px)";
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px" }}>
       {/* Ungeocoded warning */}
       {(geocodingInProgress || unmappedCount > 0) && !warningDismissed && (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex-shrink-0">
@@ -330,7 +328,7 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
         <div
           ref={mapContainer}
           className="flex-1"
-          style={{ minHeight: 0, height: mapHeight }}
+          style={{ minHeight: 0 }}
         />
 
         {/* Side panel */}
