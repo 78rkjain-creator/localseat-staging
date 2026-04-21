@@ -46,7 +46,10 @@ async function main() {
       failed++;
       console.log(`${i + 1}/${addresses.length} ✗ ${addr.streetNumber} ${addr.streetName}`);
     }
-    if (i < addresses.length - 1) await new Promise((r) => setTimeout(r, 600));
+    if ((i + 1) % 50 === 0) {
+      console.log(`--- Progress: ${i + 1}/${addresses.length} (${geocoded} geocoded, ${failed} failed) ---`);
+    }
+    if (i < addresses.length - 1) await new Promise((r) => setTimeout(r, 100));
   }
 
   console.log(`\nDone. Geocoded: ${geocoded}, Failed: ${failed}`);
