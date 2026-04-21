@@ -105,7 +105,10 @@ export function ListMapClient({ entries, listId, listName }: Props) {
         ]
       : [-79.3832, 43.6532];
 
+  console.log("[ListMap] total entries:", entries.length, "geocoded:", geocoded.length, "center:", center);
+
   useEffect(() => {
+    console.log("[ListMap] useEffect firing, token:", !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
     if (!mapContainer.current) return;
 
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
