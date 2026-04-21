@@ -4,7 +4,7 @@ import { useState, useTransition, useRef } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { importVoterRows, checkDuplicatesForImport } from "./actions";
-import type { VoterCsvRow } from "./actions";
+import type { VoterCsvRow, FlaggedRow } from "./actions";
 import {
   parseCsvToReviewRows,
   getMissingFields,
@@ -43,6 +43,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     matched: number;
     created: number;
     skipped: number;
+    flaggedRows: FlaggedRow[];
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
 
@@ -194,9 +195,10 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         setSubmitError(res.error);
       } else {
         setResult({
-          matched: res.matched ?? 0,
-          created: res.created ?? 0,
-          skipped: res.skipped ?? 0,
+          matched:     res.matched     ?? 0,
+          created:     res.created     ?? 0,
+          skipped:     res.skipped     ?? 0,
+          flaggedRows: res.flaggedRows ?? [],
         });
         setStep("done");
       }
@@ -408,6 +410,28 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               {result.skipped > 0 && ` · ${result.skipped} skipped`}
             </p>
           </div>
+
+          {result.flaggedRows.length > 0 && (
+            <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-left flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <svg className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-sm text-amber-800">
+                  <strong>{result.flaggedRows.length}</strong>{" "}
+                  voter{result.flaggedRows.length !== 1 ? "s" : ""} are outside your ward boundary and were not imported.
+                </p>
+              </div>
+              <a
+                href="/campaign-settings/ward/review"
+                className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2 whitespace-nowrap transition-colors"
+                onClick={handleClose}
+              >
+                Review and decide
+              </a>
+            </div>
+          )}
+
           <Button onClick={handleClose}>Done</Button>
         </div>
       )}

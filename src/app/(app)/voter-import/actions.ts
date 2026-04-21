@@ -9,6 +9,9 @@ import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize"
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
+import { isPointInWard, campaignHasWard } from "@/lib/ward";
+import { WardStatus } from "@prisma/client";
+import type { Polygon } from "geojson";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -43,11 +46,24 @@ export interface VoterCsvRow {
   birthYear: string;    // empty string when absent
 }
 
+export interface FlaggedRow {
+  firstName: string;
+  lastName: string;
+  streetNumber: string;
+  streetName: string;
+  unitNumber: string | null;
+  city: string;
+  province: string;
+  postalCode: string;
+  wardStatus: "outside";
+}
+
 export interface VoterImportResult {
   error?: string;
   matched?: number;
   created?: number;
   skipped?: number;
+  flaggedRows?: FlaggedRow[];
 }
 
 // ── importVoterRows ───────────────────────────────────────────────────────
@@ -158,9 +174,21 @@ export async function importVoterRows(
     return { error: "This campaign has reached its constituent limit for the current plan. Upgrade to import more records." };
   }
 
+  // Fetch ward boundary once before the transaction — pure read, no need to be inside tx
+  const campaign = await db.campaign.findUnique({
+    where: { id: campaignId },
+    select: { wardBoundary: true },
+  });
+
+  const wardBoundary: Polygon | null =
+    campaign && campaignHasWard(campaign)
+      ? (campaign.wardBoundary as unknown as Polygon)
+      : null;
+
   let matched = 0;
   let created = 0;
   let skipped = 0;
+  const flaggedRows: FlaggedRow[] = [];
   const newAddressIds: string[] = [];
 
   await db.$transaction(
@@ -211,7 +239,12 @@ export async function importVoterRows(
         }
 
         // 2. Find or create address
-        let address = await tx.address.findFirst({
+        // Select lat/lng so we can check ward membership for existing geocoded addresses.
+        let addressId: string;
+        let addressLat: number | null = null;
+        let addressLng: number | null = null;
+
+        const existingAddress = await tx.address.findFirst({
           where: {
             campaignId,
             deletedAt: null,
@@ -222,26 +255,58 @@ export async function importVoterRows(
               : null,
             postalCode:   { equals: postalCode,   mode: "insensitive" },
           },
-          select: { id: true },
+          select: { id: true, lat: true, lng: true },
         });
 
-        if (!address) {
-          address = await tx.address.create({
+        if (existingAddress) {
+          addressId  = existingAddress.id;
+          addressLat = existingAddress.lat;
+          addressLng = existingAddress.lng;
+        } else {
+          const newAddress = await tx.address.create({
             data: { campaignId, streetNumber, streetName, unitNumber, city, province, postalCode },
             select: { id: true },
           });
-          newAddressIds.push(address.id);
+          addressId = newAddress.id;
+          newAddressIds.push(addressId);
+          // lat/lng are null — geocoding fires after the transaction
+        }
+
+        // 2a. Ward boundary check
+        // Only possible when the campaign has a boundary AND the address is already geocoded.
+        // Newly created addresses have no lat/lng yet → not_checked.
+        let wardStatus: WardStatus = WardStatus.not_checked;
+        if (wardBoundary && addressLat !== null && addressLng !== null) {
+          wardStatus = isPointInWard(addressLat, addressLng, wardBoundary)
+            ? WardStatus.inside
+            : WardStatus.outside;
+        }
+
+        if (wardStatus === WardStatus.outside) {
+          flaggedRows.push({
+            firstName,
+            lastName,
+            streetNumber,
+            streetName,
+            unitNumber,
+            city,
+            province,
+            postalCode,
+            wardStatus: "outside",
+          });
+          // Do not create the person record — leave address/household in place
+          continue;
         }
 
         // 3. Find or create household
         let household = await tx.household.findFirst({
-          where: { campaignId, addressId: address.id, deletedAt: null },
+          where: { campaignId, addressId, deletedAt: null },
           select: { id: true },
         });
 
         if (!household) {
           household = await tx.household.create({
-            data: { campaignId, addressId: address.id },
+            data: { campaignId, addressId },
             select: { id: true },
           });
         }
@@ -258,6 +323,7 @@ export async function importVoterRows(
             email:        email ?? undefined,
             birthYear:    birthYear ?? undefined,
             importSource: importSource.trim() || "voter-list-import",
+            wardStatus,
           },
         });
 
@@ -284,7 +350,7 @@ export async function importVoterRows(
     });
   }
 
-  return { matched, created, skipped };
+  return { matched, created, skipped, flaggedRows };
 }
 
 // ── mergePersons ──────────────────────────────────────────────────────────
