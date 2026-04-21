@@ -2,10 +2,10 @@
  * Seed script for LocalSeat — foundation + address structure.
  *
  * Creates:
- *   - 1 campaign (Greenfield Ward 3 — 2026)
+ *   - 1 campaign (Owen Sound Ward 4 — 2026)
  *   - 13 users across all roles (password: "password")
  *   - 6 system/user-facing tags
- *   - 555 addresses across 16 streets
+ *   - 555 addresses across 16 real Owen Sound streets (pre-geocoded)
  *   - 555 households (100×1 + 200×2 + 100×3 + 75×4 + 80×5)
  *   - 1500 placeholder voter records
  *
@@ -19,39 +19,29 @@ const db = new PrismaClient();
 const VERIFIED = new Date();
 
 // ── Cultural name pools ───────────────────────────────────────────────────────
-// Each group has a first-name pool and a last-name pool.
-// Household members share the same last name (family unit).
-// First names are picked per-person with an offset to avoid repeats in a household.
-
 const GROUPS = [
   {
-    // English — 30% of households (cycle positions 0-29)
     first: ["James","William","Thomas","Robert","David","Michael","John","Richard","Charles","George","Mary","Patricia","Linda","Barbara","Elizabeth","Jennifer","Susan","Margaret","Dorothy","Helen","Daniel","Matthew","Andrew","Joshua","Ryan","Emma","Olivia","Sophia","Charlotte","Grace"],
     last:  ["Smith","Johnson","Brown","Wilson","Taylor","Anderson","Thomas","Martin","White","Harris"],
   },
   {
-    // French — 20% (positions 30-49)
     first: ["Jean","Pierre","Michel","François","Philippe","André","Louis","Jacques","Henri","Luc","Marie","Isabelle","Sophie","Camille","Amélie","Claire","Nathalie","Céline","Monique","Brigitte"],
     last:  ["Tremblay","Gagnon","Roy","Côté","Bouchard","Lavoie","Fortin","Gauthier","Morin","Pelletier"],
   },
   {
-    // South Asian — 20% (positions 50-69)
     first: ["Rahul","Arjun","Vikram","Suresh","Rajesh","Amit","Priya","Anjali","Deepa","Sunita","Neha","Pooja","Kavya","Ravi","Anil","Sanjay","Meera","Divya","Kiran","Manish"],
     last:  ["Patel","Singh","Kumar","Sharma","Jain","Shah","Mehta","Gupta","Verma","Agarwal"],
   },
   {
-    // East Asian — 15% (positions 70-84)
     first: ["Wei","Ming","Jun","Fang","Yan","Hui","Lin","Ying","Hong","Xiao","Jing","Tao","Yong","Feng","Lei","Na","Hua","Bo","Chen","Li"],
     last:  ["Chen","Wang","Li","Zhang","Liu","Huang","Wu","Yang","Zhou","Xu"],
   },
   {
-    // African — 15% (positions 85-99)
     first: ["Kwame","Kofi","Emeka","Chidi","Tunde","Yaw","Ade","Bayo","Seun","Dele","Amara","Nkechi","Fatima","Zainab","Aisha","Yewande","Folake","Ngozi","Chiamaka","Abena"],
     last:  ["Okafor","Mensah","Diallo","Nkosi","Owusu","Adeyemi","Ibrahim","Kamara","Diop","Asante"],
   },
 ];
 
-// 100-element cycle → English 30%, French 20%, South Asian 20%, East Asian 15%, African 15%
 function culturalGroup(hhIdx: number) {
   const pos = hhIdx % 100;
   if (pos < 30) return GROUPS[0];
@@ -61,8 +51,6 @@ function culturalGroup(hhIdx: number) {
   return GROUPS[4];
 }
 
-// ── Support level distribution (first 900 of 1500 voters) ────────────────────
-// Boundaries: 225 strong_yes | 405 soft_yes | 630 undecided | 765 soft_no | 855 strong_no | 900 not_home
 function supportLevel(personIdx: number): string | null {
   if (personIdx <  225) return "strong_yes";
   if (personIdx <  405) return "soft_yes";
@@ -73,8 +61,6 @@ function supportLevel(personIdx: number): string | null {
   return null;
 }
 
-// ── Phone number helpers ──────────────────────────────────────────────────────
-// Deterministic but varied — large prime multiplier ensures good distribution
 function phoneHome(personIdx: number): string | null {
   if (personIdx >= 800) return null;
   const xxxx = String(1000 + ((personIdx * 7919 + 3141) % 9000));
@@ -93,7 +79,6 @@ async function main() {
   const HASH = await bcrypt.hash("password", 12);
 
   // ── Cleanup (FK-safe order) ───────────────────────────────────────────────
-  // DemoRegistration is intentionally excluded from cleanup — lead data is preserved across resets
   await db.$transaction([
     db.auditLog.deleteMany(),
     db.volunteerShiftAttendee.deleteMany(),
@@ -124,13 +109,13 @@ async function main() {
   // ── Campaign ──────────────────────────────────────────────────────────────
   const campaign = await db.campaign.create({
     data: {
-      name:         "Greenfield Ward 3 — 2026",
+      name:         "Owen Sound Ward 4 — 2026",
       ballotName:   "Alex Chen",
-      officeSought: "Ward 3 Councillor",
-      description:  "Municipal election campaign for Ward 3, Greenfield, Ontario. Focus on affordable housing, active transportation, and neighbourhood safety.",
-      municipality: "Greenfield",
-      wards:        ["Ward 3"],
-      city:         "Greenfield",
+      officeSought: "Ward 4 Councillor",
+      description:  "Municipal election campaign for Ward 4, Owen Sound, Ontario. Focus on affordable housing, active transportation, and neighbourhood safety.",
+      municipality: "Owen Sound",
+      wards:        ["Ward 4"],
+      city:         "Owen Sound",
       province:     "ON",
       year:         2026,
       electionDate: new Date("2026-10-26T00:00:00.000Z"),
@@ -170,14 +155,12 @@ async function main() {
     db.user.create({ data: { email: "tom.okonkwo@example.com",  passwordHash: HASH, firstName: "Tom",    lastName: "Okonkwo",  phoneHome: "613-555-0111", emailVerified: VERIFIED } }),
   ]);
 
-  // Platform superuser — upsert so it survives repeated seeds
   await db.user.upsert({
     where:  { email: "superuser@localseat.io" },
     create: { email: "superuser@localseat.io", passwordHash: HASH, firstName: "Super", lastName: "User", isActive: true, platformRole: "super_user", emailVerified: VERIFIED },
     update: { passwordHash: HASH, platformRole: "super_user", emailVerified: VERIFIED },
   });
 
-  // Demo entry-point account — upsert so repeated seeds don't fail
   const demoUser = await db.user.upsert({
     where:  { email: "demo@localseat.io" },
     create: { email: "demo@localseat.io", passwordHash: HASH, firstName: "Demo", lastName: "Login", isActive: true, emailVerified: VERIFIED },
@@ -188,19 +171,19 @@ async function main() {
   // ── Campaign memberships ──────────────────────────────────────────────────
   await db.campaignMembership.createMany({
     data: [
-      { userId: alexChen.id,     campaignId: campaign.id, role: "candidate"            },
-      { userId: mariaSantos.id,  campaignId: campaign.id, role: "campaign_manager"     },
-      { userId: jamesOkafor.id,  campaignId: campaign.id, role: "field_organizer"      },
-      { userId: sarahKim.id,     campaignId: campaign.id, role: "field_organizer"      },
-      { userId: claireMorgan.id, campaignId: campaign.id, role: "co_chair"             },
-      { userId: robertBell.id,   campaignId: campaign.id, role: "co_chair"             },
-      { userId: danWu.id,        campaignId: campaign.id, role: "finance_lead"         },
-      { userId: saraBishop.id,   campaignId: campaign.id, role: "volunteer_coordinator"},
-      { userId: priyaNair.id,    campaignId: campaign.id, role: "canvasser"            },
-      { userId: kevinLafleur.id, campaignId: campaign.id, role: "canvasser"            },
-      { userId: amyZhang.id,     campaignId: campaign.id, role: "canvasser"            },
-      { userId: tomOkonkwo.id,   campaignId: campaign.id, role: "canvasser"            },
-      { userId: demoUser.id,      campaignId: campaign.id, role: "candidate"            },
+      { userId: alexChen.id,     campaignId: campaign.id, role: "candidate"             },
+      { userId: mariaSantos.id,  campaignId: campaign.id, role: "campaign_manager"      },
+      { userId: jamesOkafor.id,  campaignId: campaign.id, role: "field_organizer"       },
+      { userId: sarahKim.id,     campaignId: campaign.id, role: "field_organizer"       },
+      { userId: claireMorgan.id, campaignId: campaign.id, role: "co_chair"              },
+      { userId: robertBell.id,   campaignId: campaign.id, role: "co_chair"              },
+      { userId: danWu.id,        campaignId: campaign.id, role: "finance_lead"          },
+      { userId: saraBishop.id,   campaignId: campaign.id, role: "volunteer_coordinator" },
+      { userId: priyaNair.id,    campaignId: campaign.id, role: "canvasser"             },
+      { userId: kevinLafleur.id, campaignId: campaign.id, role: "canvasser"             },
+      { userId: amyZhang.id,     campaignId: campaign.id, role: "canvasser"             },
+      { userId: tomOkonkwo.id,   campaignId: campaign.id, role: "canvasser"             },
+      { userId: demoUser.id,     campaignId: campaign.id, role: "candidate"             },
     ],
   });
   console.log("  ✓ Campaign memberships: 13");
@@ -208,58 +191,67 @@ async function main() {
   // ── Tags ──────────────────────────────────────────────────────────────────
   await db.tag.createMany({
     data: [
-      { name: "field-entry",       color: "#475569" }, // system — auto-applied on canvass import
-      { name: "record-outdated",   color: "#dc2626" }, // system — applied on merge/deduplicate
-      { name: "strong-supporter",  color: "#16a34a" },
-      { name: "needs-sign",        color: "#2563eb" },
-      { name: "volunteer-interest",color: "#7c3aed" },
-      { name: "donor-prospect",    color: "#ea6c0a" },
+      { name: "field-entry",        color: "#475569" },
+      { name: "record-outdated",    color: "#dc2626" },
+      { name: "strong-supporter",   color: "#16a34a" },
+      { name: "needs-sign",         color: "#2563eb" },
+      { name: "volunteer-interest", color: "#7c3aed" },
+      { name: "donor-prospect",     color: "#ea6c0a" },
     ],
   });
   console.log("  ✓ Tags: 6");
 
   // ── Streets, addresses, households, placeholder voters ───────────────────
   //
-  // 16 streets, 25 households each = 400 households total.
-  // House numbers: even side only (2, 4, 6, … 50).
+  // 16 real Owen Sound streets across 4 neighbourhoods.
+  // 11 streets × 35 + 5 streets × 34 = 555 addresses.
+  // House numbers: even side only (2, 4, 6, …).
+  // All addresses are pre-geocoded with real approximate coordinates.
   //
-  // Household size pattern — 10-element cycle that yields exactly:
-  //   120 single-person, 160 two-person, 80 three-person, 40 four-person
-  // per 400 households (40 complete cycles).
-  //   Pattern [1,2,2,3,1,2,4,1,3,2] → 3 singles + 4 twos + 2 threes + 1 four
-  //   per cycle → 840 total persons across 400 households.
-
-  const STREETS: { name: string; postalCode: string; poll: string }[] = [
-    { name: "Elm Street",       postalCode: "K1A 1A1", poll: "Poll 1" },
-    { name: "Maple Avenue",     postalCode: "K1A 1B2", poll: "Poll 1" },
-    { name: "Oak Drive",        postalCode: "K1B 2A1", poll: "Poll 2" },
-    { name: "Cedar Boulevard",  postalCode: "K1B 2B2", poll: "Poll 2" },
-    { name: "Birch Lane",       postalCode: "K1C 3A1", poll: "Poll 3" },
-    { name: "Pine Crescent",    postalCode: "K1C 3B2", poll: "Poll 3" },
-    { name: "Willow Court",     postalCode: "K1D 4A1", poll: "Poll 4" },
-    { name: "Spruce Road",      postalCode: "K1D 4B2", poll: "Poll 4" },
-    { name: "Chestnut Drive",   postalCode: "K1E 5A1", poll: "Poll 5" },
-    { name: "Walnut Avenue",    postalCode: "K1E 5B2", poll: "Poll 5" },
-    { name: "Poplar Street",    postalCode: "K1F 6A1", poll: "Poll 6" },
-    { name: "Ash Court",        postalCode: "K1F 6B2", poll: "Poll 6" },
-    { name: "Linden Boulevard", postalCode: "K1G 7A1", poll: "Poll 7" },
-    { name: "Hawthorn Lane",    postalCode: "K1G 7B2", poll: "Poll 7" },
-    { name: "Sycamore Road",    postalCode: "K1H 8A1", poll: "Poll 8" },
-    { name: "Beech Street",     postalCode: "K1H 8B2", poll: "Poll 8" },
-  ];
-
-  // Household sizes by global index — direct boundary approach, no cycle needed.
+  // Household size pattern — boundary table:
   // 100 single + 200 two + 100 three + 75 four + 80 five = 555 HH, 1500 voters exactly.
-  function hhSize(idx: number): number {
-    if (idx <  100) return 1; // 100 × 1 = 100
-    if (idx <  300) return 2; // 200 × 2 = 400
-    if (idx <  400) return 3; // 100 × 3 = 300
-    if (idx <  475) return 4; //  75 × 4 = 300
-    return               5;   //  80 × 5 = 400
+
+  interface StreetDef {
+    name:       string;
+    postalCode: string;
+    poll:       string;
+    baseLat:    number;
+    baseLng:    number;
+    latStep:    number;
+    lngStep:    number;
   }
 
-  // 555 addresses across 16 streets: 11 streets × 35 + 5 streets × 34 = 555
-  // House numbers: even side (2, 4, 6, …)
+  const STREETS: StreetDef[] = [
+    // ── Neighbourhood 1: Downtown East (4 × 35 = 140) ──────────────────────
+    { name: "2nd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5712, baseLng: -80.9401, latStep: 0.000015, lngStep: 0 },
+    { name: "3rd Ave E", postalCode: "N4K 2H1", poll: "Poll 1", baseLat: 44.5698, baseLng: -80.9388, latStep: 0.000015, lngStep: 0 },
+    { name: "4th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5684, baseLng: -80.9375, latStep: 0.000015, lngStep: 0 },
+    { name: "5th Ave E", postalCode: "N4K 2H1", poll: "Poll 2", baseLat: 44.5670, baseLng: -80.9362, latStep: 0.000015, lngStep: 0 },
+    // ── Neighbourhood 2: East Side Residential (4 × 35 = 140) ──────────────
+    { name: "6th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5656, baseLng: -80.9348, latStep: 0.000015, lngStep: 0 },
+    { name: "7th Ave E", postalCode: "N4K 3C4", poll: "Poll 3", baseLat: 44.5642, baseLng: -80.9335, latStep: 0.000015, lngStep: 0 },
+    { name: "8th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5628, baseLng: -80.9322, latStep: 0.000015, lngStep: 0 },
+    { name: "9th Ave E", postalCode: "N4K 3C4", poll: "Poll 4", baseLat: 44.5614, baseLng: -80.9308, latStep: 0.000015, lngStep: 0 },
+    // ── Neighbourhood 3: West Side (3 × 35 + 1 × 34 = 139) ─────────────────
+    { name: "2nd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5712, baseLng: -80.9488, latStep: 0.000015, lngStep: 0 },
+    { name: "3rd Ave W", postalCode: "N4K 1T6", poll: "Poll 5", baseLat: 44.5698, baseLng: -80.9502, latStep: 0.000015, lngStep: 0 },
+    { name: "4th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5684, baseLng: -80.9515, latStep: 0.000015, lngStep: 0 },
+    { name: "5th Ave W", postalCode: "N4K 1T6", poll: "Poll 6", baseLat: 44.5670, baseLng: -80.9529, latStep: 0.000015, lngStep: 0 },
+    // ── Neighbourhood 4: North End (4 × 34 = 136) ──────────────────────────
+    { name: "10th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5756, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
+    { name: "11th St E", postalCode: "N4K 4L8", poll: "Poll 7", baseLat: 44.5770, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
+    { name: "12th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5784, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
+    { name: "13th St E", postalCode: "N4K 4L8", poll: "Poll 8", baseLat: 44.5798, baseLng: -80.9401, latStep: 0, lngStep: 0.000020 },
+  ];
+
+  function hhSize(idx: number): number {
+    if (idx <  100) return 1;
+    if (idx <  300) return 2;
+    if (idx <  400) return 3;
+    if (idx <  475) return 4;
+    return               5;
+  }
+
   const HOUSES_PER_STREET = [35,35,35,35,35,35,35,35,35,35,35,34,34,34,34,34];
 
   const addressRows = STREETS.flatMap((street, si) =>
@@ -267,9 +259,11 @@ async function main() {
       campaignId:   campaign.id,
       streetNumber: String((i + 1) * 2),
       streetName:   street.name,
-      city:         "Greenfield",
+      city:         "Owen Sound",
       province:     "ON",
       postalCode:   street.postalCode,
+      lat:          street.baseLat + i * street.latStep,
+      lng:          street.baseLng + i * street.lngStep,
     }))
   );
 
@@ -284,7 +278,6 @@ async function main() {
   const households = await db.household.createManyAndReturn({ data: householdRows });
   console.log(`  ✓ Households: ${households.length}`);
 
-  // Accumulate per-street address counts for poll number lookup
   const streetStartIdx: number[] = [];
   let runningIdx = 0;
   HOUSES_PER_STREET.forEach((count) => {
@@ -305,20 +298,15 @@ async function main() {
   }[] = [];
 
   households.forEach((hh, hhIdx) => {
-    // Determine which street this household belongs to
     const streetIdx = HOUSES_PER_STREET.reduce((found, count, si) => {
       return hhIdx >= streetStartIdx[si] && hhIdx < streetStartIdx[si] + count ? si : found;
     }, 0);
     const poll  = STREETS[streetIdx].poll;
     const size  = hhSize(hhIdx);
     const group = culturalGroup(hhIdx);
-
-    // All members share the household's last name (family unit)
     const lastName = group.last[hhIdx % group.last.length];
 
     for (let p = 0; p < size; p++) {
-      // hhIdx * 7 spreads picks across the pool (7 is coprime with pool sizes 20 and 30)
-      // + p ensures different first names within the same household
       const firstName = group.first[(hhIdx * 7 + p) % group.first.length];
       const pIdx = personRows.length;
       const sl   = supportLevel(pIdx);
@@ -361,33 +349,33 @@ async function main() {
 
   const WALK_LIST_DEFS = [
     {
-      name:           "Elm Street Block — Round 1",
-      description:    "Initial door knock on Elm Street between 14 and 32",
-      street:         "Elm Street",
+      name:           "Downtown East Route",
+      description:    "Initial door knock on 2nd Ave E",
+      street:         "2nd Ave E",
       canvasser:      priyaNair,
       totalEntries:   40,
       completedCount: 24,
     },
     {
-      name:           "Walnut Avenue West",
-      description:    "Walnut Avenue west side canvass",
-      street:         "Walnut Avenue",
+      name:           "East Side Route",
+      description:    "6th Ave E east side canvass",
+      street:         "6th Ave E",
       canvasser:      kevinLafleur,
       totalEntries:   35,
       completedCount: 14,
     },
     {
-      name:           "Oak Drive Circuit",
-      description:    "Full Oak Drive sweep",
-      street:         "Oak Drive",
+      name:           "West Side Route",
+      description:    "Full 2nd Ave W sweep",
+      street:         "2nd Ave W",
       canvasser:      amyZhang,
       totalEntries:   45,
       completedCount:  9,
     },
     {
-      name:           "Cedar Boulevard Run",
-      description:    "Cedar Boulevard first pass",
-      street:         "Cedar Boulevard",
+      name:           "North End Route",
+      description:    "10th St E first pass",
+      street:         "10th St E",
       canvasser:      tomOkonkwo,
       totalEntries:   30,
       completedCount:  0,
@@ -398,7 +386,6 @@ async function main() {
 
   for (let listIdx = 0; listIdx < WALK_LIST_DEFS.length; listIdx++) {
     const def = WALK_LIST_DEFS[listIdx];
-    // Fetch persons from this street (capped at totalEntries)
     const streetPersons = await db.person.findMany({
       where: {
         campaignId: campaign.id,
@@ -506,8 +493,6 @@ async function main() {
   console.log("  ✓ Follow-up tasks: 30 (15 open, 15 completed)");
 
   // ── Donor prospects ───────────────────────────────────────────────────────
-  // Status distribution: 8 interested · 5 pledged · 4 received · 3 thanked
-  // "thanked" maps to received + thankYouSent: true (no separate enum value)
   const donorPersons = await db.person.findMany({
     where: { campaignId: campaign.id },
     take: 20,
@@ -517,10 +502,10 @@ async function main() {
   const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
 
   const DONOR_NOTES: (string | null)[] = [
-    null, null, null, null, null, null, null, null,    // 8 interested
-    "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door", // 5 pledged
-    "E-transfer received", "E-transfer received", "Cheque by mail", "Cheque by mail",              // 4 received
-    "E-transfer received", "Cheque by mail", "E-transfer received",                                // 3 thanked
+    null, null, null, null, null, null, null, null,
+    "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door", "Pledged at door",
+    "E-transfer received", "E-transfer received", "Cheque by mail", "Cheque by mail",
+    "E-transfer received", "Cheque by mail", "E-transfer received",
   ];
 
   await db.donor.createMany({
@@ -531,7 +516,7 @@ async function main() {
                        : i < 13 ? DonorStatus.pledged
                        :           DonorStatus.received;
       const createdAt  = new Date(nowMs - Math.random() * FOUR_WEEKS_MS);
-      const amount     = 50 + Math.floor(Math.random() * 701); // $50–$750
+      const amount     = 50 + Math.floor(Math.random() * 701);
       return {
         campaignId:    campaign.id,
         firstName:     p.firstName,
@@ -552,18 +537,12 @@ async function main() {
   console.log("  ✓ Donor prospects: 20 (8 interested, 5 pledged, 4 received, 3 thanked)");
 
   // ── Volunteer shifts ──────────────────────────────────────────────────────
-  // Dates relative to today 2026-04-19 (Sunday):
-  //   Shift 1 — last Saturday Apr 18 (already happened → attended)
-  //   Shift 2 — next Tuesday  Apr 21 (pending)
-  //   Shift 3 — next Saturday Apr 25
-  //   Shift 4 — following Sat May 02
-  //   Shift 5 — Saturday before election Oct 24
   const SHIFT_DEFS = [
-    { name: "Saturday Canvass — Elm Street", date: new Date("2026-04-18T00:00:00Z"), startTime: "09:00", endTime: "13:00", maxVolunteers:  8 },
-    { name: "Phone Banking Evening",         date: new Date("2026-04-21T00:00:00Z"), startTime: "18:00", endTime: "21:00", maxVolunteers:  6 },
-    { name: "Sign Installation",             date: new Date("2026-04-25T00:00:00Z"), startTime: "10:00", endTime: "14:00", maxVolunteers: 10 },
-    { name: "Voter Contact Blitz",           date: new Date("2026-05-02T00:00:00Z"), startTime: "09:00", endTime: "12:00", maxVolunteers:  8 },
-    { name: "Final Push Canvass",            date: new Date("2026-10-24T00:00:00Z"), startTime: "08:00", endTime: "17:00", maxVolunteers: 15 },
+    { name: "Saturday Canvass — Downtown East", date: new Date("2026-04-18T00:00:00Z"), startTime: "09:00", endTime: "13:00", maxVolunteers:  8 },
+    { name: "Phone Banking Evening",            date: new Date("2026-04-21T00:00:00Z"), startTime: "18:00", endTime: "21:00", maxVolunteers:  6 },
+    { name: "Sign Installation",                date: new Date("2026-04-25T00:00:00Z"), startTime: "10:00", endTime: "14:00", maxVolunteers: 10 },
+    { name: "Voter Contact Blitz",              date: new Date("2026-05-02T00:00:00Z"), startTime: "09:00", endTime: "12:00", maxVolunteers:  8 },
+    { name: "Final Push Canvass",               date: new Date("2026-10-24T00:00:00Z"), startTime: "08:00", endTime: "17:00", maxVolunteers: 15 },
   ];
 
   const shifts = await Promise.all(
@@ -581,7 +560,6 @@ async function main() {
     )
   );
 
-  // Volunteer records: use 5 voters who were canvassed
   const volPersons = await db.person.findMany({
     where: { campaignId: campaign.id },
     take: 5,
@@ -600,8 +578,6 @@ async function main() {
     )
   );
 
-  // Shift 1 (past): 4 volunteers, attended
-  // Shift 2 (upcoming): 3 volunteers, pending
   await db.volunteerShiftAttendee.createMany({
     data: [
       ...volRecords.slice(0, 4).map((r) => ({
@@ -616,7 +592,6 @@ async function main() {
       })),
     ],
   });
-
   console.log("  ✓ Volunteer shifts: 5 (4 attended shift 1, 3 pending shift 2)");
 
   // ── Outreach log ──────────────────────────────────────────────────────────
@@ -634,7 +609,6 @@ async function main() {
     return "contacted";
   }
 
-  // Part 1: one entry per canvass response (door knock record)
   const canvassResponses = await db.canvassResponse.findMany({
     include: { assignment: true },
   });
@@ -651,7 +625,6 @@ async function main() {
     })),
   });
 
-  // Part 2: 100 manual entries (phone, door, email, event)
   const manualPersons = await db.person.findMany({
     where: { campaignId: campaign.id },
     take: 100,
@@ -777,53 +750,42 @@ async function main() {
   const canvassersOnly = [priyaNair, kevinLafleur, amyZhang, tomOkonkwo];
   const loginUsers     = [alexChen, mariaSantos, jamesOkafor, sarahKim, priyaNair, kevinLafleur, amyZhang, tomOkonkwo];
 
-  // 15 LOGIN
   for (let i = 0; i < 15; i++) {
     const u = loginUsers[i % loginUsers.length];
-    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "LOGIN",                    entityType: "user",                    entityId: u.id,          createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "LOGIN",                         entityType: "user",                   entityId: u.id,        createdAt: randomAuditDate() });
   }
-  // 10 CANVASS_RESPONSE_SAVED
   for (let i = 0; i < 10; i++) {
     const u = canvassersOnly[i % canvassersOnly.length];
-    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "CANVASS_RESPONSE_SAVED",   entityType: "canvass_response",        entityId: campaign.id,   createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "CANVASS_RESPONSE_SAVED",        entityType: "canvass_response",       entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 8 FOLLOW_UP_CREATED
   for (let i = 0; i < 8; i++) {
     const u = allFieldUsers[i % allFieldUsers.length];
-    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_CREATED",        entityType: "task",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_CREATED",             entityType: "task",                   entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 8 FOLLOW_UP_COMPLETED
   for (let i = 0; i < 8; i++) {
     const u = allFieldUsers[i % allFieldUsers.length];
-    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_COMPLETED",      entityType: "task",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "FOLLOW_UP_COMPLETED",           entityType: "task",                   entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 8 NOTE_ADDED
   for (let i = 0; i < 8; i++) {
     const u = [jamesOkafor, sarahKim, mariaSantos, priyaNair][i % 4];
-    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "NOTE_ADDED",               entityType: "note",                    entityId: campaign.id,   createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: u.id, action: "NOTE_ADDED",                    entityType: "note",                   entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 8 VOTER_LIST_IMPORTED
   for (let i = 0; i < 8; i++) {
-    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "VOTER_LIST_IMPORTED", entityType: "voter_list",          entityId: campaign.id,   createdAt: randomAuditDate(), after: { count: 50 + i * 20 } });
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "VOTER_LIST_IMPORTED",  entityType: "voter_list",             entityId: campaign.id, createdAt: randomAuditDate(), after: { count: 50 + i * 20 } });
   }
-  // 6 MEMBER_ADDED
   for (let i = 0; i < 6; i++) {
-    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "MEMBER_ADDED",   entityType: "campaign_membership",     entityId: campaign.id,   createdAt: randomAuditDate() });
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "MEMBER_ADDED",         entityType: "campaign_membership",    entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 5 ROLE_CHANGED
   for (let i = 0; i < 5; i++) {
-    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "ROLE_CHANGED",   entityType: "campaign_membership",     entityId: campaign.id,   createdAt: randomAuditDate(), before: { role: "canvasser" }, after: { role: "field_organizer" } });
+    auditRows.push({ campaignId: campaign.id, userId: mariaSantos.id, action: "ROLE_CHANGED",         entityType: "campaign_membership",    entityId: campaign.id, createdAt: randomAuditDate(), before: { role: "canvasser" }, after: { role: "field_organizer" } });
   }
-  // 5 EXPORT_VOTER_LIST
   for (let i = 0; i < 5; i++) {
     const u = [mariaSantos, jamesOkafor, sarahKim][i % 3];
-    auditRows.push({ campaignId: campaign.id, userId: u.id,           action: "EXPORT_VOTER_LIST", entityType: "voter_list",           entityId: campaign.id,   createdAt: randomAuditDate(), after: { format: "csv", rows: 100 + i * 50 } });
+    auditRows.push({ campaignId: campaign.id, userId: u.id,           action: "EXPORT_VOTER_LIST",    entityType: "voter_list",             entityId: campaign.id, createdAt: randomAuditDate(), after: { format: "csv", rows: 100 + i * 50 } });
   }
-  // 4 ADDRESS_CHANGE_APPROVED
   for (let i = 0; i < 4; i++) {
     auditRows.push({ campaignId: campaign.id, userId: jamesOkafor.id, action: "ADDRESS_CHANGE_APPROVED", entityType: "address_change_request", entityId: campaign.id, createdAt: randomAuditDate() });
   }
-  // 3 PASSWORD_RESET_REQUESTED (no campaignId — user-level event)
   for (let i = 0; i < 3; i++) {
     const u = [priyaNair, kevinLafleur, amyZhang][i];
     auditRows.push({ userId: u.id, action: "PASSWORD_RESET_REQUESTED", entityType: "user", entityId: u.id, createdAt: randomAuditDate() });
@@ -835,19 +797,19 @@ async function main() {
   // ── Address change requests ───────────────────────────────────────────────
   const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-  const [elmAcr, mapleAcr, birchAcr] = await Promise.all([
+  const [acrSource1, acrSource2, acrSource3] = await Promise.all([
     db.person.findMany({
-      where: { campaignId: campaign.id, household: { address: { streetName: "Elm Street" } } },
+      where: { campaignId: campaign.id, household: { address: { streetName: "2nd Ave E" } } },
       take: 1,
       include: { household: true },
     }),
     db.person.findMany({
-      where: { campaignId: campaign.id, household: { address: { streetName: "Maple Avenue" } } },
+      where: { campaignId: campaign.id, household: { address: { streetName: "3rd Ave E" } } },
       take: 2,
       include: { household: true },
     }),
     db.person.findMany({
-      where: { campaignId: campaign.id, household: { address: { streetName: "Birch Lane" } } },
+      where: { campaignId: campaign.id, household: { address: { streetName: "2nd Ave W" } } },
       take: 1,
       include: { household: true },
     }),
@@ -858,28 +820,28 @@ async function main() {
       {
         campaignId:        campaign.id,
         requestedByUserId: priyaNair.id,
-        personId:          elmAcr[0].id,
-        affectedPersonIds: [elmAcr[0].id],
-        oldAddressId:      elmAcr[0].household?.addressId ?? undefined,
-        newAddressData:    { streetNumber: "45", streetName: "Oak Drive",      city: "Greenfield", province: "ON", postalCode: "K1B 2A1" },
+        personId:          acrSource1[0].id,
+        affectedPersonIds: [acrSource1[0].id],
+        oldAddressId:      acrSource1[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "45", streetName: "4th Ave E", city: "Owen Sound", province: "ON", postalCode: "N4K 2H1" },
         createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
       },
       {
         campaignId:        campaign.id,
         requestedByUserId: kevinLafleur.id,
-        personId:          mapleAcr[0].id,
-        affectedPersonIds: [mapleAcr[0].id, mapleAcr[1].id],
-        oldAddressId:      mapleAcr[0].household?.addressId ?? undefined,
-        newAddressData:    { streetNumber: "88", streetName: "Cedar Boulevard", city: "Greenfield", province: "ON", postalCode: "K1B 2B2" },
+        personId:          acrSource2[0].id,
+        affectedPersonIds: [acrSource2[0].id, acrSource2[1].id],
+        oldAddressId:      acrSource2[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "88", streetName: "6th Ave E", city: "Owen Sound", province: "ON", postalCode: "N4K 3C4" },
         createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
       },
       {
         campaignId:        campaign.id,
         requestedByUserId: amyZhang.id,
-        personId:          birchAcr[0].id,
-        affectedPersonIds: [birchAcr[0].id],
-        oldAddressId:      birchAcr[0].household?.addressId ?? undefined,
-        newAddressData:    { streetNumber: "12", streetName: "Willow Court",    city: "Greenfield", province: "ON", postalCode: "K1D 4A1" },
+        personId:          acrSource3[0].id,
+        affectedPersonIds: [acrSource3[0].id],
+        oldAddressId:      acrSource3[0].household?.addressId ?? undefined,
+        newAddressData:    { streetNumber: "12", streetName: "10th St E", city: "Owen Sound", province: "ON", postalCode: "N4K 4L8" },
         createdAt:         new Date(nowMs - Math.random() * ONE_WEEK_MS),
       },
     ],
