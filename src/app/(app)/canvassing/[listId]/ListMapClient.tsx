@@ -109,6 +109,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
 
   useEffect(() => {
     console.log("[ListMap] useEffect firing, token:", !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
+    console.log("[ListMap] container ref:", mapContainer.current);
     if (!mapContainer.current) return;
 
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -122,6 +123,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
     ]).then(([mapboxgl]) => {
+      console.log("[ListMap] mapboxgl loaded, container:", mapContainer.current, "dimensions:", mapContainer.current?.offsetWidth, "x", mapContainer.current?.offsetHeight);
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
