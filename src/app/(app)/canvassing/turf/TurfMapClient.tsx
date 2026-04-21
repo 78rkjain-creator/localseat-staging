@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createTurfCanvassList } from "../actions";
+import { getWardBoundary } from "../[listId]/map/actions";
+import type { Polygon } from "geojson";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -47,6 +49,53 @@ function pointInPolygon(point: [number, number], ring: [number, number][]): bool
 function addressLabel(a: AddressPoint): string {
   const unit = a.unitNumber ? ` Unit ${a.unitNumber}` : "";
   return `${a.streetNumber} ${a.streetName}${unit}, ${a.city}`;
+}
+
+// ── Ward boundary layers ───────────────────────────────────────────────────
+
+function addWardBoundaryLayers(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+  wardBoundary: Polygon
+): void {
+  const worldRing: [number, number][] = [
+    [-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90],
+  ];
+
+  map.addSource("ward-mask", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [worldRing, wardBoundary.coordinates[0]],
+      },
+      properties: {},
+    },
+  });
+
+  map.addLayer({
+    id: "ward-mask-fill",
+    type: "fill",
+    source: "ward-mask",
+    paint: { "fill-color": "#000000", "fill-opacity": 0.25 },
+  });
+
+  map.addSource("ward-border", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: wardBoundary,
+      properties: {},
+    },
+  });
+
+  map.addLayer({
+    id: "ward-border-line",
+    type: "line",
+    source: "ward-border",
+    paint: { "line-color": "#000000", "line-width": 2 },
+  });
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -121,7 +170,8 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
       import("@mapbox/mapbox-gl-draw"),
-    ]).then(([mapboxgl, , MapboxDraw]) => {
+      getWardBoundary(),
+    ]).then(([mapboxgl, , MapboxDraw, wardBoundary]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
@@ -205,6 +255,11 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
       map.addControl(draw, "top-right");
 
       map.on("load", () => {
+        // Ward boundary layers — added before address points so markers sit on top.
+        if (wardBoundary) {
+          addWardBoundaryLayers(map, wardBoundary);
+        }
+
         // Add address points source
         map.addSource("addresses", {
           type: "geojson",

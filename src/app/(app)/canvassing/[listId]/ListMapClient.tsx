@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { CanvassOutcome, SupportLevel } from "@/types";
+import type { Polygon } from "geojson";
+import { getWardBoundary } from "./map/actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +88,56 @@ function summarise(entries: MapEntry[]) {
   return { total: entries.length, contacted, notHome, remaining };
 }
 
+// ── Ward boundary layers ───────────────────────────────────────────────────
+// Inverted-polygon mask dims everything outside the ward; a line layer draws
+// the boundary edge. Both layers are safe to call only if wardBoundary != null.
+
+function addWardBoundaryLayers(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  map: any,
+  wardBoundary: Polygon
+): void {
+  // Outer ring covers the entire world so the hole punches through cleanly.
+  const worldRing: [number, number][] = [
+    [-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90],
+  ];
+
+  map.addSource("ward-mask", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [worldRing, wardBoundary.coordinates[0]],
+      },
+      properties: {},
+    },
+  });
+
+  map.addLayer({
+    id: "ward-mask-fill",
+    type: "fill",
+    source: "ward-mask",
+    paint: { "fill-color": "#000000", "fill-opacity": 0.25 },
+  });
+
+  map.addSource("ward-border", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: wardBoundary,
+      properties: {},
+    },
+  });
+
+  map.addLayer({
+    id: "ward-border-line",
+    type: "line",
+    source: "ward-border",
+    paint: { "line-color": "#000000", "line-width": 2 },
+  });
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function ListMapClient({ entries, listId, listName }: Props) {
@@ -118,7 +170,8 @@ export function ListMapClient({ entries, listId, listName }: Props) {
     Promise.all([
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
-    ]).then(([mapboxgl]) => {
+      getWardBoundary(),
+    ]).then(([mapboxgl, , wardBoundary]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
@@ -131,6 +184,12 @@ export function ListMapClient({ entries, listId, listName }: Props) {
       mapRef.current = map;
 
       map.on("load", () => {
+        // Ward boundary layers (mask + border) — added before markers so
+        // markers always render on top.
+        if (wardBoundary) {
+          addWardBoundaryLayers(map, wardBoundary);
+        }
+
         // Add source
         map.addSource("entries", {
           type: "geojson",

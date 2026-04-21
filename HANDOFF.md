@@ -416,6 +416,21 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - @mapbox/mapbox-gl-draw CSS imported statically from npm package (`@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css`)
 - Geocoding script delay updated to 100ms for bulk operations
 
+### Ward Boundary
+
+- WardStatus enum on Person: `not_checked | inside | outside | outside_accepted | pending_review`
+- `wardBoundary Json?` and `wardBoundarySetAt DateTime?` added to Campaign model
+- Migration: `20260421164841_add_ward_boundary`
+- `src/lib/ward.ts` — `isPointInWard` (ray-cast), `campaignHasWard`, `parseKmlToGeoJsonPolygon` (simple single-polygon KML only)
+- `/campaign-settings/ward` — manager page to draw or upload GeoJSON/KML ward boundary, save/clear actions, amber banner when flagged voters waiting
+- `/campaign-settings/ward/review` — review queue for outside-ward voters, per-row and bulk save-anyway or discard
+- Ward boundary check wired into voter CSV import — outside-ward rows held with `wardStatus: outside`, not saved automatically, warning banner shown after import with link to review queue
+- Ward boundary check wired into `addPersonAtDoor` — sets `wardStatus: outside_accepted`, returns `outsideWard: true`, canvassing screen shows amber warning that auto-dismisses after 4 seconds
+- No boundary set = no enforcement anywhere — all imports and saves proceed normally
+- Ward boundary page and review queue accessible to `candidate`, `campaign_manager`, `co_chair` only
+- `clearWardBoundary` action nulls both `wardBoundary` and `wardBoundarySetAt`
+- All save, clear, accept, and discard actions are audit logged
+
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts
 - canvasser-route-protection.test.ts
@@ -498,6 +513,9 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     address-changes.ts, people.ts, canvassing.ts, outreach.ts, activity.ts
     offline-queue.ts, terms.ts, plan-limits.ts
     geocoding.ts
+    ward.ts
+  /app/(app)/campaign-settings/ward/page.tsx, WardMapClient.tsx, actions.ts
+  /app/(app)/campaign-settings/ward/review/page.tsx, WardReviewClient.tsx, actions.ts
   /app/(app)/canvassing/turf/page.tsx, TurfMapClient.tsx
   /app/(app)/canvassing/[listId]/map/page.tsx, ListMapClient.tsx
   /hooks/useOfflineSync.ts
