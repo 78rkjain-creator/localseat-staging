@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createTurfCanvassList } from "../actions";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
