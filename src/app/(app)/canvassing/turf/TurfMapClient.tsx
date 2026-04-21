@@ -114,11 +114,13 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let draw: any;
 
-    // Dynamic import keeps mapbox-gl out of the server bundle
+    // Dynamic import keeps mapbox-gl out of the server bundle.
+    // CSS is imported from the npm package to guarantee version alignment.
     Promise.all([
       import("mapbox-gl"),
+      import("mapbox-gl/dist/mapbox-gl.css"),
       import("@mapbox/mapbox-gl-draw"),
-    ]).then(([mapboxgl, MapboxDraw]) => {
+    ]).then(([mapboxgl, , MapboxDraw]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({

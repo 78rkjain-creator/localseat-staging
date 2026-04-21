@@ -114,7 +114,11 @@ export function ListMapClient({ entries, listId, listName }: Props) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let map: any;
 
-    import("mapbox-gl").then((mapboxgl) => {
+    // CSS imported from the npm package to guarantee version alignment.
+    Promise.all([
+      import("mapbox-gl"),
+      import("mapbox-gl/dist/mapbox-gl.css"),
+    ]).then(([mapboxgl]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
