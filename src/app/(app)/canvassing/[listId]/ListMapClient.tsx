@@ -230,7 +230,7 @@ export function ListMapClient({ entries, listId, listName }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px" }}>
+    <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px", background: "rgba(255,0,0,0.1)" }}>
       {/* Summary bar */}
       <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-6">
         <Link
@@ -262,8 +262,8 @@ export function ListMapClient({ entries, listId, listName }: Props) {
       </div>
 
       {/* Map */}
-      <div className="relative flex-1 min-h-0">
-        <div ref={mapContainer} className="absolute inset-0" />
+      <div className="relative flex-1 min-h-0" style={{ overflow: "hidden" }}>
+        <div ref={mapContainer} className="absolute inset-0" style={{ zIndex: 1, background: "#e5e3df" }} />
 
         {/* Legend */}
         <div className="absolute bottom-8 left-3 z-10 bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm px-3 py-2.5 flex flex-col gap-1.5">
