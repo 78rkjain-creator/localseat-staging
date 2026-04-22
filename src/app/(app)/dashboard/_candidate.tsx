@@ -22,7 +22,7 @@ export async function CandidateDashboard({ campaignId }: Props) {
     total, forUs, againstUs, undecided, notHome, uncontacted,
     doorsTotal, doorsToday, walkListProgress,
     followUpSummary, donorCountByStatus, recentOutreach, teamMembers,
-    canvassersOutToday,
+    canvassersOutToday, competitorBreakdown,
   } = data;
 
   const idd = forUs + againstUs + undecided;
@@ -213,6 +213,26 @@ export async function CandidateDashboard({ campaignId }: Props) {
             Based on {idd.toLocaleString()} ID&apos;d voter{idd !== 1 ? "s" : ""} (excludes not home and uncontacted)
           </p>
         </div>
+      )}
+
+      {/* Competitor breakdown */}
+      {competitorBreakdown.length > 0 && (
+        <Card padding="sm" className="mb-8">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Supporting other candidates
+          </h2>
+          <div className="flex flex-col gap-2">
+            {competitorBreakdown.slice(0, 5).map((c) => (
+              <div key={c.name} className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">{c.name}</span>
+                <span className="text-sm font-semibold text-slate-900 tabular">{c.count}</span>
+              </div>
+            ))}
+            {competitorBreakdown.length > 5 && (
+              <p className="text-xs text-slate-400 pt-1">+{competitorBreakdown.length - 5} more</p>
+            )}
+          </div>
+        </Card>
       )}
 
       {/* Walk list progress */}

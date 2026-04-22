@@ -40,7 +40,7 @@ export async function GET() {
       canvassResponses: {
         orderBy: { respondedAt: "desc" },
         take: 1,
-        select: { supportLevel: true },
+        select: { supportLevel: true, outcome: true, competitor: { select: { name: true } } },
       },
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -49,7 +49,7 @@ export async function GET() {
   const headers = row([
     "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
     "Street", "Unit", "City", "Province", "Postal Code", "Poll Number",
-    "Tags", "Support Level", "Notes Count", "Created Date", "Import Source",
+    "Tags", "Support Level", "Competitor", "Notes Count", "Created Date", "Import Source",
   ]);
 
   const rows = people.map((p) => {
@@ -58,16 +58,21 @@ export async function GET() {
       ? `${addr.streetNumber} ${addr.streetName}`
       : "";
     const tags = p.tags.map(({ tag }) => tag.name).join("; ");
-    const rawLevel = p.canvassResponses[0]?.supportLevel;
+    const latestResponse = p.canvassResponses[0];
+    const rawLevel = latestResponse?.supportLevel;
     const supportLevel = rawLevel
       ? (SUPPORT_LEVEL_LABELS[rawLevel as SupportLevel] ?? rawLevel)
       : "";
+    const competitor =
+      (latestResponse?.outcome as string) === "other_candidate" && latestResponse?.competitor?.name
+        ? latestResponse.competitor.name
+        : "";
 
     return row([
       p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
       street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
       p.pollNumber,
-      tags, supportLevel, p.notes.length,
+      tags, supportLevel, competitor, p.notes.length,
       p.createdAt.toISOString().slice(0, 10),
       p.importSource,
     ]);

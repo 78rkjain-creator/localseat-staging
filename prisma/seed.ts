@@ -1014,6 +1014,76 @@ async function main() {
   }
   console.log(`  ✓ Walk lists: 4 | Canvass responses: ${totalResponses}`);
 
+  // ── Competitors ───────────────────────────────────────────────────────────
+  const competitors = await Promise.all([
+    db.campaignCompetitor.create({ data: { campaignId: campaign.id, name: "Akshay Kumar", sortOrder: 1 } }),
+    db.campaignCompetitor.create({ data: { campaignId: campaign.id, name: "Charles Wong", sortOrder: 2 } }),
+    db.campaignCompetitor.create({ data: { campaignId: campaign.id, name: "Walter Smith", sortOrder: 3 } }),
+  ]);
+  console.log("  ✔ Competitors: 3");
+
+  // ── Extended canvass responses (voter ID story) ───────────────────────────
+  const dtAssignment = await db.canvassAssignment.findFirst({
+    where: { canvassList: { campaignId: campaign.id, name: "Downtown East Route" } },
+    include: { canvassList: { select: { id: true, name: true, campaignId: true } } },
+  });
+  console.log("  dtAssignment:", dtAssignment?.id, "canvassList.campaignId:", (dtAssignment as any)?.canvassList?.campaignId, "campaign.id:", campaign.id);
+
+  const uncontactedPeople = await db.person.findMany({
+    where: {
+      campaignId: campaign.id,
+      canvassResponses: { none: {} },
+      deletedAt: null,
+    },
+    take: 200,
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (dtAssignment && uncontactedPeople.length >= 115) {
+    // 50 strong yes / soft yes for our candidate
+    const forUsData = uncontactedPeople.slice(0, 50).map((p, i) => ({
+      assignmentId: dtAssignment.id,
+      personId: p.id,
+      outcome: "contacted" as const,
+      supportLevel: i < 25 ? "strong_yes" as const : "soft_yes" as const,
+      respondedAt: randomRespondedAt(),
+    }));
+
+    // 20 supporting Akshay Kumar
+    const akshayData = uncontactedPeople.slice(50, 70).map((p) => ({
+      assignmentId: dtAssignment.id,
+      personId: p.id,
+      outcome: "other_candidate" as const,
+      competitorId: competitors[0].id,
+      respondedAt: randomRespondedAt(),
+    }));
+
+    // 30 supporting Charles Wong
+    const charlesData = uncontactedPeople.slice(70, 100).map((p) => ({
+      assignmentId: dtAssignment.id,
+      personId: p.id,
+      outcome: "other_candidate" as const,
+      competitorId: competitors[1].id,
+      respondedAt: randomRespondedAt(),
+    }));
+
+    // 15 supporting Walter Smith
+    const walterData = uncontactedPeople.slice(100, 115).map((p) => ({
+      assignmentId: dtAssignment.id,
+      personId: p.id,
+      outcome: "other_candidate" as const,
+      competitorId: competitors[2].id,
+      respondedAt: randomRespondedAt(),
+    }));
+
+    const created = await db.canvassResponse.createMany({
+      data: [...forUsData, ...akshayData, ...charlesData, ...walterData],
+    });
+    console.log("  Created responses:", created.count);
+
+    console.log("  ✔ Extended canvass responses: 50 for us, 20 Akshay Kumar, 30 Charles Wong, 15 Walter Smith");
+  }
+
   // ── Follow-up tasks ───────────────────────────────────────────────────────
   const FOLLOW_UP_NOTES = [
     "Call back after 6pm",

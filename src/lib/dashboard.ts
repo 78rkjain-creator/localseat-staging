@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getFollowUpSummary } from "@/lib/follow-ups";
+import type { CanvassOutcome, Prisma } from "@prisma/client";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -14,9 +15,21 @@ function startOfToday(): Date {
 export async function getCandidateDashboardData(campaignId: string) {
   const todayStart = startOfToday();
 
+  const allResponses = await db.canvassResponse.findMany({
+    where: { assignment: { canvassList: { campaignId } } },
+    select: { personId: true, supportLevel: true, outcome: true, respondedAt: true },
+    orderBy: { respondedAt: "desc" },
+  });
+  const latestMap = new Map<string, typeof allResponses[number]>();
+  for (const r of allResponses) {
+    if (!latestMap.has(r.personId)) {
+      latestMap.set(r.personId, r);
+    }
+  }
+  const latestResponses = Array.from(latestMap.values());
+
   const [
     allPeople,
-    latestResponses,
     doorsTotal,
     doorsToday,
     walkLists,
@@ -26,16 +39,11 @@ export async function getCandidateDashboardData(campaignId: string) {
     teamMembers,
     pendingAddressChangeCount,
     canvassersOutTodayRaw,
+    competitorGroupsRaw,
   ] = await Promise.all([
     db.person.findMany({
       where: { campaignId, deletedAt: null },
       select: { id: true },
-    }),
-    db.canvassResponse.findMany({
-      where: { person: { campaignId, deletedAt: null } },
-      orderBy: { respondedAt: "desc" },
-      distinct: ["personId"],
-      select: { personId: true, supportLevel: true, outcome: true },
     }),
     db.canvassResponse.count({
       where: { assignment: { canvassList: { campaignId } } },
@@ -101,23 +109,51 @@ export async function getCandidateDashboardData(campaignId: string) {
       select: { canvasserId: true },
       distinct: ["canvasserId"],
     }),
+    db.canvassResponse.groupBy({
+      by: ["competitorId" as unknown as Prisma.CanvassResponseScalarFieldEnum],
+      where: {
+        person: { campaignId, deletedAt: null },
+        outcome: "other_candidate" as unknown as CanvassOutcome,
+        competitorId: { not: null },
+      },
+      _count: { id: true },
+    }),
   ]);
 
   const canvassersOutToday = canvassersOutTodayRaw.length;
 
+  // Competitor breakdown — fetch names for the grouped competitor IDs.
+  // db.campaignCompetitor cast required until prisma generate runs post-migration.
+  const competitorIds = competitorGroupsRaw
+    .map((r) => (r as unknown as { competitorId: string | null }).competitorId)
+    .filter(Boolean) as string[];
+  const competitorNameRecords: { id: string; name: string }[] = competitorIds.length > 0
+    ? await (db as unknown as { campaignCompetitor: { findMany: (a: unknown) => Promise<{ id: string; name: string }[]> } })
+        .campaignCompetitor.findMany({ where: { id: { in: competitorIds } }, select: { id: true, name: true } })
+    : [];
+  const competitorNameMap = new Map(competitorNameRecords.map((c) => [c.id, c.name]));
+  const competitorBreakdown: { name: string; count: number }[] = competitorGroupsRaw
+    .map((r) => {
+      const id = (r as unknown as { competitorId: string | null }).competitorId;
+      return id ? { name: competitorNameMap.get(id) ?? "Unknown", count: r._count.id } : null;
+    })
+    .filter((x): x is { name: string; count: number } => x !== null)
+    .sort((a, b) => b.count - a.count);
+
   // Voter ID breakdown
-  const latestByPerson = new Map(latestResponses.map((r) => [r.personId, r]));
+  const latestByPerson = new Map(
+    latestResponses.map((r) => [r.personId, { supportLevel: r.supportLevel, outcome: r.outcome }])
+  );
   let forUs = 0, againstUs = 0, undecided = 0, notHome = 0, uncontacted = 0;
   for (const { id } of allPeople) {
     if (!latestByPerson.has(id)) { uncontacted++; continue; }
-    const { supportLevel, outcome } = latestByPerson.get(id)!;
-    if (supportLevel === "strong_yes" || supportLevel === "soft_yes") forUs++;
-    else if (supportLevel === "strong_no" || supportLevel === "soft_no") againstUs++;
-    else if (supportLevel === "undecided") undecided++;
-    else if ((outcome as string) === "other_candidate") againstUs++;
+    const { supportLevel: level, outcome } = latestByPerson.get(id)!;
+    if ((outcome as string) === "other_candidate") { againstUs++; continue; }
+    if (level === "strong_yes" || level === "soft_yes") forUs++;
+    else if (level === "strong_no" || level === "soft_no") againstUs++;
+    else if (level === "undecided") undecided++;
     else notHome++;
   }
-
   const walkListProgress = walkLists.map((l) => ({
     id: l.id,
     name: l.name,
@@ -147,6 +183,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     teamMembers,
     pendingAddressChangeCount,
     canvassersOutToday,
+    competitorBreakdown,
   };
 }
 
