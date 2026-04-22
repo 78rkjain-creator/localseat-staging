@@ -137,6 +137,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
               </h2>
               <div className="flex flex-col gap-2">
                 <OutcomeBadge outcome={latestCanvass.outcome as CanvassOutcome} />
+                {latestCanvass.outcome === "other_candidate" && latestCanvass.competitor?.name && (
+                  <p className="text-xs text-slate-500">
+                    Supporting: {latestCanvass.competitor.name}
+                  </p>
+                )}
                 {latestCanvass.supportLevel && (
                   <SupportLevelBadge
                     level={latestCanvass.supportLevel as SupportLevel}
@@ -335,7 +340,7 @@ function CanvassTimelineItem({
   event,
   date,
 }: {
-  event: { outcome: string; supportLevel?: string | null; notes?: string | null; assignment: { canvasser: { firstName: string; lastName: string }; canvassList: { name: string } } };
+  event: { outcome: string; supportLevel?: string | null; notes?: string | null; competitor?: { name: string } | null; assignment: { canvasser: { firstName: string; lastName: string }; canvassList: { name: string } } };
   date: Date;
 }) {
   return (
@@ -347,6 +352,9 @@ function CanvassTimelineItem({
           <SupportLevelBadge level={event.supportLevel as SupportLevel} />
         )}
       </div>
+      {event.outcome === "other_candidate" && event.competitor?.name && (
+        <p className="text-xs text-slate-500 mb-1">Supporting: {event.competitor.name}</p>
+      )}
       {event.notes && (
         <p className="text-sm text-slate-600 mb-1">&ldquo;{event.notes}&rdquo;</p>
       )}

@@ -79,13 +79,13 @@ export default async function CanvassingPage() {
               <Link key={list.id} href={`/canvassing/${list.id}`}>
                 <Card
                   padding="md"
-                  className="hover:border-brand-200 hover:shadow-soft transition-all cursor-pointer"
+                  className="hover:border-slate-200 hover:shadow-soft transition-all cursor-pointer"
                 >
                   <div className="flex items-start gap-4">
                     {/* Icon */}
-                    <div className="h-10 w-10 rounded-2xl bg-brand-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <svg
-                        className="h-5 w-5 text-brand-500"
+                        className="h-5 w-5 text-slate-500"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -191,9 +191,9 @@ async function CanvasserView({
             return (
               <Card key={a.assignmentId} padding="md">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="h-10 w-10 rounded-2xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+                  <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0">
                     <svg
-                      className="h-5 w-5 text-brand-500"
+                      className="h-5 w-5 text-slate-500"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -224,7 +224,7 @@ async function CanvasserView({
                 <div className="mb-4">
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-brand-500 rounded-full transition-all"
+                      className="h-full bg-slate-800 rounded-full transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>

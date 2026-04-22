@@ -33,6 +33,19 @@ const config: Config = {
           600: "#4d7a5a",
           700: "#3a5c44",
         },
+        // Support level sentiment scale (1 = strong yes → 5 = strong no)
+        sentiment: {
+          1: '#10b981',
+          2: '#34d399',
+          3: '#f59e0b',
+          4: '#f97316',
+          5: '#ef4444',
+        },
+        // High-contrast ink tones for display text
+        ink: {
+          DEFAULT: '#0f172a',
+          soft: '#1e293b',
+        },
       },
       borderRadius: {
         "2xl": "1rem",

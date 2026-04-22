@@ -13,16 +13,47 @@ import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "./search-bar";
+import { VoterListDateFilter } from "./filters-client";
 import type { Role, SupportLevel } from "@/types";
 
 export const metadata: Metadata = { title: "Voter List" };
 
+type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
+
+const SUPPORT_FILTER_LABELS: Record<SupportFilter, string> = {
+  supporting: "Supporting",
+  undecided: "Undecided",
+  not_supporting: "Not supporting",
+  not_contacted: "Not contacted",
+};
+
+const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[] = [
+  { label: "All", value: undefined },
+  { label: "Supporting", value: "supporting" },
+  { label: "Undecided", value: "undecided" },
+  { label: "Not supporting", value: "not_supporting" },
+  { label: "Not contacted", value: "not_contacted" },
+];
+
+function buildUrl(params: { q?: string; tag?: string; supportFilter?: string; contactedAfter?: string }) {
+  const p = new URLSearchParams();
+  if (params.q) p.set("q", params.q);
+  if (params.tag) p.set("tag", params.tag);
+  if (params.supportFilter) p.set("supportFilter", params.supportFilter);
+  if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
+  const s = p.toString();
+  return `/voter-list${s ? `?${s}` : ""}`;
+}
+
 interface PageProps {
-  searchParams: Promise<{ q?: string; tag?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string; supportFilter?: string; contactedAfter?: string }>;
 }
 
 export default async function VoterListPage({ searchParams }: PageProps) {
-  const { q, tag } = await searchParams;
+  const { q, tag, supportFilter: rawSupportFilter, contactedAfter } = await searchParams;
+  const supportFilter = (rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS)
+    ? rawSupportFilter as SupportFilter
+    : undefined;
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -38,6 +69,8 @@ export default async function VoterListPage({ searchParams }: PageProps) {
       campaignId: activeCampaignId,
       q,
       tagId: tag,
+      supportFilter,
+      contactedAfter,
     }),
     getPeopleCount(activeCampaignId),
     getCampaignTags(activeCampaignId),
@@ -45,7 +78,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
 
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
-  const isFiltered = !!q || !!activeTagId;
+  const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -57,6 +90,12 @@ export default async function VoterListPage({ searchParams }: PageProps) {
             {totalCount.toLocaleString()} total
             {isFiltered && people.length < totalCount && (
               <> &mdash; showing {people.length} result{people.length !== 1 ? "s" : ""}</>
+            )}
+            {supportFilter && (
+              <> &middot; filtered by: {SUPPORT_FILTER_LABELS[supportFilter]}</>
+            )}
+            {contactedAfter && (
+              <> &middot; contacted after {new Date(contactedAfter).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}</>
             )}
           </p>
         </div>
@@ -74,11 +113,35 @@ export default async function VoterListPage({ searchParams }: PageProps) {
         )}
       </div>
 
-      {/* Search + tag filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="flex-1">
-          <PeopleSearchBar defaultValue={q ?? ""} />
-        </div>
+      {/* Search */}
+      <div className="mb-3">
+        <PeopleSearchBar defaultValue={q ?? ""} />
+      </div>
+
+      {/* Support filter pills + date filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        {SUPPORT_FILTER_PILLS.map((pill) => {
+          const isActive = supportFilter === pill.value;
+          return (
+            <Link
+              key={pill.label}
+              href={buildUrl({ q, tag, supportFilter: pill.value, contactedAfter })}
+              className={
+                isActive
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {pill.label}
+            </Link>
+          );
+        })}
+        <VoterListDateFilter
+          q={q}
+          tag={tag}
+          supportFilter={supportFilter}
+          contactedAfter={contactedAfter}
+        />
       </div>
 
       {/* Active tag filter pill */}
@@ -88,7 +151,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
           <TagChip name={activeTag.name} color={activeTag.color} />
           <Link
             href="/voter-list"
-            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+            className="text-sm text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900"
           >
             Clear
           </Link>
@@ -155,7 +218,33 @@ export default async function VoterListPage({ searchParams }: PageProps) {
                       )}
                     </div>
 
-                    <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                      {/* Last contacted date */}
+                      {latestResponse?.respondedAt ? (
+                        <span className="text-xs text-slate-500">
+                          Contacted{" "}
+                          {new Date(latestResponse.respondedAt).toLocaleDateString("en-CA", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Not contacted</span>
+                      )}
+
+                      {/* Support level badge */}
+                      {latestResponse?.supportLevel && (
+                        <SupportLevelBadge
+                          level={latestResponse.supportLevel as SupportLevel}
+                        />
+                      )}
+
+                      {/* Other candidate label */}
+                      {(latestResponse?.outcome as string) === "other_candidate" && (
+                        <span className="text-xs text-slate-500">Other candidate</span>
+                      )}
+
+                      {/* Tag chips */}
                       {person.tags.slice(0, 2).map(({ tag }) => (
                         <TagChip
                           key={tag.id}
@@ -167,14 +256,6 @@ export default async function VoterListPage({ searchParams }: PageProps) {
                         <span className="text-xs text-slate-400">
                           +{person.tags.length - 2}
                         </span>
-                      )}
-                    </div>
-
-                    <div className="flex-shrink-0 ml-2">
-                      {latestResponse?.supportLevel && (
-                        <SupportLevelBadge
-                          level={latestResponse.supportLevel as SupportLevel}
-                        />
                       )}
                     </div>
 

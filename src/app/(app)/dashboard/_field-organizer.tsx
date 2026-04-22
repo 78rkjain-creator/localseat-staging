@@ -58,7 +58,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
           {unassignedFollowUpCount > 0 ? (
             <>
               <p className="text-3xl font-bold text-amber-500">{unassignedFollowUpCount}</p>
-              <Link href="/follow-ups" className="text-xs text-brand-600 hover:underline mt-1 block">
+              <Link href="/follow-ups" className="text-xs text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900 mt-1 block">
                 Assign now →
               </Link>
             </>
@@ -77,7 +77,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
           </div>
           <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full bg-brand-500 rounded-full transition-all"
+              className="h-full bg-slate-800 rounded-full transition-all"
               style={{ width: `${overallPct}%` }}
             />
           </div>
@@ -88,7 +88,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Walk lists</h2>
-          <Link href="/canvassing" className="text-xs font-medium text-brand-600 hover:text-brand-700">Manage →</Link>
+          <Link href="/canvassing" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">Manage →</Link>
         </div>
 
         {walkListProgress.length === 0 ? (
@@ -113,7 +113,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
                     <tr key={l.id} className="hover:bg-slate-50/50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Link href={`/canvassing/${l.id}`} className="font-medium text-slate-900 hover:text-brand-600">
+                          <Link href={`/canvassing/${l.id}`} className="font-medium text-slate-900 hover:text-slate-600">
                             {l.name}
                           </Link>
                           {complete && (
@@ -131,7 +131,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
                           <div className="hidden sm:block w-20">
                             <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${complete ? "bg-emerald-500" : "bg-brand-500"}`}
+                                className={`h-full rounded-full ${complete ? "bg-emerald-500" : "bg-slate-800"}`}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
@@ -179,7 +179,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
         <Card padding="md">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-slate-900">Follow-ups</h2>
-            <Link href="/follow-ups" className="text-xs font-medium text-brand-600 hover:text-brand-700">View queue →</Link>
+            <Link href="/follow-ups" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View queue →</Link>
           </div>
           {unassignedFollowUpCount === 0 ? (
             <p className="text-sm text-slate-400">No unassigned follow-up tasks.</p>
@@ -204,7 +204,7 @@ function MetricCard({ label, value, highlight = false }: { label: string; value:
   return (
     <Card padding="md">
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={["text-3xl font-bold", highlight ? "text-brand-500" : "text-slate-900"].join(" ")}>
+      <p className="text-3xl font-bold text-slate-900">
         {value.toLocaleString()}
       </p>
     </Card>

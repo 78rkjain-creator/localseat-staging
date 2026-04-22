@@ -25,6 +25,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     recentOutreach,
     teamMembers,
     pendingAddressChangeCount,
+    canvassersOutTodayRaw,
   ] = await Promise.all([
     db.person.findMany({
       where: { campaignId, deletedAt: null },
@@ -34,7 +35,7 @@ export async function getCandidateDashboardData(campaignId: string) {
       where: { person: { campaignId, deletedAt: null } },
       orderBy: { respondedAt: "desc" },
       distinct: ["personId"],
-      select: { personId: true, supportLevel: true },
+      select: { personId: true, supportLevel: true, outcome: true },
     }),
     db.canvassResponse.count({
       where: { assignment: { canvassList: { campaignId } } },
@@ -91,17 +92,29 @@ export async function getCandidateDashboardData(campaignId: string) {
     db.addressChangeRequest.count({
       where: { campaignId, status: "pending", deletedAt: null },
     }),
+    db.canvassAssignment.findMany({
+      where: {
+        canvassList: { campaignId },
+        deletedAt: null,
+        responses: { some: { respondedAt: { gte: todayStart } } },
+      },
+      select: { canvasserId: true },
+      distinct: ["canvasserId"],
+    }),
   ]);
 
+  const canvassersOutToday = canvassersOutTodayRaw.length;
+
   // Voter ID breakdown
-  const latestByPerson = new Map(latestResponses.map((r) => [r.personId, r.supportLevel]));
+  const latestByPerson = new Map(latestResponses.map((r) => [r.personId, r]));
   let forUs = 0, againstUs = 0, undecided = 0, notHome = 0, uncontacted = 0;
   for (const { id } of allPeople) {
     if (!latestByPerson.has(id)) { uncontacted++; continue; }
-    const level = latestByPerson.get(id);
-    if (level === "strong_yes" || level === "soft_yes") forUs++;
-    else if (level === "strong_no" || level === "soft_no") againstUs++;
-    else if (level === "undecided") undecided++;
+    const { supportLevel, outcome } = latestByPerson.get(id)!;
+    if (supportLevel === "strong_yes" || supportLevel === "soft_yes") forUs++;
+    else if (supportLevel === "strong_no" || supportLevel === "soft_no") againstUs++;
+    else if (supportLevel === "undecided") undecided++;
+    else if ((outcome as string) === "other_candidate") againstUs++;
     else notHome++;
   }
 
@@ -133,6 +146,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     recentOutreach,
     teamMembers,
     pendingAddressChangeCount,
+    canvassersOutToday,
   };
 }
 
@@ -323,4 +337,68 @@ export async function getFinanceDashboardData(campaignId: string) {
     recentDonors,
     totalDonors: Object.values(countByStatus).reduce((a, b) => a + b, 0),
   };
+}
+
+// ── Needs-you queue ────────────────────────────────────────────────────────
+
+type QueuePriority = "overdue" | "today" | "this-week" | "neutral";
+
+interface NeedsYouItem {
+  id: string;
+  label: string;
+  count: number;
+  priority: QueuePriority;
+  href: string;
+}
+
+const PRIORITY_ORDER: Record<QueuePriority, number> = {
+  overdue: 0,
+  today: 1,
+  "this-week": 2,
+  neutral: 3,
+};
+
+export async function getNeedsYouQueue(campaignId: string): Promise<NeedsYouItem[]> {
+  const [
+    overdueFollowUpCount,
+    pledgedDonorCount,
+    walkListsRaw,
+    pendingAddressChangeCount,
+  ] = await Promise.all([
+    db.task.count({
+      where: { campaignId, completed: false, deletedAt: null, dueDate: { lt: new Date() } },
+    }),
+    db.donor.count({
+      where: { campaignId, status: "pledged", deletedAt: null },
+    }),
+    db.canvassList.findMany({
+      where: { campaignId, deletedAt: null },
+      select: {
+        _count: { select: { entries: true } },
+        assignments: { select: { _count: { select: { responses: true } } } },
+      },
+    }),
+    db.addressChangeRequest.count({
+      where: { campaignId, status: "pending", deletedAt: null },
+    }),
+  ]);
+
+  const walkListsInProgress = walkListsRaw.filter((l) => {
+    if (l._count.entries === 0) return false;
+    const pct = l.assignments.reduce((sum, a) => sum + a._count.responses, 0) / l._count.entries;
+    return pct >= 0.5 && pct < 1.0;
+  }).length;
+
+  const items: NeedsYouItem[] = [];
+
+  if (overdueFollowUpCount > 0)
+    items.push({ id: "overdue-followups", label: "follow-ups overdue", count: overdueFollowUpCount, priority: "overdue", href: "/follow-ups" });
+  if (pledgedDonorCount > 0)
+    items.push({ id: "pledged-donors", label: "pledged donors to call", count: pledgedDonorCount, priority: "today", href: "/donors" });
+  if (walkListsInProgress > 0)
+    items.push({ id: "walklists-in-progress", label: "walk lists need attention", count: walkListsInProgress, priority: "today", href: "/canvassing" });
+  if (pendingAddressChangeCount > 0)
+    items.push({ id: "address-changes", label: "address changes to review", count: pendingAddressChangeCount, priority: "today", href: "/address-changes" });
+
+  return items.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 }

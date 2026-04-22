@@ -35,6 +35,7 @@ enum CanvassOutcome {
   moved
   unavailable
   deceased
+  other_candidate
 }
 
 enum OutreachChannel {
@@ -105,6 +106,7 @@ model Campaign {
   tasks            Task[]
   addressChangeRequests AddressChangeRequest[]
   override              CampaignOverride?
+  competitors           CampaignCompetitor[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -402,15 +404,18 @@ model CanvassResponse {
   needsFollowUp     Boolean        @default(false)
   respondedAt       DateTime       @default(now())
   createdAt         DateTime       @default(now())
+  competitorId      String?
 
-  assignment CanvassAssignment @relation(fields: [assignmentId], references: [id])
-  person     Person            @relation(fields: [personId], references: [id])
+  assignment CanvassAssignment  @relation(fields: [assignmentId], references: [id])
+  person     Person             @relation(fields: [personId], references: [id])
+  competitor CampaignCompetitor? @relation(fields: [competitorId], references: [id])
 
   // One response per person per assignment — prevents duplicate submissions from
   // network retries or offline queue re-syncs. Use upsert when saving.
   @@unique([assignmentId, personId])
   @@index([assignmentId])
   @@index([personId])
+  @@index([competitorId])
   @@map("canvass_responses")
 }
 
@@ -669,6 +674,23 @@ model CampaignOverride {
   updatedAt            DateTime @updatedAt
 
   @@map("campaign_overrides")
+}
+
+model CampaignCompetitor {
+  id         String    @id @default(cuid())
+  campaignId String
+  name       String
+  sortOrder  Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  campaign          Campaign          @relation(fields: [campaignId], references: [id])
+  canvassResponses  CanvassResponse[]
+
+  @@index([campaignId])
+  @@index([deletedAt])
+  @@map("campaign_competitors")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

@@ -69,7 +69,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
                 <div className="mb-4">
                   <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className={["h-full rounded-full transition-all", complete ? "bg-emerald-500" : "bg-brand-500"].join(" ")}
+                      className={["h-full rounded-full transition-all", complete ? "bg-emerald-500" : "bg-slate-800"].join(" ")}
                       style={{ width: `${pct}%` }}
                     />
                   </div>

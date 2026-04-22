@@ -24,7 +24,8 @@ export type CanvassOutcome =
   | "refused"
   | "moved"
   | "unavailable"
-  | "deceased";
+  | "deceased"
+  | "other_candidate";
 
 export type OutreachChannel =
   | "door_knock"
@@ -119,6 +120,7 @@ export const CANVASS_OUTCOME_LABELS: Record<CanvassOutcome, string> = {
   moved: "Moved",
   unavailable: "Unavailable",
   deceased: "Deceased",
+  other_candidate: "Other candidate",
 };
 
 export type PlatformRole = "super_user" | "super_admin";

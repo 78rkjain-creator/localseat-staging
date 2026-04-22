@@ -47,6 +47,13 @@
 .terms-content a {
   @apply text-brand-600 hover:underline;
 }
+
+.tabular { font-variant-numeric: tabular-nums; }
+.display {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-feature-settings: "ss01", "cv11";
+}
 .terms-content .terms-version {
   @apply text-xs text-slate-400 mt-6 pt-4 border-t border-slate-200;
 }

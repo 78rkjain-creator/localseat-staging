@@ -430,6 +430,10 @@ Co-chair and Finance Lead are outside the main hierarchy. All 7 roles can access
 - Ward boundary page and review queue accessible to `candidate`, `campaign_manager`, `co_chair` only
 - `clearWardBoundary` action nulls both `wardBoundary` and `wardBoundarySetAt`
 - All save, clear, accept, and discard actions are audit logged
+- Ward boundary overlay added to ListMapClient and TurfMapClient — grey semi-transparent mask (fill-color #000000, opacity 0.25) covers everything outside the boundary, black line layer (line-width 2) traces the boundary edge
+- `getWardBoundary` server action in `src/app/(app)/canvassing/[listId]/map/actions.ts` — returns campaign wardBoundary as Polygon or null
+- Overlay layers added on map load before markers so markers always render on top
+- `demo` folder excluded from TypeScript compilation in `tsconfig.json` — eliminates 6 pre-existing test file errors
 
 ### Automated Tests (src/__tests__/)
 - canvass-response-dedup.test.ts

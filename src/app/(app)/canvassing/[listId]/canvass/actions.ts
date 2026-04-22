@@ -22,6 +22,7 @@ export interface SaveResponseInput {
   donorInterest: boolean;
   notes: string;
   needsFollowUp: boolean;
+  competitorId?: string | null;
   /** Client-side timestamp (ms) from the offline queue. When present and within
    *  48 hours, used as respondedAt so door-knock times reflect when the canvasser
    *  was at the door, not when the sync ran. */
@@ -87,6 +88,7 @@ export async function saveCanvassResponse(
     donorInterest: isContacted ? input.donorInterest : false,
     notes: noteText,
     needsFollowUp: input.needsFollowUp,
+    competitorId: input.outcome === "other_candidate" ? (input.competitorId ?? null) : null,
     respondedAt,
   };
 

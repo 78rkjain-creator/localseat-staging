@@ -7,7 +7,6 @@ import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
 import { enqueue } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import { SyncStatusBar } from "@/components/ui/SyncStatusBar";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +25,7 @@ interface ResponseDraft {
   donorInterest: boolean;
   notes: string;
   needsFollowUp: boolean;
+  competitorId: string | null;
 }
 
 function emptyDraft(): ResponseDraft {
@@ -37,11 +37,12 @@ function emptyDraft(): ResponseDraft {
     donorInterest: false,
     notes: "",
     needsFollowUp: false,
+    competitorId: null,
   };
 }
 
 // ── Support level config ───────────────────────────────────────────────────
-// 5 primary options. Not Home is handled separately as a one-tap button.
+// Kept for reference — no longer drives the UI directly.
 
 const SUPPORT_LEVELS: {
   value: SupportLevel;
@@ -81,11 +82,27 @@ const SUPPORT_LEVELS: {
   },
 ];
 
+// ── 1–5 scale button config ────────────────────────────────────────────────
+
+const SCALE_BUTTONS: {
+  value: SupportLevel;
+  numeral: number;
+  caption: string;
+  style: string;
+}[] = [
+  { value: "strong_yes", numeral: 1, caption: "Yes+", style: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  { value: "soft_yes",   numeral: 2, caption: "Yes",  style: "border-emerald-100 bg-white text-emerald-600" },
+  { value: "undecided",  numeral: 3, caption: "?",    style: "border-amber-200 bg-amber-50 text-amber-700" },
+  { value: "soft_no",    numeral: 4, caption: "No",   style: "border-orange-200 bg-orange-50 text-orange-700" },
+  { value: "strong_no",  numeral: 5, caption: "No−",  style: "border-red-200 bg-red-50 text-red-700" },
+];
+
 const OTHER_OUTCOMES: { value: CanvassOutcome; label: string }[] = [
   { value: "refused", label: "Refused" },
   { value: "moved", label: "Moved" },
   { value: "unavailable", label: "Unavailable" },
   { value: "deceased", label: "Deceased" },
+  { value: "other_candidate", label: "Other candidate" },
 ];
 
 // ── Main screen component ──────────────────────────────────────────────────
@@ -95,6 +112,7 @@ interface CanvassScreenProps {
   listName: string;
   assignmentId: string;
   entries: CanvassingQueue["entries"];
+  competitors: { id: string; name: string }[];
 }
 
 export function CanvassScreen({
@@ -102,6 +120,7 @@ export function CanvassScreen({
   listName,
   assignmentId,
   entries: initialEntries,
+  competitors,
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -119,7 +138,7 @@ export function CanvassScreen({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(firstPending < 0 && entries.length > 0);
 
-  // "More options" section (Refused / Moved / Unavailable / Deceased + add person)
+  // "Other outcome" section (Refused / Moved / Unavailable / Deceased + add person)
   const [showMoreOptions, setShowMoreOptions] = useState(false);
 
   // Add person at door
@@ -144,7 +163,7 @@ export function CanvassScreen({
   savedSetRef.current = savedSet;
 
   // ── Offline sync ──────────────────────────────────────────────────────────
-  const { pendingCount, isSyncing, lastSyncedAt, droppedCount, refresh: refreshSyncCount } =
+  const { pendingCount, isSyncing, refresh: refreshSyncCount } =
     useOfflineSync(saveCanvassResponse);
 
   // Track SW registration failure so we can warn the canvasser.
@@ -222,6 +241,7 @@ export function CanvassScreen({
           isVolunteer: false,
           isDonorInterest: false,
           notes: "",
+          competitorId: null,
           needsFollowUp: false,
         });
         await refreshSyncCount();
@@ -264,6 +284,8 @@ export function CanvassScreen({
     const capturedIndex = currentIndex;
     const capturedPersonId = current.person.id;
 
+    const competitorId = otherOutcome === "other_candidate" ? draft.competitorId : null;
+
     // ── Offline path ─────────────────────────────────────────────────────────
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
@@ -277,6 +299,7 @@ export function CanvassScreen({
           isDonorInterest: otherOutcome ? false : draft.donorInterest,
           notes: draft.notes,
           needsFollowUp: draft.needsFollowUp,
+          competitorId,
         });
         await refreshSyncCount();
         markSavedAndAdvance(capturedPersonId, capturedIndex);
@@ -287,7 +310,7 @@ export function CanvassScreen({
       return;
     }
 
-    // ── Online path (unchanged) ───────────────────────────────────────────────
+    // ── Online path ───────────────────────────────────────────────────────────
     startTransition(async () => {
       const result = await saveCanvassResponse({
         assignmentId,
@@ -299,6 +322,7 @@ export function CanvassScreen({
         donorInterest: otherOutcome ? false : draft.donorInterest,
         notes: draft.notes,
         needsFollowUp: draft.needsFollowUp,
+        competitorId,
       });
       if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedPersonId, capturedIndex);
@@ -352,6 +376,10 @@ export function CanvassScreen({
 
   const isContactedLevel =
     draft.supportLevel !== null && draft.supportLevel !== "not_home";
+  // Levels 1–3 (strong_yes, soft_yes, undecided) — show interest chips instead of toggles
+  const isLowSupport =
+    draft.supportLevel !== null &&
+    ["strong_yes", "soft_yes", "undecided"].includes(draft.supportLevel);
   const showDetails = isContactedLevel || !!draft.otherOutcome;
   const canSave = (!!draft.supportLevel || !!draft.otherOutcome) && !isPending;
 
@@ -406,14 +434,6 @@ export function CanvassScreen({
   return (
     <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
 
-      {/* ── Sync status — sits above header, renders nothing when queue is empty ── */}
-      <SyncStatusBar
-        pendingCount={pendingCount}
-        isSyncing={isSyncing}
-        lastSyncedAt={lastSyncedAt}
-        droppedCount={droppedCount}
-      />
-
       {/* Fix 10: SW failure warning — shown when offline caching is unavailable */}
       {swFailure && (
         <div className="flex-none bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
@@ -464,7 +484,7 @@ export function CanvassScreen({
           <p className="text-[11px] text-slate-500 truncate leading-none mb-1">{listName}</p>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-brand-500 rounded-full transition-all duration-500"
+              className="h-full bg-slate-800 rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -480,87 +500,101 @@ export function CanvassScreen({
       <main className="flex-1 overflow-y-auto min-h-0">
         <div className="px-4 pt-2 pb-2 max-w-lg mx-auto">
 
-          {/* Combined address + person card */}
-          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-2">
-            <p className="text-[12px] text-slate-500 leading-tight truncate">
-              {addressLine}{cityLine ? ` · ${cityLine}` : ""}
+          {/* ── Household hero ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-2">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
+            <p className="text-[22px] font-extrabold text-slate-900 leading-tight">{addressLine}</p>
+            <p className="text-[12px] text-slate-500">
+              {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
             </p>
-            <p className="text-[19px] font-bold text-slate-900 leading-tight mt-0.5">
-              {current.person.firstName} {current.person.lastName}
-            </p>
-            {(coResidents.length > 0 || current.lastResponse) && (
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {coResidents.length > 0 && (
-                  <p className="text-[11px] text-slate-400">
-                    Also here: {coResidents.map((r: { id: string; firstName: string; lastName: string }) => `${r.firstName} ${r.lastName}`).join(", ")}
-                  </p>
-                )}
-                {current.lastResponse && (
-                  <span className="text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
-                    Previously recorded
-                  </span>
-                )}
-              </div>
+            {current.lastResponse && (
+              <span className="inline-block mt-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                Previously recorded
+              </span>
             )}
           </div>
 
-          {/* Support level label */}
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1 px-0.5">
-            Support level
-          </p>
+          {/* ── Resident queue ── */}
+          <div className="mb-2">
+            <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl border border-brand-200">
+              <div className="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-slate-900">
+                {current.person.firstName} {current.person.lastName}
+              </span>
+              <span className="text-xs text-slate-400 ml-auto">recording…</span>
+            </div>
+            {coResidents.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-2">
+                <div className="w-2 h-2 rounded-full border border-slate-300 flex-shrink-0" />
+                <span className="text-sm text-slate-500">{r.firstName} {r.lastName}</span>
+                <span className="text-xs text-slate-300 ml-auto">next</span>
+              </div>
+            ))}
+          </div>
 
-          {/* 5 support level buttons: 2-col grid, Strong No spans full width */}
-          <div className="grid grid-cols-2 gap-1 mb-1">
-            {SUPPORT_LEVELS.map((s, i) => {
+          {/* ── Support scale 1–5 ── */}
+          <div className="flex gap-1 mb-2">
+            {SCALE_BUTTONS.map((s) => {
               const isActive = draft.supportLevel === s.value;
               return (
                 <button
                   key={s.value}
                   type="button"
+                  aria-pressed={isActive}
                   onClick={() =>
                     setDraft((d) => ({
                       ...emptyDraft(),
-                      // Preserve follow-up and notes when switching support level
                       needsFollowUp: d.needsFollowUp,
                       notes: d.notes,
                       supportLevel: isActive ? null : s.value,
                     }))
                   }
                   className={[
-                    "h-11 rounded-xl border-2 font-semibold text-sm transition-all",
-                    i === 4 ? "col-span-2" : "",
-                    isActive ? s.activeStyle : s.style,
+                    "flex-1 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-2 transition-all",
+                    s.style,
+                    isActive ? "ring-2 ring-slate-900 ring-offset-1" : "",
                   ].join(" ")}
                 >
-                  {s.label}
+                  <span className="text-lg font-bold">{s.numeral}</span>
+                  <span className="text-[10px] font-medium">{s.caption}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Not Home — one-tap, saves immediately */}
-          <button
-            type="button"
-            onClick={handleNotHome}
-            disabled={isPending}
-            className={[
-              "w-full h-11 rounded-xl border-2 font-semibold text-sm transition-all mb-1",
-              isPending
-                ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100",
-            ].join(" ")}
-          >
-            {isPending ? "Saving…" : "Not Home"}
-          </button>
+          {/* ── Interest chips — visible when support is 1–3 ── */}
+          {isLowSupport && (
+            <div className="flex gap-2 mb-2">
+              {[
+                { label: "Sign",      checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
+                { label: "Volunteer", checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
+                { label: "Donate",    checked: draft.donorInterest,     toggle: () => setDraft((d) => ({ ...d, donorInterest: !d.donorInterest })) },
+              ].map(({ label, checked, toggle }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={toggle}
+                  className={[
+                    "h-11 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-1.5",
+                    checked
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-600",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {/* More options — collapsed by default */}
+          {/* Other outcome — collapsed by default */}
           <button
             type="button"
             onClick={() => setShowMoreOptions((v) => !v)}
             className="w-full h-11 flex items-center justify-between px-0.5 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <span className="text-xs font-medium">
-              {showMoreOptions ? "Fewer options" : "More options"}
+              Other outcome
             </span>
             <svg
               className={["h-3.5 w-3.5 transition-transform", showMoreOptions ? "rotate-180" : ""].join(" ")}
@@ -586,7 +620,6 @@ export function CanvassScreen({
                       onClick={() =>
                         setDraft((d) => ({
                           ...emptyDraft(),
-                          // Preserve follow-up and notes when switching outcome
                           needsFollowUp: d.needsFollowUp,
                           notes: d.notes,
                           otherOutcome: isActive ? null : o.value,
@@ -604,6 +637,37 @@ export function CanvassScreen({
                   );
                 })}
               </div>
+
+              {/* Competitor picker — shown when "Other candidate" is selected and competitors exist */}
+              {draft.otherOutcome === "other_candidate" && competitors.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  <p className="px-4 pt-3 pb-1 text-xs font-semibold text-slate-500 uppercase tracking-widest">
+                    Which candidate?
+                  </p>
+                  <div className="px-4 pb-3 flex flex-wrap gap-2">
+                    {competitors.map((c) => {
+                      const isSelected = draft.competitorId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() =>
+                            setDraft((d) => ({ ...d, competitorId: isSelected ? null : c.id }))
+                          }
+                          className={[
+                            "h-9 px-4 rounded-full border text-sm font-medium transition-all",
+                            isSelected
+                              ? "border-slate-700 bg-slate-800 text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                          ].join(" ")}
+                        >
+                          {c.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Add person at door */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -657,7 +721,7 @@ export function CanvassScreen({
       {/* flex-none keeps it between main and footer, always fully visible. */}
       {showDetails && (
         <div className="flex-none bg-white border-t-2 border-slate-200 divide-y divide-slate-100">
-          {isContactedLevel && (
+          {isContactedLevel && !isLowSupport && (
             <>
               <CompactToggle
                 label="Yard sign"
@@ -690,6 +754,9 @@ export function CanvassScreen({
           />
         </div>
       )}
+
+      {/* ── Offline sync pill — fixed bottom-left above footer ── */}
+      <OfflinePill pendingCount={pendingCount} isSyncing={isSyncing} />
 
       {/* ── Footer — always visible, always at bottom ── */}
       <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-2 pb-3 safe-area-bottom">
@@ -726,12 +793,39 @@ export function CanvassScreen({
                 Saving…
               </span>
             ) : (
-              "Save & Next →"
+              "Save and next →"
             )}
           </button>
         </div>
       </footer>
 
+    </div>
+  );
+}
+
+// ── Offline sync pill ──────────────────────────────────────────────────────
+
+function OfflinePill({ pendingCount, isSyncing }: { pendingCount: number; isSyncing: boolean }) {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  if (isOnline && pendingCount === 0 && !isSyncing) return null;
+
+  if (!isOnline) {
+    return (
+      <div className="fixed bottom-20 left-4 z-10 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-full">
+        Offline · {pendingCount} queued
+      </div>
+    );
+  }
+  if (isSyncing) {
+    return (
+      <div className="fixed bottom-20 left-4 z-10 bg-white border border-slate-200 text-slate-600 text-xs px-3 py-1.5 rounded-full">
+        Syncing…
+      </div>
+    );
+  }
+  return (
+    <div className="fixed bottom-20 left-4 z-10 bg-white border border-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-full">
+      {pendingCount} to sync
     </div>
   );
 }

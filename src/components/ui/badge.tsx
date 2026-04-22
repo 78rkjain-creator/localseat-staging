@@ -17,6 +17,7 @@ const outcomeStyles: Record<CanvassOutcome, string> = {
   moved: "bg-purple-50 text-purple-600 border-purple-200",
   unavailable: "bg-amber-50 text-amber-700 border-amber-200",
   deceased: "bg-slate-100 text-slate-500 border-slate-200",
+  other_candidate: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 export function SupportLevelBadge({ level }: { level: SupportLevel }) {

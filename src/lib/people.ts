@@ -1,17 +1,52 @@
 import { db } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, SupportLevel, CanvassOutcome } from "@prisma/client";
 
 export interface PeopleListFilters {
   campaignId: string;
   q?: string;
   tagId?: string;
+  supportFilter?: "supporting" | "undecided" | "not_supporting" | "not_contacted";
+  contactedAfter?: string; // ISO date string
 }
 
 /**
  * Fetch a flat list of people for the list page.
  * Returns up to 50 results. Full pagination is a follow-up.
  */
-export async function getPeopleList({ campaignId, q, tagId }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter }: PeopleListFilters) {
+  // Build additive AND conditions for canvass-based filters.
+  const andFilters: Prisma.PersonWhereInput[] = [];
+
+  if (supportFilter === "supporting") {
+    andFilters.push({
+      canvassResponses: { some: { supportLevel: { in: ["strong_yes", "soft_yes"] as SupportLevel[] } } },
+    });
+  } else if (supportFilter === "undecided") {
+    andFilters.push({
+      canvassResponses: { some: { supportLevel: "undecided" as SupportLevel } },
+    });
+  } else if (supportFilter === "not_supporting") {
+    andFilters.push({
+      canvassResponses: {
+        some: {
+          OR: [
+            { supportLevel: { in: ["soft_no", "strong_no"] as SupportLevel[] } },
+            // other_candidate outcome — cast resolves after prisma generate
+            { outcome: "other_candidate" as unknown as CanvassOutcome },
+          ],
+        },
+      },
+    });
+  } else if (supportFilter === "not_contacted") {
+    andFilters.push({ canvassResponses: { none: {} } });
+  }
+
+  if (contactedAfter) {
+    andFilters.push({
+      canvassResponses: { some: { respondedAt: { gte: new Date(contactedAfter) } } },
+    });
+  }
+
   const people = await db.person.findMany({
     where: {
       campaignId,
@@ -27,9 +62,8 @@ export async function getPeopleList({ campaignId, q, tagId }: PeopleListFilters)
             ],
           }
         : {}),
-      ...(tagId
-        ? { tags: { some: { tagId } } }
-        : {}),
+      ...(tagId ? { tags: { some: { tagId } } } : {}),
+      ...(andFilters.length > 0 ? { AND: andFilters } : {}),
     },
     select: {
       id: true,
@@ -116,6 +150,7 @@ export async function getPersonDetail(personId: string, campaignId: string) {
               canvassList: { select: { name: true } },
             },
           },
+          competitor: { select: { name: true } },
         },
         orderBy: { respondedAt: "desc" },
       },

@@ -99,6 +99,7 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
           donorInterest: item.isDonorInterest,
           notes: item.notes,
           needsFollowUp: item.needsFollowUp,
+          competitorId: item.competitorId,
           queuedAt: item.queuedAt,
         });
 

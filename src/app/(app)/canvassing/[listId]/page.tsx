@@ -267,7 +267,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                             <div className="min-w-0 flex-1">
                               <Link
                                 href={`/voter-list/${entry.person.id}`}
-                                className="text-sm font-medium text-slate-800 hover:text-brand-600 transition-colors"
+                                className="text-sm font-medium text-slate-800 hover:text-slate-600 transition-colors"
                               >
                                 {entry.person.firstName} {entry.person.lastName}
                               </Link>
@@ -317,10 +317,15 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                           address.unitNumber ? ` #${address.unitNumber}` : ""
                         }`
                       : "Unknown address";
+                    // Cast to pick up competitor relation — Prisma types update after prisma generate
+                    const r = response as unknown as { competitor?: { name: string } | null };
                     return (
                       <li key={response.id} className="flex items-start gap-3 px-5 sm:px-8 py-3">
                         <div className="flex-shrink-0 mt-0.5">
                           <OutcomeBadge outcome={response.outcome as CanvassOutcome} />
+                          {(response.outcome as string) === "other_candidate" && r.competitor?.name && (
+                            <p className="text-xs text-slate-500 mt-1">Supporting: {r.competitor.name}</p>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <Link
@@ -364,7 +369,7 @@ function StatCard({ label, value, accent = false }: { label: string; value: numb
   return (
     <Card padding="sm">
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={["text-2xl font-bold", accent ? "text-brand-500" : "text-slate-900"].join(" ")}>
+      <p className="text-2xl font-bold text-slate-900">
         {value}
       </p>
     </Card>

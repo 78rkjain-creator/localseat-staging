@@ -64,6 +64,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
                   },
                 },
               },
+              competitor: { select: { name: true } },
             },
           },
         },
@@ -286,7 +287,7 @@ export async function getCanvassingQueue(
   });
   if (!assignment) return null;
 
-  const [listRecord, entries] = await Promise.all([
+  const [listRecord, entries, competitors] = await Promise.all([
     db.canvassList.findFirst({
       where: { id: listId, campaignId, deletedAt: null },
       select: { name: true },
@@ -346,11 +347,17 @@ export async function getCanvassingQueue(
         },
       },
     }),
+    db.campaignCompetitor.findMany({
+      where: { campaignId, deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    }),
   ]);
 
   return {
     assignmentId: assignment.id,
     listName: listRecord?.name ?? "",
+    competitors,
     entries: entries.map((e) => ({
       entryId: e.id,
       person: {

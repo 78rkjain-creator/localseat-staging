@@ -77,7 +77,7 @@ export async function FinanceLeadDashboard({ campaignId, firstName }: Props) {
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Export</p>
           <a
             href="/api/donors/export"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900"
           >
             Download CSV
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -91,7 +91,7 @@ export async function FinanceLeadDashboard({ campaignId, firstName }: Props) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Recent donors</h2>
-          <Link href="/donors" className="text-xs font-medium text-brand-600 hover:text-brand-700">View all →</Link>
+          <Link href="/donors" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View all →</Link>
         </div>
 
         {recentDonors.length === 0 ? (
@@ -113,7 +113,7 @@ export async function FinanceLeadDashboard({ campaignId, firstName }: Props) {
                 {recentDonors.map((d) => (
                   <tr key={d.id} className="hover:bg-slate-50/50">
                     <td className="px-4 py-3">
-                      <Link href={`/donors/${d.id}`} className="font-medium text-slate-900 hover:text-brand-600">
+                      <Link href={`/donors/${d.id}`} className="font-medium text-slate-900 hover:text-slate-600">
                         {d.firstName} {d.lastName}
                       </Link>
                     </td>

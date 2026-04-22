@@ -40,6 +40,7 @@ export interface QueuedResponse {
   isDonorInterest: boolean;
   needsFollowUp: boolean;
   notes: string;
+  competitorId: string | null;
   /** Client-side timestamp in ms (Date.now()). */
   queuedAt: number;
 }

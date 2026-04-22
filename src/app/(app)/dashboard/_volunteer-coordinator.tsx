@@ -39,7 +39,7 @@ export async function VolunteerCoordinatorDashboard({ campaignId, firstName }: P
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
             Upcoming shifts
           </h2>
-          <Link href="/volunteers/schedule" className="text-xs font-medium text-brand-600 hover:text-brand-700">
+          <Link href="/volunteers/schedule" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">
             Manage schedule →
           </Link>
         </div>
@@ -48,7 +48,7 @@ export async function VolunteerCoordinatorDashboard({ campaignId, firstName }: P
           <Card padding="md">
             <p className="text-sm text-slate-400">
               No upcoming shifts scheduled.{" "}
-              <Link href="/volunteers/schedule" className="text-brand-600 hover:underline">
+              <Link href="/volunteers/schedule" className="text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">
                 Create one
               </Link>
               .
@@ -110,7 +110,7 @@ function MetricCard({ label, value, highlight = false }: { label: string; value:
   return (
     <Card padding="md">
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={["text-3xl font-bold", highlight ? "text-brand-500" : "text-slate-900"].join(" ")}>
+      <p className="text-3xl font-bold text-slate-900">
         {value.toLocaleString()}
       </p>
     </Card>

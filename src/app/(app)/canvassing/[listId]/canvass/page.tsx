@@ -32,6 +32,7 @@ export default async function CanvassPage({ params }: PageProps) {
       listName={queue.listName}
       assignmentId={queue.assignmentId}
       entries={queue.entries}
+      competitors={queue.competitors}
     />
   );
 }
