@@ -662,6 +662,7 @@ async function main() {
     db.address.deleteMany(),
     db.campaignMembership.deleteMany(),
     db.campaignOverride.deleteMany(),
+    (db as any).campaignCompetitor.deleteMany(),
     db.campaign.deleteMany(),
     db.user.deleteMany(),
     db.platformSettings.deleteMany(),
