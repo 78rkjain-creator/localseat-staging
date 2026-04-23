@@ -16,7 +16,7 @@ import {
   Settings,
   User,
 } from "lucide-react";
-import type { Role } from "@/types";
+type Role = "candidate" | "campaign_manager" | "co_chair" | "field_organizer" | "canvasser" | "volunteer_coordinator" | "finance_lead";
 
 interface Tab {
   label: string;
