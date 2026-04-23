@@ -43,7 +43,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
           {assignments.map((a) => {
             const pct =
               a.totalEntries > 0 ? Math.round((a.totalResponses / a.totalEntries) * 100) : 0;
-            const remaining = a.totalEntries - a.totalResponses;
+            const remaining = Math.max(0, a.totalEntries - a.totalResponses);
             const started = a.totalResponses > 0;
             const complete = remaining === 0 && a.totalEntries > 0;
 

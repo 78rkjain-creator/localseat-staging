@@ -19,6 +19,13 @@ import type { Role, SupportLevel } from "@/types";
 export const metadata: Metadata = { title: "Voter List" };
 
 type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
+type VotedInFilter = "municipal" | "provincial" | "federal";
+
+const VOTED_IN_LABELS: Record<VotedInFilter, string> = {
+  municipal: "Voted municipal",
+  provincial: "Voted provincial",
+  federal: "Voted federal",
+};
 
 const SUPPORT_FILTER_LABELS: Record<SupportFilter, string> = {
   supporting: "Supporting",
@@ -35,24 +42,28 @@ const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[
   { label: "Not contacted", value: "not_contacted" },
 ];
 
-function buildUrl(params: { q?: string; tag?: string; supportFilter?: string; contactedAfter?: string }) {
+function buildUrl(params: { q?: string; tag?: string; supportFilter?: string; contactedAfter?: string; votedIn?: string }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.tag) p.set("tag", params.tag);
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
   if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
+  if (params.votedIn) p.set("votedIn", params.votedIn);
   const s = p.toString();
   return `/voter-list${s ? `?${s}` : ""}`;
 }
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; tag?: string; supportFilter?: string; contactedAfter?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string; supportFilter?: string; contactedAfter?: string; votedIn?: string }>;
 }
 
 export default async function VoterListPage({ searchParams }: PageProps) {
-  const { q, tag, supportFilter: rawSupportFilter, contactedAfter } = await searchParams;
+  const { q, tag, supportFilter: rawSupportFilter, contactedAfter, votedIn: rawVotedIn } = await searchParams;
   const supportFilter = (rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS)
     ? rawSupportFilter as SupportFilter
+    : undefined;
+  const votedIn = (rawVotedIn && rawVotedIn in VOTED_IN_LABELS)
+    ? rawVotedIn as VotedInFilter
     : undefined;
 
   const session = await getServerSession(authOptions);
@@ -64,6 +75,11 @@ export default async function VoterListPage({ searchParams }: PageProps) {
 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
 
+  const canSeeVotingFilter =
+    activeRole === "candidate" ||
+    activeRole === "campaign_manager" ||
+    activeRole === "co_chair";
+
   const [people, totalCount, allTags] = await Promise.all([
     getPeopleList({
       campaignId: activeCampaignId,
@@ -71,6 +87,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
       tagId: tag,
       supportFilter,
       contactedAfter,
+      votedIn: canSeeVotingFilter ? votedIn : undefined,
     }),
     getPeopleCount(activeCampaignId),
     getCampaignTags(activeCampaignId),
@@ -78,7 +95,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
 
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
-  const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter;
+  const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter || !!votedIn;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -143,6 +160,26 @@ export default async function VoterListPage({ searchParams }: PageProps) {
           contactedAfter={contactedAfter}
         />
       </div>
+
+      {/* Voted-in filter pills — candidate/manager only */}
+      {canSeeVotingFilter && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs text-slate-400 font-medium">Voting history:</span>
+          {(["municipal", "provincial", "federal"] as VotedInFilter[]).map((v) => (
+            <Link
+              key={v}
+              href={buildUrl({ q, tag, supportFilter, contactedAfter, votedIn: votedIn === v ? undefined : v })}
+              className={
+                votedIn === v
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {VOTED_IN_LABELS[v]}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Active tag filter pill */}
       {activeTag && (

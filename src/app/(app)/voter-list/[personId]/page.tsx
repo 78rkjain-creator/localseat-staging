@@ -13,6 +13,8 @@ import { PersonEditForm } from "./person-edit-form";
 import { AddressEditButton } from "./address-edit-button";
 import type { SupportLevel, CanvassOutcome, OutreachChannel } from "@/types";
 import { OUTREACH_CHANNEL_LABELS } from "@/types";
+import { getVotingRecordsForPerson, ELECTION_TYPE_LABELS } from "@/lib/voting-records";
+import type { VotingRecord } from "@/lib/voting-records";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -36,6 +38,15 @@ export default async function PersonDetailPage({ params }: PageProps) {
 
   const person = await getPersonDetail(personId, activeCampaignId);
   if (!person) notFound();
+
+  const canSeeVotingHistory =
+    activeRole === "candidate" ||
+    activeRole === "campaign_manager" ||
+    activeRole === "co_chair";
+
+  const votingRecords = canSeeVotingHistory
+    ? await getVotingRecordsForPerson(personId, activeCampaignId)
+    : [];
 
   const address = person.household?.address;
   const householdMembers = person.household?.people ?? [];
@@ -278,6 +289,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
             {!readOnly && <AddNoteForm personId={person.id} />}
           </Card>
 
+          {/* Voting history */}
+          {canSeeVotingHistory && votingRecords.length > 0 && (
+            <Card padding="md">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+                Voting history
+              </h2>
+              <VotingHistoryTable records={votingRecords} />
+            </Card>
+          )}
+
           {/* Activity timeline */}
           <Card padding="md">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
@@ -388,6 +409,41 @@ function OutreachTimelineItem({
       <p className="text-xs text-slate-400">
         {event.user ? `${event.user.firstName} ${event.user.lastName} · ` : ""}{formatDate(date)}
       </p>
+    </div>
+  );
+}
+
+function VotingHistoryTable({ records }: { records: VotingRecord[] }) {
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs text-slate-400 font-medium">
+            <th className="text-left pb-2 pr-4">Year</th>
+            <th className="text-left pb-2 pr-4">Type</th>
+            <th className="text-left pb-2 pr-4">Election</th>
+            <th className="text-left pb-2 pr-4">Voted</th>
+            <th className="text-left pb-2">Party</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {records.map((r) => (
+            <tr key={r.id}>
+              <td className="py-2 pr-4 font-medium text-slate-800">{r.electionYear}</td>
+              <td className="py-2 pr-4 text-slate-600">{ELECTION_TYPE_LABELS[r.electionType]}</td>
+              <td className="py-2 pr-4 text-slate-500">{r.electionName ?? "—"}</td>
+              <td className="py-2 pr-4">
+                {r.participated ? (
+                  <span className="text-emerald-600 font-medium">Yes</span>
+                ) : (
+                  <span className="text-slate-400">No</span>
+                )}
+              </td>
+              <td className="py-2 text-slate-500">{r.partySupport ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

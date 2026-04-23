@@ -198,6 +198,126 @@ export async function importVoterRows(
   return { matched, created, skipped };
 }
 
+// ── importVotingRecordRows ────────────────────────────────────────────────
+
+export interface VotingHistoryCsvRow {
+  firstName: string;
+  lastName: string;
+  streetNumber: string;
+  streetName: string;
+  city: string;
+  electionType: string;    // "municipal" | "provincial" | "federal"
+  electionYear: string;    // numeric string
+  electionName: string;    // optional
+  participated: string;    // "yes" | "no" | "true" | "false" | "1" | "0"
+  partySupport: string;    // optional
+  notes: string;           // optional
+}
+
+export interface VotingImportResult {
+  error?: string;
+  imported?: number;
+  skipped?: number;
+}
+
+const VALID_ELECTION_TYPES = new Set(["municipal", "provincial", "federal"]);
+
+function parseBool(val: string): boolean {
+  return ["yes", "true", "1"].includes(val.trim().toLowerCase());
+}
+
+export async function importVotingRecordRows(
+  rows: VotingHistoryCsvRow[]
+): Promise<VotingImportResult> {
+  const auth = await requireVoterListManager();
+  if ("error" in auth) return auth;
+  const { campaignId } = auth;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { error: "No rows to import." };
+  }
+  if (rows.length > 5000) {
+    return { error: "Maximum 5,000 rows per import." };
+  }
+
+  let imported = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const firstName    = row.firstName?.trim();
+    const lastName     = row.lastName?.trim();
+    const streetNumber = row.streetNumber?.trim();
+    const streetName   = row.streetName?.trim();
+    const city         = row.city?.trim();
+    const electionType = row.electionType?.trim().toLowerCase();
+    const electionYear = parseInt(row.electionYear?.trim(), 10);
+
+    if (
+      !firstName || !lastName || !streetNumber || !streetName || !city ||
+      !VALID_ELECTION_TYPES.has(electionType) ||
+      isNaN(electionYear) || electionYear < 1900 || electionYear > 2100
+    ) {
+      skipped++;
+      continue;
+    }
+
+    // Match person by name + address
+    const person = await db.person.findFirst({
+      where: {
+        campaignId,
+        deletedAt: null,
+        firstName: { equals: firstName, mode: "insensitive" },
+        lastName:  { equals: lastName,  mode: "insensitive" },
+        household: {
+          address: {
+            streetNumber: { equals: streetNumber, mode: "insensitive" },
+            streetName:   { equals: streetName,   mode: "insensitive" },
+            city:         { equals: city,          mode: "insensitive" },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!person) {
+      skipped++;
+      continue;
+    }
+
+    // Skip if record already exists for this person + year + type
+    const existing = await (db as any).votingRecord.findFirst({
+      where: {
+        campaignId,
+        personId: person.id,
+        electionYear,
+        electionType,
+        deletedAt: null,
+      },
+    });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    await (db as any).votingRecord.create({
+      data: {
+        campaignId,
+        personId:     person.id,
+        electionType,
+        electionYear,
+        electionName: row.electionName?.trim() || null,
+        participated: parseBool(row.participated),
+        partySupport: row.partySupport?.trim() || null,
+        notes:        row.notes?.trim() || null,
+      },
+    });
+    imported++;
+  }
+
+  revalidatePath("/voter-list");
+  return { imported, skipped };
+}
+
 // ── mergePersons ──────────────────────────────────────────────────────────
 
 export async function mergePersons(input: {

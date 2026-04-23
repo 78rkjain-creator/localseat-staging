@@ -68,6 +68,12 @@ enum WardStatus {
   pending_review
 }
 
+enum ElectionType {
+  federal
+  provincial
+  municipal
+}
+
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
@@ -107,6 +113,7 @@ model Campaign {
   addressChangeRequests AddressChangeRequest[]
   override              CampaignOverride?
   competitors           CampaignCompetitor[]
+  votingRecords         VotingRecord[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -247,6 +254,7 @@ model Person {
   volunteerRecords   VolunteerRecord[]
   tasks              Task[]
   addressChangeRequests AddressChangeRequest[]
+  votingRecords         VotingRecord[]
 
   @@index([campaignId, deletedAt])
   @@index([lastName])
@@ -711,4 +719,29 @@ model AuditLog {
 
   @@index([campaignId])
   @@map("audit_logs")
+}
+
+// ─── VotingRecord ─────────────────────────────────────────────────────────────
+
+model VotingRecord {
+  id           String       @id @default(cuid())
+  campaignId   String
+  personId     String
+  electionType ElectionType
+  electionYear Int
+  electionName String?
+  participated Boolean      @default(false)
+  partySupport String?
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  person   Person   @relation(fields: [personId], references: [id])
+
+  @@index([campaignId])
+  @@index([personId])
+  @@index([deletedAt])
+  @@map("voting_records")
 }

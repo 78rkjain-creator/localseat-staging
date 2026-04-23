@@ -186,7 +186,7 @@ async function CanvasserView({
               a.totalEntries > 0
                 ? Math.round((a.totalResponses / a.totalEntries) * 100)
                 : 0;
-            const remaining = a.totalEntries - a.totalResponses;
+            const remaining = Math.max(0, a.totalEntries - a.totalResponses);
 
             return (
               <Card key={a.assignmentId} padding="md">

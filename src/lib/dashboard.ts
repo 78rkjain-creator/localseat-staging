@@ -40,6 +40,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     pendingAddressChangeCount,
     canvassersOutTodayRaw,
     competitorGroupsRaw,
+    votersWithHistory,
   ] = await Promise.all([
     db.person.findMany({
       where: { campaignId, deletedAt: null },
@@ -118,6 +119,10 @@ export async function getCandidateDashboardData(campaignId: string) {
       },
       _count: { id: true },
     }),
+    (db as any).votingRecord.groupBy({
+      by: ["personId"],
+      where: { campaignId, deletedAt: null },
+    }).then((rows: { personId: string }[]) => rows.length),
   ]);
 
   const canvassersOutToday = canvassersOutTodayRaw.length;
@@ -184,6 +189,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     pendingAddressChangeCount,
     canvassersOutToday,
     competitorBreakdown,
+    votersWithHistory,
   };
 }
 

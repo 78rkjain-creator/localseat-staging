@@ -657,6 +657,7 @@ async function main() {
     db.personTag.deleteMany(),
     db.tag.deleteMany(),
     db.addressChangeRequest.deleteMany(),
+    (db as any).votingRecord.deleteMany(),
     db.person.deleteMany(),
     db.household.deleteMany(),
     db.address.deleteMany(),
@@ -1084,6 +1085,45 @@ async function main() {
 
     console.log("  ✔ Extended canvass responses: 50 for us, 20 Akshay Kumar, 30 Charles Wong, 15 Walter Smith");
   }
+
+  // ── Voting records ────────────────────────────────────────────────────────
+  const votingRecordPeople = await db.person.findMany({
+    where: { campaignId: campaign.id, deletedAt: null },
+    take: 60,
+    select: { id: true },
+  });
+
+  type ElectionEntry = {
+    electionType: string;
+    electionYear: number;
+    electionName: string;
+    participated: boolean;
+    partySupport?: string;
+  };
+
+  const ELECTIONS: ElectionEntry[] = [
+    { electionType: "municipal", electionYear: 2022, electionName: "Toronto City Council", participated: true, partySupport: undefined },
+    { electionType: "provincial", electionYear: 2022, electionName: "Ontario General Election", participated: true, partySupport: "Liberal" },
+    { electionType: "federal", electionYear: 2021, electionName: "44th Canadian General Election", participated: true, partySupport: "Liberal" },
+    { electionType: "municipal", electionYear: 2018, electionName: "Toronto City Council", participated: false },
+  ];
+
+  const votingRecordData = votingRecordPeople.flatMap((p, i) => {
+    // Most people have 2–3 election records; some have all 4
+    const count = i % 5 === 0 ? 4 : i % 3 === 0 ? 3 : 2;
+    return ELECTIONS.slice(0, count).map((e) => ({
+      campaignId: campaign.id,
+      personId: p.id,
+      electionType: e.electionType,
+      electionYear: e.electionYear,
+      electionName: e.electionName,
+      participated: e.participated,
+      partySupport: e.partySupport ?? null,
+    }));
+  });
+
+  await (db as any).votingRecord.createMany({ data: votingRecordData, skipDuplicates: true });
+  console.log(`  ✔ Voting records: ${votingRecordData.length}`);
 
   // ── Follow-up tasks ───────────────────────────────────────────────────────
   const FOLLOW_UP_NOTES = [

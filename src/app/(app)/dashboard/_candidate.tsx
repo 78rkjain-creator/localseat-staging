@@ -22,7 +22,7 @@ export async function CandidateDashboard({ campaignId }: Props) {
     total, forUs, againstUs, undecided, notHome, uncontacted,
     doorsTotal, doorsToday, walkListProgress,
     followUpSummary, donorCountByStatus, recentOutreach, teamMembers,
-    canvassersOutToday, competitorBreakdown,
+    canvassersOutToday, competitorBreakdown, votersWithHistory,
   } = data;
 
   const idd = forUs + againstUs + undecided;
@@ -74,6 +74,10 @@ export async function CandidateDashboard({ campaignId }: Props) {
           <div>
             <p className="text-2xl font-bold text-white tabular">{canvassersOutToday}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">canvassers out today</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white tabular">{votersWithHistory.toLocaleString()}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">voters with history</p>
           </div>
         </div>
       </div>
