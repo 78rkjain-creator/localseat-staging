@@ -1087,43 +1087,66 @@ async function main() {
   }
 
   // ── Voting records ────────────────────────────────────────────────────────
-  const votingRecordPeople = await db.person.findMany({
+  // Owen Sound municipal elections only. Fetch all 1,500 people ordered by id
+  // (deterministic — no Math.random). Slice into groups by index.
+  const allVotingPeople = await db.person.findMany({
     where: { campaignId: campaign.id, deletedAt: null },
-    take: 60,
     select: { id: true },
+    orderBy: { id: "asc" },
   });
 
-  type ElectionEntry = {
+  const E2022 = { electionType: "municipal" as const, electionYear: 2022, electionName: "2022 Owen Sound Municipal Election", participated: true };
+  const E2018 = { electionType: "municipal" as const, electionYear: 2018, electionName: "2018 Owen Sound Municipal Election", participated: true };
+  const E2014 = { electionType: "municipal" as const, electionYear: 2014, electionName: "2014 Owen Sound Municipal Election", participated: true };
+
+  // Deterministic grouping by index slice:
+  // [0..224]   → three-election group (225 people, 15%)
+  // [225..374] → two-election group  (150 people, 10%)
+  // [375..479] → one-election group  (105 people,  7%)
+  // [480..]    → no records
+  const threeGroup  = allVotingPeople.slice(0, 225);
+  const twoGroup    = allVotingPeople.slice(225, 375);
+  const oneGroup    = allVotingPeople.slice(375, 480);
+
+  // Two-election combos distributed evenly: 2022+2018, 2022+2014, 2018+2014
+  const TWO_COMBOS = [
+    [E2022, E2018],
+    [E2022, E2014],
+    [E2018, E2014],
+  ];
+  // One-election options distributed evenly: 2022, 2018, 2014
+  const ONE_OPTIONS = [E2022, E2018, E2014];
+
+  const votingRecordRows: {
+    campaignId: string;
+    personId: string;
     electionType: string;
     electionYear: number;
     electionName: string;
     participated: boolean;
-    partySupport?: string;
-  };
+  }[] = [];
 
-  const ELECTIONS: ElectionEntry[] = [
-    { electionType: "municipal", electionYear: 2022, electionName: "Toronto City Council", participated: true, partySupport: undefined },
-    { electionType: "provincial", electionYear: 2022, electionName: "Ontario General Election", participated: true, partySupport: "Liberal" },
-    { electionType: "federal", electionYear: 2021, electionName: "44th Canadian General Election", participated: true, partySupport: "Liberal" },
-    { electionType: "municipal", electionYear: 2018, electionName: "Toronto City Council", participated: false },
-  ];
+  for (const p of threeGroup) {
+    votingRecordRows.push(
+      { campaignId: campaign.id, personId: p.id, ...E2022 },
+      { campaignId: campaign.id, personId: p.id, ...E2018 },
+      { campaignId: campaign.id, personId: p.id, ...E2014 },
+    );
+  }
+  for (let i = 0; i < twoGroup.length; i++) {
+    const combo = TWO_COMBOS[i % 3];
+    for (const e of combo) {
+      votingRecordRows.push({ campaignId: campaign.id, personId: twoGroup[i].id, ...e });
+    }
+  }
+  for (let i = 0; i < oneGroup.length; i++) {
+    const e = ONE_OPTIONS[i % 3];
+    votingRecordRows.push({ campaignId: campaign.id, personId: oneGroup[i].id, ...e });
+  }
 
-  const votingRecordData = votingRecordPeople.flatMap((p, i) => {
-    // Most people have 2–3 election records; some have all 4
-    const count = i % 5 === 0 ? 4 : i % 3 === 0 ? 3 : 2;
-    return ELECTIONS.slice(0, count).map((e) => ({
-      campaignId: campaign.id,
-      personId: p.id,
-      electionType: e.electionType,
-      electionYear: e.electionYear,
-      electionName: e.electionName,
-      participated: e.participated,
-      partySupport: e.partySupport ?? null,
-    }));
-  });
-
-  await (db as any).votingRecord.createMany({ data: votingRecordData, skipDuplicates: true });
-  console.log(`  ✔ Voting records: ${votingRecordData.length}`);
+  const voterCount = threeGroup.length + twoGroup.length + oneGroup.length;
+  await (db as any).votingRecord.createMany({ data: votingRecordRows, skipDuplicates: true });
+  console.log(`  ✔ Voting records: ${votingRecordRows.length} across ${voterCount} voters`);
 
   // ── Follow-up tasks ───────────────────────────────────────────────────────
   const FOLLOW_UP_NOTES = [
