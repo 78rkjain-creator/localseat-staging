@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DemoBanner } from "@/components/layout/demo-banner";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -36,10 +37,11 @@ export default async function AppLayout({
           campaignName={activeMembership?.campaignName ?? null}
           campaignCount={memberships.length}
         />
-        <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto">
+        <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">
           {children}
         </main>
       </div>
+      <MobileNav />
     </div>
   );
 }

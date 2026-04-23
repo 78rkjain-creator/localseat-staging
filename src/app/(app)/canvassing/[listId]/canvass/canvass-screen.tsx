@@ -432,7 +432,7 @@ export function CanvassScreen({
   // This guarantees zero scroll for the default view on any phone.
 
   return (
-    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+    <div className="h-screen [height:100dvh] bg-slate-50 flex flex-col overflow-hidden">
 
       {/* Fix 10: SW failure warning — shown when offline caching is unavailable */}
       {swFailure && (
@@ -495,36 +495,35 @@ export function CanvassScreen({
         </span>
       </header>
 
-      {/* ── Main scrollable content ── */}
-      {/* In the default state this content is ~370px, well under the ~460px+ available. */}
-      <main className="flex-1 overflow-y-auto min-h-0">
-        <div className="px-4 pt-2 pb-2 max-w-lg mx-auto">
+      {/* ── Zone 2: Controls — flex-1, no scroll ── */}
+      <main className="flex-1 min-h-0 overflow-hidden">
+        <div className="px-4 pt-1.5 pb-0 max-w-lg mx-auto">
 
           {/* ── Household hero ── */}
-          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-2">
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
-            <p className="text-[22px] font-extrabold text-slate-900 leading-tight">{addressLine}</p>
+            <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{addressLine}</p>
             <p className="text-[12px] text-slate-500">
               {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
             </p>
             {current.lastResponse && (
-              <span className="inline-block mt-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
+              <span className="inline-block mt-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
                 Previously recorded
               </span>
             )}
           </div>
 
           {/* ── Resident queue ── */}
-          <div className="mb-2">
-            <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl border border-brand-200">
+          <div className="mb-1.5">
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-white rounded-xl border border-brand-200">
               <div className="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0" />
               <span className="text-sm font-semibold text-slate-900">
                 {current.person.firstName} {current.person.lastName}
               </span>
               <span className="text-xs text-slate-400 ml-auto">recording…</span>
             </div>
-            {coResidents.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 px-4 py-2">
+            {coResidents.map((r: { id: string; firstName: string; lastName: string }) => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-1.5">
                 <div className="w-2 h-2 rounded-full border border-slate-300 flex-shrink-0" />
                 <span className="text-sm text-slate-500">{r.firstName} {r.lastName}</span>
                 <span className="text-xs text-slate-300 ml-auto">next</span>
@@ -533,7 +532,7 @@ export function CanvassScreen({
           </div>
 
           {/* ── Support scale 1–5 ── */}
-          <div className="flex gap-1 mb-2">
+          <div className="flex gap-1 mb-1.5">
             {SCALE_BUTTONS.map((s) => {
               const isActive = draft.supportLevel === s.value;
               return (
@@ -564,7 +563,7 @@ export function CanvassScreen({
 
           {/* ── Interest chips — visible when support is 1–3 ── */}
           {isLowSupport && (
-            <div className="flex gap-2 mb-2">
+            <div className="flex gap-2 mb-1.5">
               {[
                 { label: "Sign",      checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
                 { label: "Volunteer", checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
@@ -575,7 +574,7 @@ export function CanvassScreen({
                   type="button"
                   onClick={toggle}
                   className={[
-                    "h-11 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-1.5",
+                    "h-10 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-1.5",
                     checked
                       ? "border-slate-900 bg-slate-900 text-white"
                       : "border-slate-200 bg-white text-slate-600",
@@ -591,11 +590,9 @@ export function CanvassScreen({
           <button
             type="button"
             onClick={() => setShowMoreOptions((v) => !v)}
-            className="w-full h-11 flex items-center justify-between px-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+            className="w-full h-9 flex items-center justify-between px-0.5 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <span className="text-xs font-medium">
-              Other outcome
-            </span>
+            <span className="text-xs font-medium">Other outcome</span>
             <svg
               className={["h-3.5 w-3.5 transition-transform", showMoreOptions ? "rotate-180" : ""].join(" ")}
               fill="none"
@@ -609,7 +606,7 @@ export function CanvassScreen({
 
           {/* Expanded: refused / moved / unavailable / deceased + add person */}
           {showMoreOptions && (
-            <div className="space-y-2 pt-1 pb-2">
+            <div className="space-y-2 pt-1 pb-1">
               <div className="grid grid-cols-2 gap-1.5">
                 {OTHER_OUTCOMES.map((o) => {
                   const isActive = draft.otherOutcome === o.value;
@@ -714,52 +711,51 @@ export function CanvassScreen({
             </div>
           )}
 
+          {/* ── Details panel — toggles + notes ── */}
+          {showDetails && (
+            <div className="bg-white border-t-2 border-slate-200 divide-y divide-slate-100 mt-1.5">
+              {isContactedLevel && !isLowSupport && (
+                <>
+                  <CompactToggle
+                    label="Yard sign"
+                    checked={draft.signRequest}
+                    onChange={(v) => setDraft((d) => ({ ...d, signRequest: v }))}
+                  />
+                  <CompactToggle
+                    label="Volunteer interest"
+                    checked={draft.volunteerInterest}
+                    onChange={(v) => setDraft((d) => ({ ...d, volunteerInterest: v }))}
+                  />
+                  <CompactToggle
+                    label="Donor interest"
+                    checked={draft.donorInterest}
+                    onChange={(v) => setDraft((d) => ({ ...d, donorInterest: v }))}
+                  />
+                </>
+              )}
+              <CompactToggle
+                label="Needs follow-up"
+                checked={draft.needsFollowUp}
+                onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
+              />
+              <textarea
+                value={draft.notes}
+                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                placeholder="Note (optional)…"
+                rows={2}
+                className="w-full px-4 py-2 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
+              />
+            </div>
+          )}
+
         </div>
       </main>
 
-      {/* ── Details panel — slides in above footer when a level is selected ── */}
-      {/* flex-none keeps it between main and footer, always fully visible. */}
-      {showDetails && (
-        <div className="flex-none bg-white border-t-2 border-slate-200 divide-y divide-slate-100">
-          {isContactedLevel && !isLowSupport && (
-            <>
-              <CompactToggle
-                label="Yard sign"
-                checked={draft.signRequest}
-                onChange={(v) => setDraft((d) => ({ ...d, signRequest: v }))}
-              />
-              <CompactToggle
-                label="Volunteer interest"
-                checked={draft.volunteerInterest}
-                onChange={(v) => setDraft((d) => ({ ...d, volunteerInterest: v }))}
-              />
-              <CompactToggle
-                label="Donor interest"
-                checked={draft.donorInterest}
-                onChange={(v) => setDraft((d) => ({ ...d, donorInterest: v }))}
-              />
-            </>
-          )}
-          <CompactToggle
-            label="Needs follow-up"
-            checked={draft.needsFollowUp}
-            onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
-          />
-          <textarea
-            value={draft.notes}
-            onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-            placeholder="Note (optional)…"
-            rows={1}
-            className="w-full px-4 py-2 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
-          />
-        </div>
-      )}
-
-      {/* ── Offline sync pill — fixed bottom-left above footer ── */}
+      {/* ── Offline sync pill — sits above footer ── */}
       <OfflinePill pendingCount={pendingCount} isSyncing={isSyncing} />
 
-      {/* ── Footer — always visible, always at bottom ── */}
-      <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-2 pb-3 safe-area-bottom">
+      {/* ── Zone 3: Actions — pinned bottom, clears mobile nav ── */}
+      <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-2 pb-16">
         {error && (
           <p className="text-xs text-red-600 text-center mb-1.5">{error}</p>
         )}
@@ -811,20 +807,20 @@ function OfflinePill({ pendingCount, isSyncing }: { pendingCount: number; isSync
 
   if (!isOnline) {
     return (
-      <div className="fixed bottom-20 left-4 z-10 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-full">
+      <div className="fixed bottom-36 left-4 z-10 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-full">
         Offline · {pendingCount} queued
       </div>
     );
   }
   if (isSyncing) {
     return (
-      <div className="fixed bottom-20 left-4 z-10 bg-white border border-slate-200 text-slate-600 text-xs px-3 py-1.5 rounded-full">
+      <div className="fixed bottom-36 left-4 z-10 bg-white border border-slate-200 text-slate-600 text-xs px-3 py-1.5 rounded-full">
         Syncing…
       </div>
     );
   }
   return (
-    <div className="fixed bottom-20 left-4 z-10 bg-white border border-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-full">
+    <div className="fixed bottom-36 left-4 z-10 bg-white border border-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-full">
       {pendingCount} to sync
     </div>
   );
