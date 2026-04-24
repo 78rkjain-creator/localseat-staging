@@ -10,7 +10,7 @@ export function NewListButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)} size="md">
-        New list
+        Create list from addresses
       </Button>
       <NewListModal open={open} onClose={() => setOpen(false)} />
     </>

@@ -71,7 +71,11 @@ cd /var/www/demo
 git pull origin main
 npm run build
 pm2 restart localseat-demo --update-env
+npx prisma migrate deploy
+npx prisma db seed
 ```
+
+8. **Always deploy app and demo together.** Whenever a change is deployed to `app.localseat.io`, the demo site at `demo.localseat.io` must also be updated in the same session. The two sites must always run the same code. Never leave them out of sync.
 
 ---
 
