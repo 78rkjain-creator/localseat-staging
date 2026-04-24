@@ -6,13 +6,13 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
-import type { Polygon } from "geojson";
+import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
 const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
 
 export async function saveWardBoundary(
-  polygon: Polygon
+  polygon: Polygon | MultiPolygon
 ): Promise<{ error?: string }> {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "Not authenticated." };

@@ -7,7 +7,7 @@ import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { WardStatus } from "@prisma/client";
-import type { Polygon } from "geojson";
+import type { Polygon, MultiPolygon } from "geojson";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 
 // ── Save canvass response ─────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export async function addPersonAtDoor(input: {
     ]);
 
     if (campaign && campaignHasWard(campaign) && address?.lat !== null && address?.lng !== null && address?.lat !== undefined && address?.lng !== undefined) {
-      const boundary = campaign.wardBoundary as unknown as Polygon;
+      const boundary = campaign.wardBoundary as unknown as Polygon | MultiPolygon;
       if (isPointInWard(address.lat, address.lng, boundary)) {
         wardStatus = WardStatus.inside;
       } else {

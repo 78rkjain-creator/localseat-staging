@@ -90,6 +90,7 @@ model Campaign {
   electionDate DateTime?
   wardBoundary      Json?
   wardBoundarySetAt DateTime?
+  canvassScript     String?
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(starter)
   planActivated  Boolean   @default(true)

@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { WardMapClient } from "./WardMapClient";
-import type { Polygon } from "geojson";
+import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Ward boundary" };
@@ -41,7 +41,7 @@ export default async function WardBoundaryPage() {
 
   const wardBoundary =
     campaign.wardBoundary !== null
-      ? (campaign.wardBoundary as unknown as Polygon)
+      ? (campaign.wardBoundary as unknown as Polygon | MultiPolygon)
       : null;
 
   const wardBoundarySetAt = campaign.wardBoundarySetAt

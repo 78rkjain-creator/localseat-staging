@@ -26,7 +26,7 @@ export default async function CanvassPage({ params }: PageProps) {
 
   const [queue, campaign] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
-    db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true } }),
+    db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
   ]);
   if (!queue) notFound();
 
@@ -37,6 +37,7 @@ export default async function CanvassPage({ params }: PageProps) {
       assignmentId={queue.assignmentId}
       campaignId={activeCampaignId}
       campaignCity={campaign?.city ?? ""}
+      canvassScript={campaign?.canvassScript ?? null}
       entries={queue.entries}
       competitors={queue.competitors}
     />

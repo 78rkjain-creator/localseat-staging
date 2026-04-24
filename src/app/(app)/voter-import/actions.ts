@@ -11,7 +11,7 @@ import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { WardStatus } from "@prisma/client";
-import type { Polygon } from "geojson";
+import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -180,9 +180,9 @@ export async function importVoterRows(
     select: { wardBoundary: true },
   });
 
-  const wardBoundary: Polygon | null =
+  const wardBoundary: Polygon | MultiPolygon | null =
     campaign && campaignHasWard(campaign)
-      ? (campaign.wardBoundary as unknown as Polygon)
+      ? (campaign.wardBoundary as unknown as Polygon | MultiPolygon)
       : null;
 
   let matched = 0;

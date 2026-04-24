@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
-import { saveCanvassResponse, addPersonAtDoor } from "./actions";
+import { saveCanvassResponse } from "./actions";
 import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
 import { VoterChangeModal } from "@/components/voter-change-modal";
@@ -46,7 +46,7 @@ function emptyDraft(): ResponseDraft {
 }
 
 // ── Support level config ───────────────────────────────────────────────────
-// Kept for reference — no longer drives the UI directly.
+// Kept for reference — not used to drive UI directly.
 
 const SUPPORT_LEVELS: {
   value: SupportLevel;
@@ -101,12 +101,12 @@ const SCALE_BUTTONS: {
   { value: "strong_no",  numeral: 5, caption: "No−",  style: "border-red-200 bg-red-50 text-red-700" },
 ];
 
-const OTHER_OUTCOMES: { value: CanvassOutcome; label: string }[] = [
-  { value: "refused", label: "Refused" },
-  { value: "moved", label: "Moved" },
+// Level 3 quick-save outcomes
+const LEVEL_3_OUTCOMES: { value: CanvassOutcome; label: string }[] = [
+  { value: "refused",     label: "Refused" },
+  { value: "moved",       label: "Moved" },
   { value: "unavailable", label: "Unavailable" },
-  { value: "deceased", label: "Deceased" },
-  { value: "other_candidate", label: "Other candidate" },
+  { value: "deceased",    label: "Deceased" },
 ];
 
 // ── Main screen component ──────────────────────────────────────────────────
@@ -117,6 +117,7 @@ interface CanvassScreenProps {
   assignmentId: string;
   campaignId: string;
   campaignCity?: string;
+  canvassScript?: string | null;
   entries: CanvassingQueue["entries"];
   competitors: { id: string; name: string }[];
 }
@@ -127,6 +128,7 @@ export function CanvassScreen({
   assignmentId,
   campaignId,
   campaignCity = "",
+  canvassScript,
   entries: initialEntries,
   competitors,
 }: CanvassScreenProps) {
@@ -146,22 +148,20 @@ export function CanvassScreen({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(firstPending < 0 && entries.length > 0);
 
+  // Who the canvasser is speaking with at this door
+  const [selectedPersonId, setSelectedPersonId] = useState<string>(
+    () => entries[firstPending >= 0 ? firstPending : 0]?.person.id ?? ""
+  );
+
+  // Canvassing script panel
+  const [showScript, setShowScript] = useState(false);
+
   const [showVoterChangeModal, setShowVoterChangeModal] = useState(false);
   const [showAddResidentModal, setShowAddResidentModal] = useState(false);
   const [showEditConfirm, setShowEditConfirm] = useState(false);
   const [showAddResidentConfirm, setShowAddResidentConfirm] = useState(false);
 
-  // "Other outcome" section (Refused / Moved / Unavailable / Deceased + add person)
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
-
-  // Add person at door
-  const [showAddPerson, setShowAddPerson] = useState(false);
-  const [addFirst, setAddFirst] = useState("");
-  const [addLast, setAddLast] = useState("");
-  const [addError, setAddError] = useState<string | null>(null);
-  const [isAddingPerson, startAddTransition] = useTransition();
-
-  // Outside ward warning — shown after addPersonAtDoor returns outsideWard: true
+  // Outside ward warning — auto-dismisses after 4 seconds
   const [outsideWardWarning, setOutsideWardWarning] = useState(false);
   useEffect(() => {
     if (!outsideWardWarning) return;
@@ -179,11 +179,8 @@ export function CanvassScreen({
   const { pendingCount, isSyncing, refresh: refreshSyncCount } =
     useOfflineSync(saveCanvassResponse);
 
-  // Track SW registration failure so we can warn the canvasser.
   const [swFailure, setSwFailure] = useState(false);
 
-  // Register the service worker once on mount (canvassing is the primary
-  // offline-capable surface in LocalSeat).
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker
@@ -204,9 +201,9 @@ export function CanvassScreen({
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  function markSavedAndAdvance(personId: string, fromIndex: number) {
+  function markSavedAndAdvance(entryPersonId: string, fromIndex: number) {
     const newSaved = new Set(savedSetRef.current);
-    newSaved.add(personId);
+    newSaved.add(entryPersonId);
     setSavedSet(newSaved);
 
     const currentEntries = entriesRef.current;
@@ -215,7 +212,7 @@ export function CanvassScreen({
         setCurrentIndex(i);
         setDraft(emptyDraft());
         setError(null);
-        setShowMoreOptions(false);
+        setSelectedPersonId(currentEntries[i].person.id);
         return;
       }
     }
@@ -229,7 +226,7 @@ export function CanvassScreen({
       if (!savedSetRef.current.has(currentEntries[i].person.id)) {
         setCurrentIndex(i);
         setDraft(emptyDraft());
-        setShowMoreOptions(false);
+        setSelectedPersonId(currentEntries[i].person.id);
         return;
       }
     }
@@ -240,14 +237,13 @@ export function CanvassScreen({
     if (isPending) return;
     setError(null);
     const capturedIndex = currentIndex;
-    const capturedPersonId = current.person.id;
+    const capturedEntryPersonId = current.person.id;
 
-    // ── Offline path ─────────────────────────────────────────────────────────
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
         await enqueue({
           assignmentId,
-          personId: capturedPersonId,
+          personId: capturedEntryPersonId,
           outcome: "not_home",
           supportLevel: "not_home",
           wantsSign: false,
@@ -258,7 +254,7 @@ export function CanvassScreen({
           needsFollowUp: false,
         });
         await refreshSyncCount();
-        markSavedAndAdvance(capturedPersonId, capturedIndex);
+        markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
       } catch (err) {
         console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
         setError("Failed to save offline. Please try again.");
@@ -266,11 +262,10 @@ export function CanvassScreen({
       return;
     }
 
-    // ── Online path (unchanged) ───────────────────────────────────────────────
     startTransition(async () => {
       const result = await saveCanvassResponse({
         assignmentId,
-        personId: capturedPersonId,
+        personId: capturedEntryPersonId,
         outcome: "not_home",
         supportLevel: "not_home",
         signRequest: false,
@@ -280,7 +275,55 @@ export function CanvassScreen({
         needsFollowUp: false,
       });
       if (result.error) { setError(result.error); return; }
-      markSavedAndAdvance(capturedPersonId, capturedIndex);
+      markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
+    });
+  }
+
+  // Level 3 (undecided) — tapping a button immediately saves and advances
+  async function handleQuickOutcomeSave(outcome: CanvassOutcome) {
+    if (isPending) return;
+    setError(null);
+    const capturedIndex = currentIndex;
+    const capturedApiPersonId = selectedPersonId;
+    const capturedEntryPersonId = current.person.id;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      try {
+        await enqueue({
+          assignmentId,
+          personId: capturedApiPersonId,
+          outcome,
+          supportLevel: null,
+          wantsSign: false,
+          isVolunteer: false,
+          isDonorInterest: false,
+          notes: "",
+          competitorId: null,
+          needsFollowUp: false,
+        });
+        await refreshSyncCount();
+        markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
+      } catch (err) {
+        console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
+        setError("Failed to save offline. Please try again.");
+      }
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await saveCanvassResponse({
+        assignmentId,
+        personId: capturedApiPersonId,
+        outcome,
+        supportLevel: null,
+        signRequest: false,
+        volunteerInterest: false,
+        donorInterest: false,
+        notes: "",
+        needsFollowUp: false,
+      });
+      if (result.error) { setError(result.error); return; }
+      markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
     });
   }
 
@@ -295,16 +338,16 @@ export function CanvassScreen({
       : supportLevel === "not_home" ? "not_home" : "contacted";
 
     const capturedIndex = currentIndex;
-    const capturedPersonId = current.person.id;
+    const capturedApiPersonId = selectedPersonId;
+    const capturedEntryPersonId = current.person.id;
 
     const competitorId = otherOutcome === "other_candidate" ? draft.competitorId : null;
 
-    // ── Offline path ─────────────────────────────────────────────────────────
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
         await enqueue({
           assignmentId,
-          personId: capturedPersonId,
+          personId: capturedApiPersonId,
           outcome,
           supportLevel: otherOutcome ? null : supportLevel,
           wantsSign: otherOutcome ? false : draft.signRequest,
@@ -315,7 +358,7 @@ export function CanvassScreen({
           competitorId,
         });
         await refreshSyncCount();
-        markSavedAndAdvance(capturedPersonId, capturedIndex);
+        markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
       } catch (err) {
         console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
         setError("Failed to save offline. Please try again.");
@@ -323,11 +366,10 @@ export function CanvassScreen({
       return;
     }
 
-    // ── Online path ───────────────────────────────────────────────────────────
     startTransition(async () => {
       const result = await saveCanvassResponse({
         assignmentId,
-        personId: capturedPersonId,
+        personId: capturedApiPersonId,
         outcome,
         supportLevel: otherOutcome ? null : supportLevel,
         signRequest: otherOutcome ? false : draft.signRequest,
@@ -338,64 +380,20 @@ export function CanvassScreen({
         competitorId,
       });
       if (result.error) { setError(result.error); return; }
-      markSavedAndAdvance(capturedPersonId, capturedIndex);
-    });
-  }
-
-  function handleAddPerson() {
-    const firstName = addFirst.trim();
-    const lastName = addLast.trim();
-    if (!firstName || !lastName) { setAddError("First and last name are required."); return; }
-    setAddError(null);
-
-    startAddTransition(async () => {
-      const result = await addPersonAtDoor({
-        listId,
-        assignmentId,
-        firstName,
-        lastName,
-        addressId: current?.person.address?.id ?? undefined,
-      });
-      if (result.error) { setAddError(result.error); return; }
-      if (!result.person) return;
-
-      if (result.outsideWard) setOutsideWardWarning(true);
-
-      const newEntry: LocalEntry = {
-        entryId: result.person.entryId,
-        person: {
-          id: result.person.id,
-          firstName: result.person.firstName,
-          lastName: result.person.lastName,
-          phoneHome: null,
-          phoneMobile: null,
-          email: null,
-          birthYear: null,
-          address: current?.person.address ?? null,
-          coResidents: [],
-        },
-        lastResponse: null,
-      };
-
-      const next = [...entriesRef.current];
-      next.splice(currentIndex + 1, 0, newEntry);
-      setEntries(next);
-      setShowAddPerson(false);
-      setShowMoreOptions(false);
-      setAddFirst("");
-      setAddLast("");
+      markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
     });
   }
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  const isContactedLevel =
-    draft.supportLevel !== null && draft.supportLevel !== "not_home";
-  // Levels 1–3 (strong_yes, soft_yes, undecided) — show interest chips instead of toggles
-  const isLowSupport =
-    draft.supportLevel !== null &&
-    ["strong_yes", "soft_yes", "undecided"].includes(draft.supportLevel);
-  const showDetails = isContactedLevel || !!draft.otherOutcome;
+  // Levels 1/2 — show Sign, Volunteer, Potential Donor chips
+  const isYesLevel = draft.supportLevel === "strong_yes" || draft.supportLevel === "soft_yes";
+  // Level 3 — show immediate-save outcome buttons
+  const isUndecided = draft.supportLevel === "undecided";
+  // Levels 4/5 — show Other Candidate button
+  const isNoLevel = draft.supportLevel === "soft_no" || draft.supportLevel === "strong_no";
+
+  const showDetails = isYesLevel || isNoLevel;
   const canSave = (!!draft.supportLevel || !!draft.otherOutcome) && !isPending;
 
   // ── Done screen ───────────────────────────────────────────────────────────
@@ -441,15 +439,18 @@ export function CanvassScreen({
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
   const coResidents = current.person.coResidents ?? [];
 
+  // All people at this door — main person first, then co-residents
+  const allResidents = [
+    { id: current.person.id, firstName: current.person.firstName, lastName: current.person.lastName },
+    ...coResidents,
+  ];
+
   // ── Active canvassing screen ──────────────────────────────────────────────
-  // h-screen + flex-col: header / main / details / footer fill the viewport.
-  // No element is position:fixed — everything is in normal document flow.
-  // This guarantees zero scroll for the default view on any phone.
 
   return (
     <div className="h-screen [height:100dvh] bg-slate-50 flex flex-col overflow-hidden">
 
-      {/* Fix 10: SW failure warning — shown when offline caching is unavailable */}
+      {/* SW failure warning */}
       {swFailure && (
         <div className="flex-none bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
           <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -528,23 +529,62 @@ export function CanvassScreen({
             )}
           </div>
 
-          {/* ── Resident queue ── */}
+          {/* ── Resident queue — tap to select who you're speaking with ── */}
           <div className="mb-1.5">
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-white rounded-xl border border-brand-200">
-              <div className="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0" />
-              <span className="text-sm font-semibold text-slate-900">
-                {current.person.firstName} {current.person.lastName}
-              </span>
-              <span className="text-xs text-slate-400 ml-auto">recording…</span>
-            </div>
-            {coResidents.map((r: { id: string; firstName: string; lastName: string }) => (
-              <div key={r.id} className="flex items-center gap-3 px-4 py-1.5">
-                <div className="w-2 h-2 rounded-full border border-slate-300 flex-shrink-0" />
-                <span className="text-sm text-slate-500">{r.firstName} {r.lastName}</span>
-                <span className="text-xs text-slate-300 ml-auto">next</span>
-              </div>
-            ))}
+            {allResidents.map((r) => {
+              const isSelected = selectedPersonId === r.id;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelectedPersonId(r.id)}
+                  className={[
+                    "w-full flex items-center gap-3 px-4 py-1.5 rounded-xl transition-colors text-left",
+                    isSelected ? "bg-white border border-brand-200" : "hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  <div className={[
+                    "w-2 h-2 rounded-full flex-shrink-0",
+                    isSelected ? "bg-brand-500" : "border border-slate-300",
+                  ].join(" ")} />
+                  <span className={[
+                    "text-sm",
+                    isSelected ? "font-semibold text-slate-900" : "text-slate-500",
+                  ].join(" ")}>
+                    {r.firstName} {r.lastName}
+                  </span>
+                  {isSelected && <span className="text-xs text-slate-400 ml-auto">recording…</span>}
+                </button>
+              );
+            })}
           </div>
+
+          {/* ── Canvassing script panel — collapsible ── */}
+          {canvassScript && (
+            <div className="mb-1.5">
+              <button
+                type="button"
+                onClick={() => setShowScript((v) => !v)}
+                className="w-full h-9 flex items-center justify-between px-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                <span className="text-xs font-medium">{showScript ? "Hide script" : "View script"}</span>
+                <svg
+                  className={["h-3.5 w-3.5 transition-transform", showScript ? "rotate-180" : ""].join(" ")}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showScript && (
+                <div className="mt-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{canvassScript}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Support scale 1–5 ── */}
           <div className="flex gap-1 mb-1.5">
@@ -576,20 +616,20 @@ export function CanvassScreen({
             })}
           </div>
 
-          {/* ── Interest chips — visible when support is 1–3 ── */}
-          {isLowSupport && (
+          {/* ── Levels 1/2 — Sign, Volunteer, Potential Donor chips ── */}
+          {isYesLevel && (
             <div className="flex gap-2 mb-1.5">
               {[
-                { label: "Sign",      checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
-                { label: "Volunteer", checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
-                { label: "Donate",    checked: draft.donorInterest,     toggle: () => setDraft((d) => ({ ...d, donorInterest: !d.donorInterest })) },
+                { label: "Sign",            checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
+                { label: "Volunteer",       checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
+                { label: "Potential Donor", checked: draft.donorInterest,     toggle: () => setDraft((d) => ({ ...d, donorInterest: !d.donorInterest })) },
               ].map(({ label, checked, toggle }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={toggle}
                   className={[
-                    "h-10 px-4 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-1.5",
+                    "h-10 px-3 rounded-xl border-2 text-xs font-medium transition-all flex items-center justify-center flex-1",
                     checked
                       ? "border-slate-900 bg-slate-900 text-white"
                       : "border-slate-200 bg-white text-slate-600",
@@ -601,58 +641,46 @@ export function CanvassScreen({
             </div>
           )}
 
-          {/* Other outcome — collapsed by default */}
-          <button
-            type="button"
-            onClick={() => setShowMoreOptions((v) => !v)}
-            className="w-full h-9 flex items-center justify-between px-0.5 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <span className="text-xs font-medium">Other outcome</span>
-            <svg
-              className={["h-3.5 w-3.5 transition-transform", showMoreOptions ? "rotate-180" : ""].join(" ")}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+          {/* ── Level 3 — Refused / Moved / Unavailable / Deceased (immediate save) ── */}
+          {isUndecided && (
+            <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+              {LEVEL_3_OUTCOMES.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => handleQuickOutcomeSave(o.value)}
+                  disabled={isPending}
+                  className="h-11 rounded-xl border border-slate-200 bg-white font-medium text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {/* Expanded: refused / moved / unavailable / deceased + add person */}
-          {showMoreOptions && (
-            <div className="space-y-2 pt-1 pb-1">
-              <div className="grid grid-cols-2 gap-1.5">
-                {OTHER_OUTCOMES.map((o) => {
-                  const isActive = draft.otherOutcome === o.value;
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() =>
-                        setDraft((d) => ({
-                          ...emptyDraft(),
-                          needsFollowUp: d.needsFollowUp,
-                          notes: d.notes,
-                          otherOutcome: isActive ? null : o.value,
-                        }))
-                      }
-                      className={[
-                        "h-11 rounded-xl border font-medium text-sm transition-all",
-                        isActive
-                          ? "border-slate-600 bg-slate-700 text-white"
-                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                      ].join(" ")}
-                    >
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Competitor picker — shown when "Other candidate" is selected and competitors exist */}
+          {/* ── Levels 4/5 — Other Candidate ── */}
+          {isNoLevel && (
+            <div className="mb-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    otherOutcome: d.otherOutcome === "other_candidate" ? null : "other_candidate",
+                    competitorId: null,
+                  }))
+                }
+                className={[
+                  "w-full h-11 rounded-xl border font-medium text-sm transition-all",
+                  draft.otherOutcome === "other_candidate"
+                    ? "border-slate-600 bg-slate-700 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                Other Candidate
+              </button>
               {draft.otherOutcome === "other_candidate" && competitors.length > 0 && (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="mt-1.5 bg-white rounded-xl border border-slate-200 overflow-hidden">
                   <p className="px-4 pt-3 pb-1 text-xs font-semibold text-slate-500 uppercase tracking-widest">
                     Which candidate?
                   </p>
@@ -680,74 +708,12 @@ export function CanvassScreen({
                   </div>
                 </div>
               )}
-
-              {/* Add person at door */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => { setShowAddPerson((v) => !v); setAddError(null); }}
-                  className="w-full h-11 flex items-center gap-3 px-4 text-left hover:bg-slate-50 transition-colors"
-                >
-                  <svg className="h-4 w-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="text-sm font-medium text-slate-600">Add person at door</span>
-                </button>
-                {showAddPerson && (
-                  <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="First name"
-                        value={addFirst}
-                        onChange={(e) => setAddFirst(e.target.value)}
-                        className="h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Last name"
-                        value={addLast}
-                        onChange={(e) => setAddLast(e.target.value)}
-                        className="h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                      />
-                    </div>
-                    {addError && <p className="text-xs text-red-600">{addError}</p>}
-                    <button
-                      type="button"
-                      onClick={handleAddPerson}
-                      disabled={isAddingPerson || !addFirst.trim() || !addLast.trim()}
-                      className="w-full h-11 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 active:bg-slate-900 transition-colors disabled:opacity-40"
-                    >
-                      {isAddingPerson ? "Adding…" : "Add to list"}
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
-          {/* ── Details panel — toggles + notes ── */}
+          {/* ── Details panel — notes + follow-up ── */}
           {showDetails && (
             <div className="bg-white border-t-2 border-slate-200 divide-y divide-slate-100 mt-1.5">
-              {isContactedLevel && !isLowSupport && (
-                <>
-                  <CompactToggle
-                    label="Yard sign"
-                    checked={draft.signRequest}
-                    onChange={(v) => setDraft((d) => ({ ...d, signRequest: v }))}
-                  />
-                  <CompactToggle
-                    label="Volunteer interest"
-                    checked={draft.volunteerInterest}
-                    onChange={(v) => setDraft((d) => ({ ...d, volunteerInterest: v }))}
-                  />
-                  <CompactToggle
-                    label="Donor interest"
-                    checked={draft.donorInterest}
-                    onChange={(v) => setDraft((d) => ({ ...d, donorInterest: v }))}
-                  />
-                </>
-              )}
               <CompactToggle
                 label="Needs follow-up"
                 checked={draft.needsFollowUp}
@@ -974,3 +940,6 @@ function CompactToggle({
     </button>
   );
 }
+
+// Keep unused export to prevent TS errors from lingering references
+export type { LocalEntry };

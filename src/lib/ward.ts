@@ -1,45 +1,47 @@
-import type { Polygon } from "geojson";
+import type { Polygon, MultiPolygon } from "geojson";
 import type { Prisma } from "@prisma/client";
 
 // ── Ray-cast point-in-polygon ─────────────────────────────────────────────────
-// Mirrors the algorithm used in TurfMapClient.tsx.
 // GeoJSON coordinates are [lng, lat]; point is supplied as lat, lng separately.
+// For MultiPolygon, a point is inside if it's inside any component polygon.
+
+function isPointInPolygonRing(
+  py: number,
+  px: number,
+  ring: (number[] | readonly number[])[]
+): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ri = ring[i];
+    const rj = ring[j];
+    const xi = ri?.[0];
+    const yi = ri?.[1];
+    const xj = rj?.[0];
+    const yj = rj?.[1];
+    if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) continue;
+    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 export function isPointInWard(
   lat: number,
   lng: number,
-  boundary: Polygon
+  boundary: Polygon | MultiPolygon
 ): boolean {
-  const ring = boundary.coordinates[0];
-  const px = lng;
-  const py = lat;
-  let inside = false;
-
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const ri = ring[i];
-    const rj = ring[j];
-    const xi = ri[0];
-    const yi = ri[1];
-    const xj = rj[0];
-    const yj = rj[1];
-
-    if (
-      xi === undefined ||
-      yi === undefined ||
-      xj === undefined ||
-      yj === undefined
-    ) {
-      continue;
-    }
-
-    const intersect =
-      yi > py !== yj > py &&
-      px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
-
-    if (intersect) inside = !inside;
+  if (boundary.type === "Polygon") {
+    const ring = boundary.coordinates[0];
+    if (!ring) return false;
+    return isPointInPolygonRing(lat, lng, ring);
   }
 
-  return inside;
+  // MultiPolygon — inside if inside any component polygon's outer ring
+  for (const poly of boundary.coordinates) {
+    const ring = poly[0];
+    if (ring && isPointInPolygonRing(lat, lng, ring)) return true;
+  }
+  return false;
 }
 
 // ── Ward boundary presence check ──────────────────────────────────────────────
