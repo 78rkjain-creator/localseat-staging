@@ -390,9 +390,9 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
         <div className="w-72 flex-shrink-0 bg-white border-l border-slate-100 flex flex-col overflow-y-auto">
           {/* Header */}
           <div className="px-4 py-4 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-900">Draw turf</h2>
+            <h2 className="font-semibold text-slate-900">Create walk list from map</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Use the polygon tool on the map to select an area.
+              Draw a boundary on the map to automatically create a walk list from the addresses inside it.
             </p>
           </div>
 

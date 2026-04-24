@@ -297,6 +297,7 @@ export function ListMapClient({ entries, listId, listName, ungeocodedCount = 0 }
           </svg>
           <span className="hidden sm:inline">{listName}</span>
         </Link>
+        <span className="text-xs font-medium text-slate-400 uppercase tracking-wide hidden sm:inline">Walk list map</span>
 
         <div className="flex items-center gap-1">
           <span className="text-sm font-semibold text-slate-900">{summary.total}</span>
