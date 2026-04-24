@@ -31,7 +31,8 @@ export default function CreateCampaignPage() {
       }
       // Refresh the JWT token with the new campaign membership
       await update({ refreshMemberships: true, activeCampaignId: result?.campaignId });
-      // Hard navigate — ensures the browser sends the updated cookie before the next page loads
+      // Wait for the session cookie to propagate before navigating
+      await new Promise((resolve) => setTimeout(resolve, 500));
       window.location.href = `/onboarding/choose-plan?campaignId=${result?.campaignId}`;
     } catch {
       setError("Something went wrong. Please try again.");
@@ -43,7 +44,7 @@ export default function CreateCampaignPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-12">
       {/* Brand mark */}
       <div className="mb-8 flex flex-col items-center gap-3">
-        <div className="h-12 w-12 rounded-2xl bg-brand-500 flex items-center justify-center shadow-soft">
+        <div className="h-12 w-12 rounded-2xl bg-orange-500 flex items-center justify-center shadow-md">
           <svg
             className="h-7 w-7 text-white"
             fill="none"
@@ -71,7 +72,7 @@ export default function CreateCampaignPage() {
       </div>
 
       {/* Onboarding card */}
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-card border border-slate-100 p-8">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
         <h2 className="text-xl font-semibold text-slate-900 mb-1">
           Let&apos;s set up your campaign
         </h2>
@@ -137,7 +138,7 @@ export default function CreateCampaignPage() {
               type="date"
               value={electionDate}
               onChange={(e) => setElectionDate(e.target.value)}
-              className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
 

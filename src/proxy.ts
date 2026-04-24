@@ -86,7 +86,7 @@ export default withAuth(
       pathname === "/resend-verification" ||
       pathname === "/account-expired" ||
       pathname.startsWith("/api/auth") ||
-      pathname.startsWith("/onboarding/choose-plan");
+      pathname.startsWith("/onboarding");
 
     if (!skipVerificationCheck && process.env.SKIP_EMAIL_VERIFICATION !== "true") {
       const { emailVerified, verificationTokenExpiry } = token;
@@ -105,7 +105,8 @@ export default withAuth(
     if (!token.activeCampaignId) {
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
-        pathname === "/select-campaign";
+        pathname === "/select-campaign" ||
+        pathname.startsWith("/onboarding/choose-plan");
 
       if (!atCampaignGate) {
         const hasMemberships =
