@@ -86,7 +86,7 @@ export default withAuth(
       pathname === "/resend-verification" ||
       pathname === "/account-expired" ||
       pathname.startsWith("/api/auth") ||
-      pathname.startsWith("/onboarding");
+      pathname.startsWith("/onboarding/choose-plan");
 
     if (!skipVerificationCheck && process.env.SKIP_EMAIL_VERIFICATION !== "true") {
       const { emailVerified, verificationTokenExpiry } = token;
