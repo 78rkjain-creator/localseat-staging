@@ -114,6 +114,7 @@ model Campaign {
   override              CampaignOverride?
   competitors           CampaignCompetitor[]
   votingRecords         VotingRecord[]
+  voterChangeRequests   VoterChangeRequest[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -153,6 +154,8 @@ model User {
   donorsCreated        Donor[]
   addressChangeRequests AddressChangeRequest[] @relation("AddressChangeRequests")
   addressChangeReviews  AddressChangeRequest[] @relation("AddressChangeReviews")
+  submittedVoterChanges VoterChangeRequest[]   @relation("VoterChangeSubmitter")
+  reviewedVoterChanges  VoterChangeRequest[]   @relation("VoterChangeReviewer")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -255,6 +258,7 @@ model Person {
   tasks              Task[]
   addressChangeRequests AddressChangeRequest[]
   votingRecords         VotingRecord[]
+  voterChangeRequests   VoterChangeRequest[]
 
   @@index([campaignId, deletedAt])
   @@index([lastName])
@@ -744,4 +748,34 @@ model VotingRecord {
   @@index([personId])
   @@index([deletedAt])
   @@map("voting_records")
+}
+
+// ─── Voter Change Request ─────────────────────────────────────────────────────
+// Canvassers submit record corrections from the canvass screen.
+// Managers / organizers review and apply or reject.
+
+model VoterChangeRequest {
+  id                String              @id @default(cuid())
+  campaignId        String
+  submittedByUserId String
+  reviewedByUserId  String?
+  personId          String?
+  requestType       String?             @default("field_edit")
+  proposedChanges   Json
+  currentSnapshot   Json?
+  status            AddressChangeStatus @default(pending)
+  rejectionReason   String?
+  createdAt         DateTime            @default(now())
+  reviewedAt        DateTime?
+  deletedAt         DateTime?
+
+  campaign    Campaign  @relation(fields: [campaignId], references: [id])
+  submittedBy User      @relation("VoterChangeSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy  User?     @relation("VoterChangeReviewer", fields: [reviewedByUserId], references: [id])
+  person      Person?   @relation(fields: [personId], references: [id])
+
+  @@index([campaignId, status])
+  @@index([personId])
+  @@index([deletedAt])
+  @@map("voter_change_requests")
 }

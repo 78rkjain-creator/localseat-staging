@@ -636,6 +636,11 @@ function phoneMobile(personIdx: number): string | null {
 }
 
 async function main() {
+  if (process.env.DATABASE_URL?.includes("localseat_prod")) {
+    console.error("❌ Seed aborted: DATABASE_URL points to localseat_prod. Refusing to seed a production database.");
+    process.exit(1);
+  }
+
   console.log("🌱 Seeding database...");
 
   const HASH = await bcrypt.hash("password", 12);

@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { canReviewAddressChanges } from "@/lib/permissions";
+import { getPendingAddressChangeCount } from "@/lib/address-changes";
+import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -26,6 +29,14 @@ export default async function AppLayout({
 
   const demoMode = process.env.DEMO_MODE === "true";
 
+  const pendingDataCorrectionsCount =
+    activeCampaignId && activeRole && canReviewAddressChanges(activeRole as Role)
+      ? await Promise.all([
+          getPendingAddressChangeCount(activeCampaignId),
+          getPendingVoterChangeCount(activeCampaignId),
+        ]).then(([a, b]) => a + b)
+      : 0;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {demoMode && <DemoBanner currentEmail={email} />}
@@ -36,6 +47,7 @@ export default async function AppLayout({
           role={activeRole as Role | null}
           campaignName={activeMembership?.campaignName ?? null}
           campaignCount={memberships.length}
+          pendingDataCorrectionsCount={pendingDataCorrectionsCount}
         />
         <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">
           {children}

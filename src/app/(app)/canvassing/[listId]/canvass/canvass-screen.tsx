@@ -5,6 +5,8 @@ import Link from "next/link";
 import { saveCanvassResponse, addPersonAtDoor } from "./actions";
 import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
+import { VoterChangeModal } from "@/components/voter-change-modal";
+import { AddResidentModal } from "@/components/add-resident-modal";
 import { enqueue } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
@@ -13,6 +15,8 @@ import { useOfflineSync } from "@/hooks/useOfflineSync";
 type LocalEntry = CanvassingQueue["entries"][number] & {
   person: {
     phoneMobile: string | null;
+    email: string | null;
+    birthYear: number | null;
     coResidents: { id: string; firstName: string; lastName: string }[];
   };
 };
@@ -111,6 +115,8 @@ interface CanvassScreenProps {
   listId: string;
   listName: string;
   assignmentId: string;
+  campaignId: string;
+  campaignCity?: string;
   entries: CanvassingQueue["entries"];
   competitors: { id: string; name: string }[];
 }
@@ -119,6 +125,8 @@ export function CanvassScreen({
   listId,
   listName,
   assignmentId,
+  campaignId,
+  campaignCity = "",
   entries: initialEntries,
   competitors,
 }: CanvassScreenProps) {
@@ -137,6 +145,11 @@ export function CanvassScreen({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(firstPending < 0 && entries.length > 0);
+
+  const [showVoterChangeModal, setShowVoterChangeModal] = useState(false);
+  const [showAddResidentModal, setShowAddResidentModal] = useState(false);
+  const [showEditConfirm, setShowEditConfirm] = useState(false);
+  const [showAddResidentConfirm, setShowAddResidentConfirm] = useState(false);
 
   // "Other outcome" section (Refused / Moved / Unavailable / Deceased + add person)
   const [showMoreOptions, setShowMoreOptions] = useState(false);
@@ -356,6 +369,8 @@ export function CanvassScreen({
           lastName: result.person.lastName,
           phoneHome: null,
           phoneMobile: null,
+          email: null,
+          birthYear: null,
           address: current?.person.address ?? null,
           coResidents: [],
         },
@@ -759,42 +774,141 @@ export function CanvassScreen({
         {error && (
           <p className="text-xs text-red-600 text-center mb-1.5">{error}</p>
         )}
-        <div className="flex gap-3 max-w-lg mx-auto">
-          <button
-            type="button"
-            onClick={handleSkip}
-            disabled={isPending}
-            className="h-12 px-5 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
-          >
-            Skip
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave}
-            className={[
-              "flex-1 h-12 rounded-2xl font-bold text-base transition-all",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
-              canSave
-                ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-sm"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed",
-            ].join(" ")}
-          >
-            {isPending ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Saving…
-              </span>
-            ) : (
-              "Save and next →"
-            )}
-          </button>
+
+        {/* ── Edit record confirmation ── */}
+        {showEditConfirm && (
+          <div className="max-w-lg mx-auto mb-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5">
+            <p className="text-sm font-semibold text-slate-900 mb-0.5">Edit this record?</p>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Changes will be submitted for review and won&apos;t update the record until a manager approves.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowEditConfirm(false); setShowVoterChangeModal(true); }}
+                className="flex-1 h-10 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white text-sm font-semibold transition-colors"
+              >
+                Yes, edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditConfirm(false)}
+                className="flex-1 h-10 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-white active:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Add resident confirmation ── */}
+        {showAddResidentConfirm && (
+          <div className="max-w-lg mx-auto mb-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5">
+            <p className="text-sm font-semibold text-slate-900 mb-0.5">Add a new resident?</p>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              This will be submitted for review and won&apos;t appear in the voter list until a manager approves.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowAddResidentConfirm(false); setShowAddResidentModal(true); }}
+                className="flex-1 h-10 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white text-sm font-semibold transition-colors"
+              >
+                Yes, add
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddResidentConfirm(false)}
+                className="flex-1 h-10 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-white active:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 max-w-lg mx-auto">
+          {/* Row 1 — secondary actions */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setShowEditConfirm((v) => !v); setShowAddResidentConfirm(false); }}
+              disabled={isPending}
+              className="flex-1 h-12 rounded-2xl border border-slate-200 bg-white text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Edit Record
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowAddResidentConfirm((v) => !v); setShowEditConfirm(false); }}
+              disabled={isPending}
+              className="flex-1 h-12 rounded-2xl border border-slate-200 bg-white text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Add Resident
+            </button>
+          </div>
+          {/* Row 2 — primary actions */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSkip}
+              disabled={isPending}
+              className="flex-1 h-12 rounded-2xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!canSave}
+              className={[
+                "flex-1 h-12 rounded-2xl font-bold text-base transition-all",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
+                canSave
+                  ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-400 cursor-not-allowed",
+              ].join(" ")}
+            >
+              {isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Saving…
+                </span>
+              ) : (
+                "Save and next →"
+              )}
+            </button>
+          </div>
         </div>
       </footer>
 
+      {showVoterChangeModal && (
+        <VoterChangeModal
+          personId={current.person.id}
+          campaignId={campaignId}
+          currentRecord={{
+            id: current.person.id,
+            firstName: current.person.firstName,
+            lastName: current.person.lastName,
+            phoneHome: current.person.phoneHome,
+            phoneMobile: current.person.phoneMobile ?? null,
+            email: current.person.email ?? null,
+            birthYear: current.person.birthYear ?? null,
+          }}
+          onClose={() => setShowVoterChangeModal(false)}
+        />
+      )}
+
+      {showAddResidentModal && (
+        <AddResidentModal
+          campaignId={campaignId}
+          campaignCity={campaignCity}
+          onClose={() => setShowAddResidentModal(false)}
+        />
+      )}
     </div>
   );
 }

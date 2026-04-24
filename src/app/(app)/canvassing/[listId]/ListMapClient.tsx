@@ -22,6 +22,7 @@ interface Props {
   entries: MapEntry[];
   listId: string;
   listName: string;
+  ungeocodedCount?: number;
 }
 
 // ── Colour logic ───────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ function addWardBoundaryLayers(
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function ListMapClient({ entries, listId, listName }: Props) {
+export function ListMapClient({ entries, listId, listName, ungeocodedCount = 0 }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -314,6 +315,18 @@ export function ListMapClient({ entries, listId, listName }: Props) {
           <span className="text-xs text-slate-400">remaining</span>
         </div>
       </div>
+
+      {/* Ungeocoded banner */}
+      {ungeocodedCount > 0 && (
+        <div className="flex-shrink-0 flex items-center gap-2 bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+          <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <p className="text-xs text-amber-800">
+            {ungeocodedCount} address{ungeocodedCount === 1 ? "" : "es"} on this list {ungeocodedCount === 1 ? "hasn't" : "haven't"} been mapped yet and won't appear on the map.
+          </p>
+        </div>
+      )}
 
       {/* Map */}
       <div className="relative flex-1 min-h-0 flex flex-col" style={{ overflow: "hidden" }}>

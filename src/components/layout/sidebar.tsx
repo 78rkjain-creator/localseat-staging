@@ -24,12 +24,14 @@ interface SidebarProps {
   role: Role | null;
   campaignName: string | null;
   campaignCount?: number;
+  pendingDataCorrectionsCount?: number;
 }
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  badge?: number;
 }
 
 function NavLink({
@@ -54,7 +56,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1 }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -85,11 +87,12 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
       ),
     },
     {
-      href: "/address-changes",
-      label: "Address Changes",
+      href: "/data-corrections",
+      label: "Data Corrections",
+      badge: pendingDataCorrectionsCount > 0 ? pendingDataCorrectionsCount : undefined,
       icon: (
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
       ),
     },
@@ -299,7 +302,12 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                       ].join(" ")}
                     >
                       <span className="h-4 w-4 flex-shrink-0">{item.icon}</span>
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge !== undefined && (
+                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-semibold bg-brand-500 text-white">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

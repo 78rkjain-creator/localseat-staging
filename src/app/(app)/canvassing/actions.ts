@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
+import { geocodeAddressesForCanvassList } from "@/lib/geocoding";
 import type { Role } from "@/types";
 
 // ── Create walk list ───────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ export async function createCanvassList(
   });
 
   revalidatePath("/canvassing");
+  geocodeAddressesForCanvassList(list.id);
   redirect(`/canvassing/${list.id}`);
 }
 
@@ -121,6 +123,7 @@ export async function createTurfCanvassList(data: {
   });
 
   revalidatePath("/canvassing");
+  geocodeAddressesForCanvassList(list.id);
   return { listId: list.id };
 }
 

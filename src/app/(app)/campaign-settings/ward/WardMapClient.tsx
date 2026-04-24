@@ -21,6 +21,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
   const drawRef = useRef<any>(null);
 
   const [currentPolygon, setCurrentPolygon] = useState<Polygon | null>(wardBoundary);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -137,12 +138,13 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onUpdate = (_e: any) => { evaluatePolygon(draw); };
-      map.on("draw.create", onUpdate);
+      map.on("draw.create", () => { setIsDrawing(false); evaluatePolygon(draw); });
       map.on("draw.update", onUpdate);
-      map.on("draw.delete", () => setCurrentPolygon(null));
+      map.on("draw.delete", () => { setCurrentPolygon(null); setIsDrawing(false); });
     });
 
     return () => {
+      setIsDrawing(false);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -153,9 +155,14 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
   function handleDrawBoundary() {
     if (!drawRef.current) return;
-    // Clear existing before drawing a new one (one boundary only)
+    if (isDrawing) {
+      drawRef.current.changeMode("simple_select");
+      setIsDrawing(false);
+      return;
+    }
     drawRef.current.deleteAll();
     setCurrentPolygon(null);
+    setIsDrawing(true);
     drawRef.current.changeMode("draw_polygon");
   }
 
@@ -163,6 +170,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     if (!drawRef.current) return;
     drawRef.current.deleteAll();
     setCurrentPolygon(null);
+    setIsDrawing(false);
     setSaveMsg(null);
   }
 
@@ -199,6 +207,47 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     setFileError(null);
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.name.endsWith(".kmz")) {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const buffer = evt.target?.result;
+        if (!(buffer instanceof ArrayBuffer)) { setFileError("Could not read file."); return; }
+
+        try {
+          const JSZip = (await import("jszip")).default;
+          const zip = await JSZip.loadAsync(buffer);
+          const kmlFile = Object.values(zip.files).find((f) => f.name.endsWith(".kml"));
+          if (!kmlFile) { setFileError("No KML file found inside this KMZ."); return; }
+
+          const kmlText = await kmlFile.async("string");
+          const polygon = parseKmlToGeoJsonPolygon(kmlText);
+          if (!polygon) { setFileError("Could not parse KML inside KMZ. Make sure it contains a single polygon."); return; }
+
+          if (drawRef.current) {
+            drawRef.current.deleteAll();
+            drawRef.current.add({ type: "Feature", geometry: polygon, properties: {} });
+
+            const coords = polygon.coordinates[0];
+            if (coords && coords.length > 0 && mapRef.current) {
+              const lngs = coords.map((c) => c[0]).filter((v): v is number => v !== undefined);
+              const lats = coords.map((c) => c[1]).filter((v): v is number => v !== undefined);
+              mapRef.current.fitBounds(
+                [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+                { padding: 60 }
+              );
+            }
+          }
+          setCurrentPolygon(polygon);
+          setSaveMsg(null);
+        } catch {
+          setFileError("Could not read KMZ file.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = "";
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -268,9 +317,14 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={handleDrawBoundary}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          className={[
+            "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl border text-sm font-medium transition-colors",
+            isDrawing
+              ? "border-brand-500 bg-brand-500 text-white"
+              : "border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300",
+          ].join(" ")}
         >
-          <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+          <svg className={["h-4 w-4", isDrawing ? "text-white" : "text-slate-500"].join(" ")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.536-9.536a2 2 0 012.828 0l.707.707a2 2 0 010 2.828L9 13z" />
           </svg>
           Draw boundary
@@ -288,7 +342,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".geojson,.kml"
+          accept=".geojson,.kml,.kmz"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -358,6 +412,20 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
         </p>
       )}
 
+      {/* Drawing instruction banner */}
+      {isDrawing && (
+        <div className="flex items-start gap-3 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+          <svg className="h-4 w-4 text-slate-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex flex-col gap-0.5">
+            <p className="text-xs text-slate-600"><span className="font-semibold">Click</span> to place each point of your boundary.</p>
+            <p className="text-xs text-slate-600"><span className="font-semibold">Double-click</span> to close and finish the shape.</p>
+            <p className="text-xs text-slate-600"><span className="font-semibold">Press Escape</span> to cancel.</p>
+          </div>
+        </div>
+      )}
+
       {/* Map */}
       <div
         className="relative rounded-2xl overflow-hidden border border-slate-200"
@@ -367,7 +435,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       </div>
 
       <p className="text-xs text-slate-400">
-        Accepted file types: .geojson, .kml (single polygon only)
+        Accepted file types: .geojson, .kml, .kmz (single polygon only)
       </p>
     </div>
   );

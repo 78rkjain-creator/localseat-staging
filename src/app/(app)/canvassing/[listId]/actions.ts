@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageWalkLists } from "@/lib/permissions";
 import { previewPeopleFilter } from "@/lib/canvassing";
+import { geocodeAddressesForCanvassList } from "@/lib/geocoding";
 import type { Prisma } from "@prisma/client";
 import type { Role, SupportLevel } from "@/types";
 
@@ -112,6 +113,7 @@ export async function addFilteredPeople(
   });
 
   revalidatePath(`/canvassing/${listId}`);
+  if (people.length > 0) geocodeAddressesForCanvassList(listId);
   return { added: people.length };
 }
 
@@ -280,6 +282,7 @@ export async function importCsvPeople(
   }, { timeout: 30000 });
 
   revalidatePath(`/canvassing/${listId}`);
+  if (matched > 0 || created > 0) geocodeAddressesForCanvassList(listId);
   return { matched, created, skipped };
 }
 

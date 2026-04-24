@@ -307,6 +307,9 @@ export async function getCanvassingQueue(
             firstName: true,
             lastName: true,
             phoneHome: true,
+            phoneMobile: true,
+            email: true,
+            birthYear: true,
             household: {
               select: {
                 address: {
@@ -365,6 +368,9 @@ export async function getCanvassingQueue(
         firstName: e.person.firstName,
         lastName: e.person.lastName,
         phoneHome: e.person.phoneHome,
+        phoneMobile: e.person.phoneMobile,
+        email: e.person.email,
+        birthYear: e.person.birthYear,
         address: e.person.household?.address ?? null,
         coResidents: (e.person.household?.people ?? []).filter(
           (p) => p.id !== e.person.id

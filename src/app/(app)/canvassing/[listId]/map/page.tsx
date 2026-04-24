@@ -121,8 +121,9 @@ export default async function ListMapPage({ params }: PageProps) {
   });
 
   const geocodedCount = mapEntries.filter((e) => e.lat !== null).length;
+  const ungeocodedCount = mapEntries.length - geocodedCount;
 
-  if (geocodedCount < 2) {
+  if (geocodedCount === 0) {
     return (
       <div className="px-4 sm:px-6 py-12 max-w-lg mx-auto text-center">
         <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
@@ -152,6 +153,7 @@ export default async function ListMapPage({ params }: PageProps) {
       entries={mapEntries}
       listId={listId}
       listName={list.name}
+      ungeocodedCount={ungeocodedCount}
     />
   );
 }

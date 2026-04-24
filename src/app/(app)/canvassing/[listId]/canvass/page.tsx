@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCanvassingQueue } from "@/lib/canvassing";
+import { db } from "@/lib/db";
 import { CanvassScreen } from "./canvass-screen";
 
 interface PageProps {
@@ -23,7 +24,10 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const queue = await getCanvassingQueue(listId, session.user.id, activeCampaignId);
+  const [queue, campaign] = await Promise.all([
+    getCanvassingQueue(listId, session.user.id, activeCampaignId),
+    db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true } }),
+  ]);
   if (!queue) notFound();
 
   return (
@@ -31,6 +35,8 @@ export default async function CanvassPage({ params }: PageProps) {
       listId={listId}
       listName={queue.listName}
       assignmentId={queue.assignmentId}
+      campaignId={activeCampaignId}
+      campaignCity={campaign?.city ?? ""}
       entries={queue.entries}
       competitors={queue.competitors}
     />

@@ -252,6 +252,64 @@ Candidate
 
 ---
 
+## Session Log — April 23, 2026 (Mobile Nav, Canvass Screen, Voting History)
+
+**Commits: ba6c171, bdaaffd, 88ff1de, 05c43c3, ec6ba3e**
+
+### Mobile bottom navigation bar
+- `src/components/layout/mobile-nav.tsx` — new component, role-aware bottom tab bar for mobile (below `md:` breakpoint only)
+- `src/app/(app)/layout.tsx` — MobileNav imported and rendered, `pb-16 md:pb-0` added to main content wrapper
+- Desktop sidebar untouched — mobile nav only renders below `md:` breakpoint
+- Tab sets are role-aware: canvasser, field_organizer, volunteer_coordinator, finance_lead, super_user/super_admin each get a tailored set; candidate/campaign_manager/co_chair get a More sheet with overflow links
+- Fixed build failure: `lucide-react` was missing from `package.json` — added via `npm install lucide-react`
+- Fixed build failure: `Role` import from `@/types` caused Vercel module-not-found error — replaced with inline type definition in `mobile-nav.tsx`
+
+### Mobile canvassing screen viewport fix
+- `src/app/(app)/canvassing/[listId]/canvass/canvass-screen.tsx` — full viewport layout fix
+- Outer wrapper changed to `h-screen [height:100dvh]` for Safari mobile browser chrome support
+- Zone 2 (controls): removed `overflow-y-auto`, kept `flex-1 min-h-0 overflow-hidden` — controls no longer scroll
+- Spacing tightened throughout: household card, resident queue, scale buttons, interest chips, other outcome toggle
+- `showDetails` panel moved inside `<main>` content flow
+- Footer `pb-3` → `pb-16` to clear mobile nav bar
+- OfflinePill `bottom-20` → `bottom-36`
+- All controls and Save & Next button now visible on one screen without scrolling
+
+### Negative remaining count fix
+- `src/app/(app)/canvassing/page.tsx` and `src/app/(app)/dashboard/_canvasser.tsx`
+- `remaining` clamped with `Math.max(0, a.totalEntries - a.totalResponses)` to prevent negative values
+
+### Voting history feature
+- New `ElectionType` enum (`federal`, `provincial`, `municipal`) and `VotingRecord` model added to `prisma/schema.prisma`
+- Migration: `20260423151852_add_voting_records`
+- `src/lib/voting-records.ts` — `getVotingRecordsForPerson`, `addVotingRecord`, `updateVotingRecord`, `deleteVotingRecord`, `importVotingRecords`, `ELECTION_TYPE_LABELS`
+- `src/app/(app)/voter-list/[personId]/page.tsx` — Voting History section added, visible to candidate/campaign_manager/co_chair only
+- `src/lib/people.ts` and `src/app/(app)/voter-list/page.tsx` — `votedIn` filter added, visible to candidate/campaign_manager/co_chair only
+- `src/app/(app)/voter-list/actions.ts` — `importVotingRecordRows` server action
+- `src/app/(app)/voter-list/voting-history-template/route.ts` — template CSV download
+- `src/app/(app)/voter-list/import-modal.tsx` — voting history note and template download link added
+
+### Voters with history — hero card metric
+- `src/lib/dashboard.ts` — `votingRecord.groupBy` query added to `getCandidateDashboardData`, returns `votersWithHistory`
+- `src/app/(app)/dashboard/_candidate.tsx` — fourth stat added to hero card: "voters with history"
+
+### Municipal voting history seed data
+- `prisma/seed.ts` — 1,080 voting records across 480 voters (municipal only: 2014, 2018, 2022 Owen Sound Municipal Elections)
+- Distribution: 15% of voters (225) have all three elections, 10% (150) have two, 7% (105) have one, 68% have none
+- Deterministic — no `Math.random()`, same result every run
+- Old mixed federal/provincial/municipal seed replaced entirely
+
+### Infrastructure
+- Migration applied to staging (Neon), production (localseat_prod), and demo (localseat_demo) databases
+- All three environments reseeded with 1,080 voting records
+- Demo repo pulled and rebuilt to match staging at commit `ec6ba3e`
+- `git config core.autocrlf false` set on local repo to suppress line ending warnings
+- Railway DATABASE_URL confirmed as local dev DB — Neon URL is the correct staging target
+
+### Known issue added
+- Staging DATABASE_URL must be the Neon connection string from Vercel environment variables, not the Railway URL in local `.env`
+
+---
+
 ## Design System — Current Token Rules
 
 ### Active nav item
@@ -310,6 +368,7 @@ sentiment: {
 - Demo site shares one database — multiple simultaneous users see each other's changes (deferred to Option 3)
 - `localseat-staging` and `localseat.io` repos can drift out of sync — always copy `seed.ts` and key shared files when making changes that affect both
 - Staging (Vercel/Neon) does not run migrations automatically — must be applied manually with `prisma migrate deploy` against the Neon `DATABASE_URL` whenever new migrations are added
+- Seed guard added to `prisma/seed.ts` — exits with code 1 if `DATABASE_URL` contains `localseat_prod`. Runs before `bcrypt.hash` and before any `db.$transaction` calls.
 
 ---
 
@@ -361,6 +420,12 @@ sentiment: {
 
 ---
 
+## Production Data Events
+
+**April 23, 2026** — Production database manually cleaned via psql. Seed data (1,500 people, 555 addresses, 4 walk lists, 1 campaign, 13 seed users) was found in `localseat_prod` and removed. Superuser account preserved. Actual table names confirmed: `voting_records`, `volunteer_shifts`, `volunteer_shift_attendees`. Production is now empty and ready for real campaign data to be entered through the app UI.
+
+---
+
 ## Remaining Work
 
 ### V1 — Not yet built
@@ -386,6 +451,11 @@ sentiment: {
 | Stripe payment integration on choose-plan page | Dev tier selector done. Stripe wiring remaining. |
 | Update HANDOFF.md at end of each session | Ongoing |
 | Map-based turf cutting | Done |
+| Mobile bottom navigation bar | Done |
+| Canvass screen viewport fix | Done |
+| Voting history data model, import, and UI | Done |
+| Voters with history hero card metric | Done |
+| Municipal seed data | Done |
 | Automated PostgreSQL backup to external storage (Backblaze B2 + rclone + cron) | Small |
 | Demo instance isolation — Option 3 (unique DB per visitor) | Large |
 

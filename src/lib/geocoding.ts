@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 
 const MAPBOX_BASE = "https://api.mapbox.com/geocoding/v5/mapbox.places";
-const BETWEEN_REQUESTS_MS = 600;
+const BATCH_SIZE = 10;
+const BETWEEN_BATCHES_MS = 600;
 
 // ── geocodeAddress ─────────────────────────────────────────────────────────
 // Resolves coordinates for a single Address record.
@@ -70,13 +71,13 @@ export async function geocodeAddress(
 // Background geocoding for addresses created during a voter CSV import.
 // Called fire-and-forget after importVoterRows completes.
 // Filters to ungeocoded IDs belonging to the campaign, then processes
-// sequentially with delay. Logs progress to server console. Never throws.
+// in parallel batches with delay between batches. Never throws.
 
 export async function geocodeNewAddresses(
   campaignId: string,
   addressIds: string[]
-): Promise<void> {
-  if (addressIds.length === 0) return;
+): Promise<{ geocoded: number; failed: number }> {
+  if (addressIds.length === 0) return { geocoded: 0, failed: 0 };
 
   try {
     const ungeocoded = await db.address.findMany({
@@ -84,41 +85,23 @@ export async function geocodeNewAddresses(
       select: { id: true },
     });
 
-    if (ungeocoded.length === 0) return;
+    if (ungeocoded.length === 0) return { geocoded: 0, failed: 0 };
 
-    console.log(`[geocoding] Background geocoding started — ${ungeocoded.length} new address(es)`);
-
-    for (let i = 0; i < ungeocoded.length; i++) {
-      const { id } = ungeocoded[i];
-      const result = await geocodeAddress(id);
-      console.log(
-        `[geocoding] ${i + 1}/${ungeocoded.length} ${id}: ${
-          result ? `${result.lat.toFixed(5)},${result.lng.toFixed(5)}` : "failed"
-        }`
-      );
-
-      if (i < ungeocoded.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, BETWEEN_REQUESTS_MS));
-      }
-    }
-
-    console.log("[geocoding] Background geocoding complete");
+    return geocodeInBatches(ungeocoded.map((a) => a.id), "geocodeNewAddresses");
   } catch (err) {
     console.error("[geocoding] Error in geocodeNewAddresses:", err);
+    return { geocoded: 0, failed: 0 };
   }
 }
 
 // ── geocodeAddressesForCanvassList ─────────────────────────────────────────
 // Geocodes all un-geocoded addresses for people on a walk list.
-// Processes sequentially with a delay to respect Mapbox rate limits.
+// Processes in parallel batches with a delay between batches.
 // Returns counts — never throws.
 
 export async function geocodeAddressesForCanvassList(
   canvassListId: string
 ): Promise<{ geocoded: number; failed: number }> {
-  let geocoded = 0;
-  let failed = 0;
-
   try {
     const entries = await db.canvassListEntry.findMany({
       where: { canvassListId, deletedAt: null },
@@ -150,24 +133,56 @@ export async function geocodeAddressesForCanvassList(
       select: { id: true },
     });
 
-    for (let i = 0; i < ungeocoded.length; i++) {
-      const { id } = ungeocoded[i];
-      const result = await geocodeAddress(id);
+    return geocodeInBatches(ungeocoded.map((a) => a.id), "geocodeAddressesForCanvassList");
+  } catch (err) {
+    console.error("[geocoding] Error in geocodeAddressesForCanvassList:", err);
+    return { geocoded: 0, failed: 0 };
+  }
+}
 
-      if (result) {
-        geocoded++;
-      } else {
-        failed++;
+// ── geocodeInBatches ───────────────────────────────────────────────────────
+// Splits addressIds into chunks of BATCH_SIZE, fires each chunk concurrently
+// with Promise.all, and waits BETWEEN_BATCHES_MS between chunks.
+
+async function geocodeInBatches(
+  addressIds: string[],
+  label: string
+): Promise<{ geocoded: number; failed: number }> {
+  let geocoded = 0;
+  let failed = 0;
+
+  if (addressIds.length === 0) return { geocoded, failed };
+
+  const totalBatches = Math.ceil(addressIds.length / BATCH_SIZE);
+  console.log(
+    `[geocoding] Starting batch geocoding — ${addressIds.length} addresses, ${totalBatches} batches of ${BATCH_SIZE} (${label})`
+  );
+
+  try {
+    for (let b = 0; b < totalBatches; b++) {
+      const chunk = addressIds.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+
+      const results = await Promise.all(chunk.map((id) => geocodeAddress(id)));
+
+      let batchGeocoded = 0;
+      let batchFailed = 0;
+      for (const result of results) {
+        if (result) { geocoded++; batchGeocoded++; }
+        else         { failed++;   batchFailed++;   }
       }
 
-      // Delay between requests — skip after the last one
-      if (i < ungeocoded.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, BETWEEN_REQUESTS_MS));
+      console.log(
+        `[geocoding] Batch ${b + 1}/${totalBatches} complete — ${batchGeocoded} geocoded, ${batchFailed} failed`
+      );
+
+      if (b < totalBatches - 1) {
+        await new Promise((resolve) => setTimeout(resolve, BETWEEN_BATCHES_MS));
       }
     }
   } catch (err) {
-    console.error("[geocoding] Error in geocodeAddressesForCanvassList:", err);
+    console.error(`[geocoding] Error in geocodeInBatches (${label}):`, err);
   }
 
+  console.log(`[geocoding] Complete — ${geocoded} geocoded, ${failed} failed (${label})`);
   return { geocoded, failed };
 }
