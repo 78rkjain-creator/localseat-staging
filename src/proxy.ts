@@ -106,7 +106,9 @@ export default withAuth(
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
         pathname === "/select-campaign" ||
-        pathname.startsWith("/onboarding/choose-plan");
+        pathname.startsWith("/onboarding/choose-plan") ||
+        pathname.startsWith("/verify-email") ||
+        pathname === "/resend-verification";
 
       if (!atCampaignGate) {
         const hasMemberships =
