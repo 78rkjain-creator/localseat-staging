@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { verifyTokenAction } from "./actions";
@@ -9,15 +9,13 @@ import { verifyTokenAction } from "./actions";
 type Status =
   | "loading"
   | "success_redirecting"
-  | "success_logged_out"
   | "expired"
   | "invalid";
 
 function VerifyEmailContent() {
   const [status, setStatus] = useState<Status>("loading");
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, update } = useSession();
+  const { update } = useSession();
   const token = searchParams.get("token");
 
   useEffect(() => {
@@ -27,28 +25,13 @@ function VerifyEmailContent() {
     }
 
     verifyTokenAction(token).then(async (result) => {
-      if (result.success) {
-        // Refresh the JWT so the proxy sees emailVerified: true
+      if (result.success || result.error === "already_verified") {
         await update({ refreshVerification: true });
-
-        if (session?.user?.id) {
-          setStatus("success_redirecting");
-          router.push("/dashboard");
-        } else {
-          // No active session — user will need to sign in for a fresh token
-          setStatus("success_logged_out");
-        }
-        return;
-      }
-
-      if (result.error === "already_verified") {
-        // Already done — just get them to the right place
-        await update({ refreshVerification: true });
-        if (session?.user?.id) {
-          router.push("/dashboard");
-        } else {
-          setStatus("success_logged_out");
-        }
+        setStatus("success_redirecting");
+        // Always send to login after verification — user must re-authenticate
+        // with a fresh session that includes emailVerified: true
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        window.location.href = "/login";
         return;
       }
 
@@ -75,25 +58,7 @@ function VerifyEmailContent() {
             <h1 className="text-xl font-semibold text-slate-900 text-center mb-2">
               Email verified
             </h1>
-            <p className="text-sm text-slate-500 text-center">Taking you to your dashboard…</p>
-          </>
-        )}
-
-        {status === "success_logged_out" && (
-          <>
-            <CheckIcon />
-            <h1 className="text-xl font-semibold text-slate-900 text-center mb-2">
-              Email verified
-            </h1>
-            <p className="text-sm text-slate-500 text-center mb-6">
-              Your account is active. Sign in to get started.
-            </p>
-            <Link
-              href="/login"
-              className="block w-full text-center h-11 leading-[44px] rounded-2xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-colors"
-            >
-              Sign in
-            </Link>
+            <p className="text-sm text-slate-500 text-center">Your account is active. Taking you to sign in…</p>
           </>
         )}
 
@@ -112,7 +77,7 @@ function VerifyEmailContent() {
             <div className="flex flex-col gap-2">
               <Link
                 href="/register"
-                className="block w-full text-center h-11 leading-[44px] rounded-2xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-colors"
+                className="block w-full text-center h-11 leading-[44px] rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
               >
                 Register again
               </Link>
@@ -168,7 +133,7 @@ function AuthCard({ children }: { children: React.ReactNode }) {
   return (
     <div className="w-full max-w-sm">
       <div className="flex flex-col items-center gap-3 mb-8">
-        <div className="h-12 w-12 rounded-2xl bg-brand-500 flex items-center justify-center shadow-soft">
+        <div className="h-12 w-12 rounded-2xl bg-orange-500 flex items-center justify-center shadow-md">
           <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -176,7 +141,7 @@ function AuthCard({ children }: { children: React.ReactNode }) {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LocalSeat</h1>
       </div>
-      <div className="bg-white rounded-3xl shadow-card border border-slate-100 p-8">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
         {children}
       </div>
     </div>
