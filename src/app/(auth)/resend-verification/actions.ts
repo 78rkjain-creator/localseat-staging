@@ -3,6 +3,10 @@
 import { db } from "@/lib/db";
 import { generateVerificationToken, isExpired } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email";
+import { rateLimitByKey } from "@/lib/rate-limit";
+
+const RESEND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RESEND_MAX = 3;
 
 export type ResendResult =
   | { success: true }
@@ -10,6 +14,10 @@ export type ResendResult =
 
 export async function resendVerificationEmail(email: string): Promise<ResendResult> {
   const normalizedEmail = email.trim().toLowerCase();
+
+  if (!rateLimitByKey(`resend:${normalizedEmail}`, RESEND_MAX, RESEND_WINDOW_MS)) {
+    return { success: true }; // Silently succeed — don't reveal rate limiting to potential enumerators
+  }
 
   const user = await db.user.findUnique({
     where: { email: normalizedEmail },

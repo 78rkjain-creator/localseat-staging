@@ -5,7 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageFollowUps } from "@/lib/permissions";
+import { OUTREACH_CHANNEL_VALUES } from "@/types";
 import type { OutreachChannel, Role } from "@/types";
+import { sanitizeText, sanitizeEnum } from "@/lib/sanitize";
 
 // ── Auth guard ─────────────────────────────────────────────────────────────
 
@@ -39,6 +41,9 @@ export async function logOutreach(
   if ("error" in auth) return auth;
   const { session, campaignId } = auth;
 
+  const channel = sanitizeEnum(input.channel, OUTREACH_CHANNEL_VALUES);
+  if (!channel) return { error: "Invalid channel." };
+
   const person = await db.person.findFirst({
     where: { id: input.personId, campaignId, deletedAt: null },
     select: { id: true },
@@ -50,10 +55,10 @@ export async function logOutreach(
       campaignId,
       personId: input.personId,
       userId: session.user.id,
-      channel: input.channel,
+      channel,
       date: new Date(input.date),
-      outcome: input.outcome?.trim() || null,
-      notes: input.notes?.trim() || null,
+      outcome: sanitizeText(input.outcome, 500),
+      notes: sanitizeText(input.notes, 2000),
     },
   });
 
@@ -243,16 +248,22 @@ export async function importOutreachResults(
       continue;
     }
 
+    const rowChannel = sanitizeEnum(row.channel, OUTREACH_CHANNEL_VALUES);
+    if (!rowChannel) {
+      unmatched.push({ firstName: row.firstName, lastName: row.lastName, address: row.address ?? "" });
+      continue;
+    }
+
     logsToCreate.push({
       campaignId,
       personId,
       userId: session.user.id,
-      channel: row.channel as OutreachChannel,
+      channel: rowChannel,
       date: row.date ? new Date(row.date) : new Date(),
-      outcome: row.outcome?.trim() || null,
-      notes: row.notes?.trim() || null,
-      phonedBy: row.phonedBy?.trim() || null,
-      phoneType: row.phoneType?.trim() || null,
+      outcome: sanitizeText(row.outcome, 500),
+      notes: sanitizeText(row.notes, 2000),
+      phonedBy: sanitizeText(row.phonedBy, 200),
+      phoneType: sanitizeText(row.phoneType, 100),
     });
     imported++;
   }

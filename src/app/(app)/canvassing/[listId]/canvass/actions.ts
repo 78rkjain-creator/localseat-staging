@@ -8,7 +8,9 @@ import { canAddConstituent } from "@/lib/plan-limits";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { WardStatus } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
+import { CANVASS_OUTCOME_VALUES, SUPPORT_LEVEL_VALUES } from "@/types";
 import type { CanvassOutcome, SupportLevel } from "@/types";
+import { sanitizeText, sanitizeEnum } from "@/lib/sanitize";
 
 // ── Save canvass response ─────────────────────────────────────────────────
 
@@ -55,8 +57,15 @@ export async function saveCanvassResponse(
   });
   if (!person) return { error: "Person not found." };
 
-  const isContacted = input.outcome === "contacted";
-  const noteText = input.notes.trim() || null;
+  const outcome = sanitizeEnum(input.outcome, CANVASS_OUTCOME_VALUES);
+  if (!outcome) return { error: "Invalid outcome value." };
+
+  const supportLevel = input.supportLevel
+    ? sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES)
+    : null;
+
+  const isContacted = outcome === "contacted";
+  const noteText = sanitizeText(input.notes, 2000);
 
   // Resolve respondedAt: use client-side queuedAt when provided and within 48h,
   // so offline door-knock times are preserved rather than reflecting sync time.
@@ -81,14 +90,14 @@ export async function saveCanvassResponse(
   const isNewResponse = !existingResponse;
 
   const responseData = {
-    outcome: input.outcome,
-    supportLevel: isContacted ? input.supportLevel : null,
+    outcome,
+    supportLevel: isContacted ? supportLevel : null,
     signRequest: isContacted ? input.signRequest : false,
     volunteerInterest: isContacted ? input.volunteerInterest : false,
     donorInterest: isContacted ? input.donorInterest : false,
     notes: noteText,
     needsFollowUp: input.needsFollowUp,
-    competitorId: input.outcome === "other_candidate" ? (input.competitorId ?? null) : null,
+    competitorId: outcome === "other_candidate" ? (input.competitorId ?? null) : null,
     respondedAt,
   };
 
@@ -210,8 +219,8 @@ export async function saveCanvassResponse(
     details: {
       personId: input.personId,
       assignmentId: input.assignmentId,
-      outcome: input.outcome,
-      supportLevel: input.supportLevel ?? null,
+      outcome,
+      supportLevel: supportLevel ?? null,
     },
   });
 

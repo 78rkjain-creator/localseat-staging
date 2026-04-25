@@ -42,17 +42,18 @@ declare module "next-auth/jwt" {
     platformRole: string | null;
     emailVerified: boolean;
     verificationTokenExpiry: string | null;
+    sessionExpiresAt?: number; // Unix seconds — enforced per-role in proxy.ts
   }
 }
 
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
-    maxAge: 43200, // 12 hours
+    maxAge: 28800, // 8 hours (canvassers enforced to 4 h via sessionExpiresAt in proxy.ts)
   },
 
   jwt: {
-    maxAge: 43200, // 12 hours
+    maxAge: 28800, // 8 hours
   },
 
   pages: {
@@ -178,6 +179,10 @@ export const authOptions: NextAuthOptions = {
           token.activeCampaignId = null;
           token.activeRole = null;
         }
+
+        // Set per-role session expiry: 4 h for canvassers, 8 h for everyone else
+        const nowSec = Math.floor(Date.now() / 1000);
+        token.sessionExpiresAt = nowSec + (token.activeRole === "canvasser" ? 14400 : 28800);
       }
 
       // Handle campaign switching via session update
@@ -188,6 +193,9 @@ export const authOptions: NextAuthOptions = {
         if (membership) {
           token.activeCampaignId = membership.campaignId;
           token.activeRole = membership.role;
+          // Reset expiry clock when role changes via campaign switch
+          const nowSec = Math.floor(Date.now() / 1000);
+          token.sessionExpiresAt = nowSec + (membership.role === "canvasser" ? 14400 : 28800);
         }
       }
 
@@ -232,6 +240,9 @@ export const authOptions: NextAuthOptions = {
           if (target) {
             token.activeCampaignId = target.campaignId;
             token.activeRole = target.role;
+            // Reset expiry clock when campaign (and role) is set after membership refresh
+            const nowSec = Math.floor(Date.now() / 1000);
+            token.sessionExpiresAt = nowSec + (target.role === "canvasser" ? 14400 : 28800);
           }
         }
       }

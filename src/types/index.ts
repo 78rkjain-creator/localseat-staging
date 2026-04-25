@@ -27,6 +27,14 @@ export type CanvassOutcome =
   | "deceased"
   | "other_candidate";
 
+export const SUPPORT_LEVEL_VALUES: SupportLevel[] = [
+  "strong_yes", "soft_yes", "undecided", "soft_no", "strong_no", "not_home",
+];
+
+export const CANVASS_OUTCOME_VALUES: CanvassOutcome[] = [
+  "contacted", "not_home", "refused", "moved", "unavailable", "deceased", "other_candidate",
+];
+
 export type OutreachChannel =
   | "door_knock"
   | "phone_call"
@@ -34,6 +42,10 @@ export type OutreachChannel =
   | "text_message"
   | "in_person"
   | "other";
+
+export const OUTREACH_CHANNEL_VALUES: OutreachChannel[] = [
+  "door_knock", "phone_call", "email", "text_message", "in_person", "other",
+];
 
 // The membership summary embedded in the session JWT
 export interface SessionMembership {

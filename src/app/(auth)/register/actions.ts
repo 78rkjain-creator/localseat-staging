@@ -8,6 +8,10 @@ import { generateVerificationToken } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email";
 import { createAuditLog } from "@/lib/audit";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { rateLimitByKey } from "@/lib/rate-limit";
+
+const REGISTER_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const REGISTER_MAX = 5;
 
 interface RegisterInput {
   firstName: string;
@@ -23,6 +27,10 @@ interface RegisterInput {
 // This action creates the user and returns success; the client calls signIn.
 export async function register(input: RegisterInput): Promise<{ error?: string } | null> {
   const email = sanitizeEmail(input.email);
+
+  if (email && !rateLimitByKey(`register:${email}`, REGISTER_MAX, REGISTER_WINDOW_MS)) {
+    return { error: "Too many registration attempts from this email. Please try again later." };
+  }
   const firstName = sanitizeText(input.firstName, 100);
   const lastName = sanitizeText(input.lastName, 100);
   const phoneHome = sanitizePhone(input.phoneHome);

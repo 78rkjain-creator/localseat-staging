@@ -3,12 +3,20 @@
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { rateLimitByKey } from "@/lib/rate-limit";
+
+const RESET_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RESET_MAX = 3;
 
 export async function resetPassword(
   token: string,
   newPassword: string
 ): Promise<{ error?: string; success?: boolean }> {
   if (!token) return { error: "Invalid reset link." };
+
+  if (!rateLimitByKey(`reset-pwd:${token}`, RESET_MAX, RESET_WINDOW_MS)) {
+    return { error: "Too many attempts. Please request a new reset link." };
+  }
   if (!newPassword || newPassword.length < 8) {
     return { error: "Password must be at least 8 characters." };
   }

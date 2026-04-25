@@ -155,6 +155,12 @@ export default withAuth(
 
         // All token property access below this line is safe.
 
+        // Per-role session expiry: canvassers 4 h, everyone else 8 h.
+        // sessionExpiresAt is set/reset in auth.ts jwt callback.
+        if (token.sessionExpiresAt && Math.floor(Date.now() / 1000) > token.sessionExpiresAt) {
+          return false;
+        }
+
         // Verification pending requires auth but no campaign.
         if (pathname === "/verify-email/pending") {
           return true;
