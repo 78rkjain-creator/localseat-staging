@@ -971,8 +971,8 @@ async function main() {
     runningIdx += count;
   });
 
-  const CF_MUNICIPAL  = ["Voted", "Did not vote", "Unknown"] as const;
-  const CF_PROVINCIAL = ["Liberal", "Conservative", "NDP", "Green", "Unknown"] as const;
+  const CF_MUNICIPAL  = ["Voted", "Did not vote"] as const;
+  const CF_PROVINCIAL = ["Liberal", "Conservative", "NDP", "Green"] as const;
   let cfGroupIdx = 0;
 
   const personRows: {
@@ -1003,8 +1003,8 @@ async function main() {
       const isSelected = pIdx % 3 === 0;
       const cfv: Record<string, string> | undefined = isSelected
         ? {
-            cf_2022_mun:  CF_MUNICIPAL[cfGroupIdx % 3],
-            cf_2025_prov: CF_PROVINCIAL[cfGroupIdx % 5],
+            cf_2022_mun:  CF_MUNICIPAL[cfGroupIdx % 2],
+            cf_2025_prov: CF_PROVINCIAL[cfGroupIdx % 4],
           }
         : undefined;
       if (isSelected) cfGroupIdx++;
