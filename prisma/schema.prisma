@@ -74,6 +74,19 @@ enum ElectionType {
   municipal
 }
 
+enum ListImportType {
+  list
+  official_voters_list
+  telephone_list
+}
+
+enum PersonListMembershipStatus {
+  matched
+  created
+  pending_review
+  accepted
+}
+
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
 model Campaign {
@@ -91,6 +104,7 @@ model Campaign {
   wardBoundary      Json?
   wardBoundarySetAt DateTime?
   canvassScript     String?
+  customFields      Json?
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(starter)
   planActivated  Boolean   @default(true)
@@ -116,6 +130,8 @@ model Campaign {
   competitors           CampaignCompetitor[]
   votingRecords         VotingRecord[]
   voterChangeRequests   VoterChangeRequest[]
+  listImports           ListImport[]
+  personListMemberships PersonListMembership[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -157,6 +173,7 @@ model User {
   addressChangeReviews  AddressChangeRequest[] @relation("AddressChangeReviews")
   submittedVoterChanges VoterChangeRequest[]   @relation("VoterChangeSubmitter")
   reviewedVoterChanges  VoterChangeRequest[]   @relation("VoterChangeReviewer")
+  listImports           ListImport[]           @relation("ListImportUser")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -242,7 +259,9 @@ model Person {
   importSource String?
   // Tracks data import source / quality notes for deduplication
   sourceNotes String?
-  wardStatus  WardStatus @default(not_checked)
+  wardStatus          WardStatus @default(not_checked)
+  isConfirmedVoter    Boolean    @default(false)
+  customFieldValues   Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -260,6 +279,7 @@ model Person {
   addressChangeRequests AddressChangeRequest[]
   votingRecords         VotingRecord[]
   voterChangeRequests   VoterChangeRequest[]
+  listMemberships       PersonListMembership[]
 
   @@index([campaignId, deletedAt])
   @@index([lastName])
@@ -779,4 +799,47 @@ model VoterChangeRequest {
   @@index([personId])
   @@index([deletedAt])
   @@map("voter_change_requests")
+}
+
+// ─── ListImport ───────────────────────────────────────────────────────────────
+
+model ListImport {
+  id             String          @id @default(cuid())
+  campaignId     String
+  name           String
+  type           ListImportType
+  importedAt     DateTime        @default(now())
+  importedById   String
+  totalRows      Int
+  matchedCount   Int             @default(0)
+  newCount       Int             @default(0)
+  reviewCount    Int             @default(0)
+
+  campaign     Campaign              @relation(fields: [campaignId], references: [id])
+  importedBy   User                  @relation("ListImportUser", fields: [importedById], references: [id])
+  memberships  PersonListMembership[]
+
+  @@index([campaignId])
+  @@map("list_imports")
+}
+
+// ─── PersonListMembership ─────────────────────────────────────────────────────
+
+model PersonListMembership {
+  id            String                     @id @default(cuid())
+  personId      String
+  listImportId  String
+  campaignId    String
+  status        PersonListMembershipStatus
+  reviewReason  String?
+  createdAt     DateTime                   @default(now())
+
+  person      Person     @relation(fields: [personId], references: [id])
+  listImport  ListImport @relation(fields: [listImportId], references: [id])
+  campaign    Campaign   @relation(fields: [campaignId], references: [id])
+
+  @@unique([personId, listImportId])
+  @@index([listImportId])
+  @@index([campaignId])
+  @@map("person_list_memberships")
 }

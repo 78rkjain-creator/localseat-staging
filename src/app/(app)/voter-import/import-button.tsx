@@ -3,8 +3,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { VoterImportModal } from "./import-modal";
+import type { CustomFieldDef } from "@/lib/csv-import";
 
-export function ImportButton() {
+interface ImportButtonProps {
+  customFields?: CustomFieldDef[];
+}
+
+export function ImportButton({ customFields }: ImportButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -12,7 +17,7 @@ export function ImportButton() {
       <Button variant="primary" size="md" onClick={() => setOpen(true)}>
         Import CSV
       </Button>
-      <VoterImportModal open={open} onClose={() => setOpen(false)} />
+      <VoterImportModal open={open} onClose={() => setOpen(false)} customFields={customFields} />
     </>
   );
 }

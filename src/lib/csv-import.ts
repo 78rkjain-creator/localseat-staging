@@ -55,6 +55,8 @@ export interface ReviewRow {
   status: RowStatus;
   /** Name of the existing person this row likely duplicates, if detected. */
   duplicateOf?: string;
+  /** Custom field values keyed by field id, extracted from matching CSV columns. */
+  customFieldValues?: Record<string, string>;
 }
 
 // ── Parsing helpers ────────────────────────────────────────────────────────
@@ -95,7 +97,15 @@ export function getMissingFields(fields: RowFields): (keyof RowFields)[] {
   return MANDATORY_FIELDS.filter((f) => !fields[f].trim());
 }
 
-export function parseCsvToReviewRows(text: string): {
+export interface CustomFieldDef {
+  id: string;
+  label: string;
+}
+
+export function parseCsvToReviewRows(
+  text: string,
+  customFields?: CustomFieldDef[]
+): {
   rows: ReviewRow[];
   fileError: string | null;
 } {
@@ -110,6 +120,10 @@ export function parseCsvToReviewRows(text: string): {
   const headers = parseCsvLine(lines[0]).map(normaliseKey);
   const rows: ReviewRow[] = [];
   let id = 0;
+
+  // Build a lookup from normalised label → field id for custom fields
+  const customFieldMap: { normLabel: string; id: string }[] =
+    customFields?.map((f) => ({ normLabel: normaliseKey(f.label), id: f.id })) ?? [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -135,10 +149,21 @@ export function parseCsvToReviewRows(text: string): {
       pollNumber:   getField(raw, "pollnumber", "poll_number", "poll", "pollno", "poll_no"),
     };
 
+    // Extract custom field values by matching CSV header labels to field definitions
+    let customFieldValues: Record<string, string> | undefined;
+    if (customFieldMap.length > 0) {
+      const cfv: Record<string, string> = {};
+      for (const cf of customFieldMap) {
+        const val = raw[cf.normLabel];
+        if (val !== undefined && val !== "") cfv[cf.id] = val;
+      }
+      if (Object.keys(cfv).length > 0) customFieldValues = cfv;
+    }
+
     const missingOnParse = MANDATORY_FIELDS.filter((f) => !fields[f]);
     const status: RowStatus = missingOnParse.length === 0 ? "ready" : "flagged";
 
-    rows.push({ id: id++, originalRowNum: i + 1, fields, missingOnParse, status });
+    rows.push({ id: id++, originalRowNum: i + 1, fields, missingOnParse, status, customFieldValues });
   }
 
   if (rows.length === 0) {

@@ -11,7 +11,7 @@ import {
   FIELD_LABELS,
   MANDATORY_FIELDS,
 } from "@/lib/csv-import";
-import type { ReviewRow, RowFields, RowStatus } from "@/lib/csv-import";
+import type { ReviewRow, RowFields, RowStatus, CustomFieldDef } from "@/lib/csv-import";
 
 // ── Local constants ────────────────────────────────────────────────────────
 
@@ -28,13 +28,15 @@ type Step = "upload" | "review" | "done";
 interface VoterImportModalProps {
   open: boolean;
   onClose: () => void;
+  customFields?: CustomFieldDef[];
 }
 
-export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
+export function VoterImportModal({ open, onClose, customFields }: VoterImportModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
-  const [sourceDescription, setSourceDescription] = useState("");
-  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [listImportType, setListImportType] = useState<"list" | "official_voters_list" | "telephone_list">("list");
+  const [listName, setListName] = useState("");
+  const [listNameError, setListNameError] = useState<string | null>(null);
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -50,8 +52,9 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
   function handleClose() {
     if (fileRef.current) fileRef.current.value = "";
     setStep("upload");
-    setSourceDescription("");
-    setSourceError(null);
+    setListImportType("list");
+    setListName("");
+    setListNameError(null);
     setReviewRows([]);
     setFileError(null);
     setSubmitError(null);
@@ -64,12 +67,12 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     setFileError(null);
     setReviewRows([]);
 
-    if (!sourceDescription.trim()) {
-      setSourceError("Enter a source description before selecting a file.");
+    if ((listImportType === "list" || listImportType === "telephone_list") && !listName.trim()) {
+      setListNameError("Enter a list name before selecting a file.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
-    setSourceError(null);
+    setListNameError(null);
 
     if (!file) return;
 
@@ -83,7 +86,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     }
 
     const text = await file.text();
-    const { rows, fileError: err } = parseCsvToReviewRows(text);
+    const { rows, fileError: err } = parseCsvToReviewRows(text, customFields);
     if (err) { setFileError(err); return; }
 
     if (rows.length > 2000) {
@@ -107,6 +110,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         phoneMobile:  r.fields.phoneMobile,
         email:        r.fields.email,
         birthYear:    r.fields.birthYear,
+        pollNumber:   r.fields.pollNumber,
       }));
 
       const duplicates = await checkDuplicatesForImport(csvRows);
@@ -182,6 +186,8 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         phoneMobile:  r.fields.phoneMobile.trim(),
         email:        r.fields.email.trim(),
         birthYear:    r.fields.birthYear.trim(),
+        pollNumber:   r.fields.pollNumber.trim(),
+        customFieldValues: r.customFieldValues,
       }));
 
     if (toImport.length === 0) {
@@ -190,7 +196,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     }
 
     startSubmit(async () => {
-      const res = await importVoterRows(toImport, sourceDescription.trim());
+      const res = await importVoterRows(toImport, listImportType, listName.trim());
       if (res.error) {
         setSubmitError(res.error);
       } else {
@@ -244,26 +250,67 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
             </p>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">
-              Source description <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={sourceDescription}
-              onChange={(e) => { setSourceDescription(e.target.value); setSourceError(null); }}
-              placeholder="e.g. Rogers phone directory April 2026, 2022 municipal voter list"
-              className={[
-                "h-10 w-full rounded-xl border px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent",
-                sourceError ? "border-red-300 bg-red-50" : "border-slate-200",
-              ].join(" ")}
-            />
-            {sourceError && (
-              <p className="text-xs text-red-600">{sourceError}</p>
+          <div className="flex flex-col gap-3">
+            <label className="text-sm font-medium text-slate-700">List type</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setListImportType("list"); setListNameError(null); }}
+                className={[
+                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  listImportType === "list"
+                    ? "bg-orange-500 border-orange-500 text-white"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => { setListImportType("telephone_list"); setListNameError(null); }}
+                className={[
+                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  listImportType === "telephone_list"
+                    ? "bg-orange-500 border-orange-500 text-white"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                Telephone List
+              </button>
+              <button
+                type="button"
+                onClick={() => { setListImportType("official_voters_list"); setListNameError(null); }}
+                className={[
+                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  listImportType === "official_voters_list"
+                    ? "bg-orange-500 border-orange-500 text-white"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                Official Voters List
+              </button>
+            </div>
+
+            {(listImportType === "list" || listImportType === "telephone_list") && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">
+                  List name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={listName}
+                  onChange={(e) => { setListName(e.target.value); setListNameError(null); }}
+                  placeholder="e.g. Rogers directory Apr 2026"
+                  className={[
+                    "h-10 w-full rounded-xl border px-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent",
+                    listNameError ? "border-red-300 bg-red-50" : "border-slate-200",
+                  ].join(" ")}
+                />
+                {listNameError && (
+                  <p className="text-xs text-red-600">{listNameError}</p>
+                )}
+              </div>
             )}
-            <p className="text-xs text-slate-400">
-              Recorded against every imported record so you can trace where each entry came from.
-            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">

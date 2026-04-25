@@ -691,6 +691,10 @@ async function main() {
       isActive:      true,
       plan:          process.env.DEMO_MODE === "true" ? "demo" : "election",
       planActivated: true,
+      customFields: [
+        { id: "cf_2022_mun",  label: "2022 Municipal Election" },
+        { id: "cf_2025_prov", label: "2025 Provincial Election" },
+      ],
     },
   });
   console.log(`  ✓ Campaign: ${campaign.name}`);
@@ -859,16 +863,21 @@ async function main() {
     runningIdx += count;
   });
 
+  const CF_MUNICIPAL  = ["Voted", "Did not vote", "Unknown"] as const;
+  const CF_PROVINCIAL = ["Liberal", "Conservative", "NDP", "Green", "Unknown"] as const;
+  let cfGroupIdx = 0;
+
   const personRows: {
-    campaignId:    string;
-    householdId:   string;
-    firstName:     string;
-    lastName:      string;
-    pollNumber:    string;
-    importSource:  string;
-    supportLevel?: string;
-    phoneHome?:    string;
-    phoneMobile?:  string;
+    campaignId:         string;
+    householdId:        string;
+    firstName:          string;
+    lastName:           string;
+    pollNumber:         string;
+    importSource:       string;
+    supportLevel?:      string;
+    phoneHome?:         string;
+    phoneMobile?:       string;
+    customFieldValues?: Record<string, string>;
   }[] = [];
 
   households.forEach((hh, hhIdx) => {
@@ -886,6 +895,15 @@ async function main() {
       const sl   = supportLevel(pIdx);
       const ph   = phoneHome(pIdx);
       const pm   = phoneMobile(pIdx);
+      const isSelected = pIdx % 3 === 0;
+      const cfv: Record<string, string> | undefined = isSelected
+        ? {
+            cf_2022_mun:  CF_MUNICIPAL[cfGroupIdx % 3],
+            cf_2025_prov: CF_PROVINCIAL[cfGroupIdx % 5],
+          }
+        : undefined;
+      if (isSelected) cfGroupIdx++;
+
       personRows.push({
         campaignId:   campaign.id,
         householdId:  hh.id,
@@ -893,15 +911,17 @@ async function main() {
         lastName,
         pollNumber:   poll,
         importSource: "2022 Municipal Voter List",
-        ...(sl ? { supportLevel: sl } : {}),
-        ...(ph ? { phoneHome:    ph } : {}),
-        ...(pm ? { phoneMobile:  pm } : {}),
+        ...(sl  ? { supportLevel:      sl  } : {}),
+        ...(ph  ? { phoneHome:         ph  } : {}),
+        ...(pm  ? { phoneMobile:       pm  } : {}),
+        ...(cfv ? { customFieldValues: cfv } : {}),
       });
     }
   });
 
   await db.person.createMany({ data: personRows });
-  console.log(`  ✓ Placeholder voters: ${personRows.length}`);
+  const cfCount = personRows.filter((r) => r.customFieldValues !== undefined).length;
+  console.log(`  ✓ Placeholder voters: ${personRows.length} (${cfCount} with custom field values)`);
 
   // ── Walk lists, assignments, entries, canvass responses ───────────────────
   const NOTE_POOL = [

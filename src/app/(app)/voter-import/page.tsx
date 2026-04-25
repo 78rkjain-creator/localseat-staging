@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, canManageVoterList } from "@/lib/permissions";
 import { getVoterList, getCampaignTags } from "@/lib/people";
+import { db } from "@/lib/db";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,10 +32,17 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
   const canManage = canManageVoterList(activeRole as Role);
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
 
-  const [{ people, total, totalPages }, allTags] = await Promise.all([
+  const [{ people, total, totalPages }, allTags, campaignData, pendingReviewCount] = await Promise.all([
     getVoterList({ campaignId: activeCampaignId, q, street, tagId: tag, page }),
     getCampaignTags(activeCampaignId),
+    db.campaign.findUnique({ where: { id: activeCampaignId }, select: { customFields: true } }),
+    canManage
+      ? db.personListMembership.count({ where: { campaignId: activeCampaignId, status: "pending_review" } })
+      : Promise.resolve(0),
   ]);
+
+  type CampaignCustomField = { id: string; label: string };
+  const customFields = (campaignData?.customFields as CampaignCustomField[] | null) ?? [];
 
   const activeTag = allTags.find((t) => t.id === tag);
   const isFiltered = !!(q || street || tag);
@@ -86,7 +94,21 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
               </svg>
               Find duplicates
             </Link>
-            <ImportButton />
+            {pendingReviewCount > 0 && (
+              <Link
+                href="/voter-import/review"
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100 transition-colors shadow-sm"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                Review matches
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-amber-500 text-white text-xs font-bold">
+                  {pendingReviewCount}
+                </span>
+              </Link>
+            )}
+            <ImportButton customFields={customFields} />
           </div>
         )}
       </div>
@@ -129,7 +151,7 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
               ? "Import a CSV file to add voter records to this campaign."
               : "Voter records will appear here once data is imported."
           }
-          action={canManage && !isFiltered ? <ImportButton /> : undefined}
+          action={canManage && !isFiltered ? <ImportButton customFields={customFields} /> : undefined}
         />
       ) : (
         <>

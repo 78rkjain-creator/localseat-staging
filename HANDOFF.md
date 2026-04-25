@@ -256,6 +256,79 @@ Candidate
 
 ---
 
+## Session Log — April 24, 2026 (Auth Flow, Canvass Screen, Ward Boundary)
+
+### Auth flow fixes
+
+- `src/proxy.ts` — `skipVerificationCheck` now covers `onboarding/choose-plan` only (not all of `/onboarding`), so unverified users cannot access `/onboarding/create-campaign` before verifying their email
+- `src/proxy.ts` — `atCampaignGate` now includes `/verify-email/*` and `/resend-verification` so the `activeCampaignId` gate never fires on verification pages, preventing a redirect loop between `/verify-email/pending` and `/onboarding/create-campaign`
+- `src/proxy.ts` — `/onboarding/choose-plan` added to `atCampaignGate` so users can reach plan selection even if the session cookie hasn't fully propagated after campaign creation
+- `src/app/(auth)/verify-email/page.tsx` — post-verification redirect changed to `/login` for all cases (success and already_verified); removed `success_logged_out` status; updated heading copy to "Email verified / Your account is active. Taking you to sign in…"
+- `src/app/(auth)/verify-email/page.tsx` — removed unused `useRouter` and `session` references; `router.push` replaced with `window.location.href` throughout
+- `src/app/(auth)/verify-email/pending/page.tsx` — fixed blank screen: replaced `shadow-card` → `shadow-sm`, `shadow-soft` → `shadow-md`, `bg-brand-500` → `bg-orange-500`; updated copy and promoted "Resend verification email" to filled primary button; added amber spam warning box
+- `src/app/(auth)/verify-email/page.tsx` — fixed blank screen: same custom token replacements in `AuthCard`, `bg-brand-500`/`hover:bg-brand-600` → `bg-orange-500`/`hover:bg-orange-600` on buttons
+- `src/app/onboarding/create-campaign/page.tsx` — fixed blank screen: same custom token replacements; added 500ms delay after `session.update()` before `window.location.href` to allow JWT cookie to propagate before navigation
+
+### Correct registration flow (post-fix)
+
+```
+Register → /verify-email/pending
+Click verify link → /verify-email?token=… → /login
+Sign in → no campaign → /onboarding/create-campaign
+Create campaign → /onboarding/choose-plan
+Choose plan → /dashboard
+```
+
+### Canvassing script
+
+- `prisma/schema.prisma` — `canvassScript String?` added to Campaign model
+- Migration: `20260424182540_add_canvass_script`
+- `src/app/(app)/campaign-settings/script/page.tsx` — new settings page (candidate, campaign_manager, co_chair only)
+- `src/app/(app)/campaign-settings/script/ScriptFormClient.tsx` — client component, textarea + save/clear buttons
+- `src/app/(app)/campaign-settings/script/actions.ts` — `saveCanvassScript` server action
+- `src/components/layout/sidebar.tsx` — "Canvassing Script" admin item added (candidate/campaign_manager/co_chair only)
+- `src/app/(app)/canvassing/[listId]/canvass/page.tsx` — fetches and passes `canvassScript` to CanvassScreen
+- `src/app/(app)/canvassing/[listId]/canvass/canvass-screen.tsx` — collapsible "View script / Hide script" panel above support scale
+
+### Canvass screen behaviour redesign
+
+- `selectedPersonId` state separates "who the response is recorded for" (API call) from "which queue entry is marked done" (`savedSet`)
+- Resident queue rows are now tappable buttons — tap to select who you're speaking with at the door
+- Support scale levels 1/2 → Sign / Volunteer / Potential Donor chips (renamed from "Donate")
+- Support scale level 3 (Undecided) → Refused / Moved / Unavailable / Deceased immediate-save buttons via `handleQuickOutcomeSave`
+- Support scale levels 4/5 → Other Candidate toggle with inline competitor picker
+- "Other outcome" collapsible section removed entirely
+- Details panel simplified to notes + needs follow-up only
+- Inline "Add person at door" form removed (replaced by Add Resident modal)
+
+### Ward boundary improvements
+
+- `src/lib/ward.ts` — `isPointInWard` now accepts `Polygon | MultiPolygon`; MultiPolygon returns true if point is inside any component polygon
+- `src/app/(app)/campaign-settings/ward/actions.ts` — `saveWardBoundary` parameter widened to `Polygon | MultiPolygon`
+- `src/app/(app)/campaign-settings/ward/page.tsx`, `canvassing/[listId]/canvass/actions.ts`, `voter-import/actions.ts` — boundary casts updated to `Polygon | MultiPolygon`
+- `src/app/(app)/campaign-settings/ward/WardMapClient.tsx` — full rewrite:
+  - `getBoundsFromGeometry` helper handles both geometry types
+  - `loadGeometryOntoMap` splits MultiPolygon into individual Polygon features for MapboxGL Draw
+  - `evaluatePolygon` merges multiple draw features back into MultiPolygon
+  - GeoJSON file upload now accepts MultiPolygon and Feature\<MultiPolygon\>
+  - KMZ file upload via dynamically imported JSZip
+  - **Represent API boundary picker** — province → municipality → ward (multi-select checkboxes) → Load; all client-side, no API key required
+  - Multiple ward selection merges shapes into a single MultiPolygon via `Promise.all`
+  - Page layout order: Represent picker → divider → toolbar → instruction banner → map → file type note
+
+### Walk list / canvassing page fixes
+
+- Geocoding changed to parallel batch processing (10 concurrent, 600ms between batches)
+- Fire-and-forget geocoding triggered after list creation and when people are added
+- Walk list map: removed `geocodedCount < 2` hard block — map shows with whatever is geocoded; amber banner for ungeocoded addresses
+- Labels: "Draw turf" → "Create walk list from map", "Map view" → "View list on map", "New list" → "Create list from addresses"
+
+### Known issue added
+
+- `jszip` was installed directly on the demo server (`npm install jszip`) to support KMZ file upload — it needs to be added to `package.json` properly and committed so production builds include it. Currently only works on the demo server.
+
+---
+
 ## Session Log — April 23, 2026 (Mobile Nav, Canvass Screen, Voting History)
 
 **Commits: ba6c171, bdaaffd, 88ff1de, 05c43c3, ec6ba3e**
@@ -364,6 +437,7 @@ sentiment: {
 
 ## Known Issues / Technical Debt
 
+- `jszip` installed directly on demo server (`npm install jszip`) for KMZ upload support — must be added to `package.json` and committed before next production deploy or the KMZ upload button will silently fail in production
 - `as unknown as` casts in several files where Prisma client types are stale — resolves automatically on next `npx prisma generate` when dev server is not holding the DLL (Windows EPERM issue)
 - Voter list capped at 50 results — pagination is a follow-up item
 - `SUPPORT_LEVELS` and `handleNotHome` in `canvass-screen.tsx` are unused locals (TS6133 hints only, not errors) — kept intentionally per spec
@@ -460,6 +534,12 @@ sentiment: {
 | Voting history data model, import, and UI | Done |
 | Voters with history hero card metric | Done |
 | Municipal seed data | Done |
+| Canvassing script (settings page + canvass screen panel) | Done |
+| Ward boundary MultiPolygon support | Done |
+| Represent API ward boundary picker | Done |
+| Auth flow redirect loop fixes | Done |
+| Auth page blank screen fixes (custom Tailwind tokens) | Done |
+| Add jszip to package.json (KMZ upload — currently demo-server-only) | Pending |
 | Automated PostgreSQL backup to external storage (Backblaze B2 + rclone + cron) | Small |
 | Demo instance isolation — Option 3 (unique DB per visitor) | Large |
 
@@ -500,7 +580,7 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     /(auth)/login, /register, /verify-email, /resend-verification, /account-expired, /reset-password
     /(app)/dashboard, /voter-list, /voter-import, /canvassing, /follow-ups
              /outreach, /donors, /volunteers, /team, /campaigns, /account, /address-changes
-    /(app)/campaign-settings/ward, /campaign-settings/competitors
+    /(app)/campaign-settings/ward, /campaign-settings/competitors, /campaign-settings/script
     /admin/campaigns, /users, /audit-log, /export, /demo-leads, /account, /settings
     /admin/contact-submissions
     /onboarding/choose-plan, /create-campaign
@@ -515,7 +595,7 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
     offline-queue.ts, terms.ts, plan-limits.ts
     geocoding.ts, ward.ts, competitors.ts, dashboard.ts
   /components
-    /layout/sidebar.tsx (collapsible Admin section — Team, Address Changes, Ward Boundary, Competitors)
+    /layout/sidebar.tsx (collapsible Admin section — Team, Address Changes, Ward Boundary, Competitors, Canvassing Script)
     /ui/list-row.tsx (shared list row component — new April 22)
     /ui/badge.tsx (OutcomeBadge includes other_candidate)
     /ui/SyncStatusBar.tsx (replaced by inline offline pill on canvass screen)

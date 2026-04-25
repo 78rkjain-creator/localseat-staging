@@ -16,7 +16,7 @@ import { PeopleSearchBar } from "./search-bar";
 import { VoterListDateFilter } from "./filters-client";
 import type { Role, SupportLevel } from "@/types";
 
-export const metadata: Metadata = { title: "Voter List" };
+export const metadata: Metadata = { title: "Residents List" };
 
 type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
 type VotedInFilter = "municipal" | "provincial" | "federal";
@@ -102,7 +102,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Residents List</h1>
           <p className="text-slate-500 text-sm mt-0.5">
             {totalCount.toLocaleString()} total
             {isFiltered && people.length < totalCount && (

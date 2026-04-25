@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, isReadOnly } from "@/lib/permissions";
 import { getPersonDetail } from "@/lib/people";
+import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
@@ -13,8 +14,8 @@ import { PersonEditForm } from "./person-edit-form";
 import { AddressEditButton } from "./address-edit-button";
 import type { SupportLevel, CanvassOutcome, OutreachChannel } from "@/types";
 import { OUTREACH_CHANNEL_LABELS } from "@/types";
-import { getVotingRecordsForPerson, ELECTION_TYPE_LABELS } from "@/lib/voting-records";
-import type { VotingRecord } from "@/lib/voting-records";
+import { CustomFieldsEditor } from "./CustomFieldsEditor";
+import type { CustomField } from "./CustomFieldsEditor";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -36,17 +37,31 @@ export default async function PersonDetailPage({ params }: PageProps) {
   if (activeRole && !canViewAllPeople(activeRole as import("@/types").Role)) redirect("/dashboard");
   const readOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
 
-  const person = await getPersonDetail(personId, activeCampaignId);
+  const [person, campaign, listMemberships] = await Promise.all([
+    getPersonDetail(personId, activeCampaignId),
+    db.campaign.findUnique({
+      where: { id: activeCampaignId },
+      select: { customFields: true },
+    }),
+    db.personListMembership.findMany({
+      where: { personId, campaignId: activeCampaignId },
+      select: {
+        id: true,
+        status: true,
+        listImport: {
+          select: { id: true, name: true, importedAt: true, type: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
   if (!person) notFound();
 
-  const canSeeVotingHistory =
+  const canSeeCustomFields =
     activeRole === "candidate" ||
     activeRole === "campaign_manager" ||
-    activeRole === "co_chair";
-
-  const votingRecords = canSeeVotingHistory
-    ? await getVotingRecordsForPerson(personId, activeCampaignId)
-    : [];
+    activeRole === "co_chair" ||
+    activeRole === "field_organizer";
 
   const address = person.household?.address;
   const householdMembers = person.household?.people ?? [];
@@ -71,6 +86,18 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const latestCanvass = person.canvassResponses[0];
   const linkedDonor = person.linkedDonors[0] ?? null;
 
+  const customFieldDefs = (campaign?.customFields as CustomField[] | null) ?? [];
+  const customFieldValues = (person.customFieldValues as Record<string, string> | null) ?? {};
+
+  const residentListMemberships = listMemberships.filter(
+    (m) => m.listImport.type === "list" || m.listImport.type === "telephone_list"
+  );
+  const voterListMemberships = listMemberships.filter(
+    (m) =>
+      m.listImport.type === "official_voters_list" &&
+      (m.status === "matched" || m.status === "created" || m.status === "accepted")
+  );
+
   return (
     <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto">
       {/* Back link */}
@@ -81,7 +108,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        Voter List
+        Residents List
       </Link>
 
       {/* Person header */}
@@ -92,9 +119,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
           </span>
         </div>
         <div className="min-w-0 flex-1 pt-1">
-          <h1 className="text-2xl font-bold text-slate-900">
-            {person.firstName} {person.lastName}
-          </h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-900">
+              {person.firstName} {person.lastName}
+            </h1>
+            {person.isConfirmedVoter && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Confirmed voter
+              </span>
+            )}
+          </div>
           {address && (
             <p className="text-slate-500 mt-0.5">
               {address.streetNumber} {address.streetName}
@@ -262,7 +296,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* Right column: notes + timeline */}
+        {/* Right column: notes + list membership + timeline */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Notes */}
           <Card padding="md">
@@ -289,15 +323,62 @@ export default async function PersonDetailPage({ params }: PageProps) {
             {!readOnly && <AddNoteForm personId={person.id} />}
           </Card>
 
-          {/* Voting history */}
-          {canSeeVotingHistory && votingRecords.length > 0 && (
+          {/* Custom fields */}
+          {canSeeCustomFields && (
             <Card padding="md">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                Voting history
+                Custom fields
               </h2>
-              <VotingHistoryTable records={votingRecords} />
+              <CustomFieldsEditor
+                personId={person.id}
+                fields={customFieldDefs}
+                values={customFieldValues}
+                readOnly={readOnly}
+              />
             </Card>
           )}
+
+          {/* Residents List */}
+          <Card padding="md">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+              Residents List
+            </h2>
+            {residentListMemberships.length === 0 ? (
+              <p className="text-sm text-slate-400">No lists on record.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100">
+                {residentListMemberships.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                    <span className="text-sm text-slate-800">{m.listImport.name}</span>
+                    <span className="text-xs text-slate-400 flex-shrink-0 ml-4">
+                      {formatDate(new Date(m.listImport.importedAt))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Voter List */}
+          <Card padding="md">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+              Voter List
+            </h2>
+            {voterListMemberships.length === 0 ? (
+              <p className="text-sm text-slate-400">No voter list data uploaded yet.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100">
+                {voterListMemberships.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                    <span className="text-sm text-slate-800">{m.listImport.name}</span>
+                    <span className="text-xs text-slate-400 flex-shrink-0 ml-4">
+                      {formatDate(new Date(m.listImport.importedAt))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
           {/* Activity timeline */}
           <Card padding="md">
@@ -409,41 +490,6 @@ function OutreachTimelineItem({
       <p className="text-xs text-slate-400">
         {event.user ? `${event.user.firstName} ${event.user.lastName} · ` : ""}{formatDate(date)}
       </p>
-    </div>
-  );
-}
-
-function VotingHistoryTable({ records }: { records: VotingRecord[] }) {
-  return (
-    <div className="overflow-x-auto -mx-1">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-xs text-slate-400 font-medium">
-            <th className="text-left pb-2 pr-4">Year</th>
-            <th className="text-left pb-2 pr-4">Type</th>
-            <th className="text-left pb-2 pr-4">Election</th>
-            <th className="text-left pb-2 pr-4">Voted</th>
-            <th className="text-left pb-2">Party</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {records.map((r) => (
-            <tr key={r.id}>
-              <td className="py-2 pr-4 font-medium text-slate-800">{r.electionYear}</td>
-              <td className="py-2 pr-4 text-slate-600">{ELECTION_TYPE_LABELS[r.electionType]}</td>
-              <td className="py-2 pr-4 text-slate-500">{r.electionName ?? "—"}</td>
-              <td className="py-2 pr-4">
-                {r.participated ? (
-                  <span className="text-emerald-600 font-medium">Yes</span>
-                ) : (
-                  <span className="text-slate-400">No</span>
-                )}
-              </td>
-              <td className="py-2 text-slate-500">{r.partySupport ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

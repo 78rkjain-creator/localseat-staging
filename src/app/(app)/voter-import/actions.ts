@@ -10,6 +10,7 @@ import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
+import { normalizeFullAddress } from "@/lib/address-normalize";
 import { WardStatus } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
@@ -44,6 +45,8 @@ export interface VoterCsvRow {
   phoneMobile: string;  // empty string when absent
   email: string;        // empty string when absent
   birthYear: string;    // empty string when absent
+  pollNumber: string;   // empty string when absent
+  customFieldValues?: Record<string, string>;
 }
 
 export interface FlaggedRow {
@@ -63,6 +66,7 @@ export interface VoterImportResult {
   matched?: number;
   created?: number;
   skipped?: number;
+  reviewCount?: number;
   flaggedRows?: FlaggedRow[];
 }
 
@@ -154,8 +158,13 @@ export async function checkDuplicatesForImport(
 
 export async function importVoterRows(
   rows: VoterCsvRow[],
-  importSource: string
+  listImportType: "list" | "official_voters_list" | "telephone_list",
+  listName: string
 ): Promise<VoterImportResult> {
+  const importSource =
+    listImportType === "official_voters_list"
+      ? "Official Voters List"
+      : listName.trim() || "voter-list-import";
   const auth = await requireVoterListManager();
   if ("error" in auth) return auth;
   const { campaignId } = auth;
@@ -174,10 +183,10 @@ export async function importVoterRows(
     return { error: "This campaign has reached its constituent limit for the current plan. Upgrade to import more records." };
   }
 
-  // Fetch ward boundary once before the transaction — pure read, no need to be inside tx
+  // Fetch ward boundary and custom fields once before the transaction
   const campaign = await db.campaign.findUnique({
     where: { id: campaignId },
-    select: { wardBoundary: true },
+    select: { wardBoundary: true, customFields: true },
   });
 
   const wardBoundary: Polygon | MultiPolygon | null =
@@ -185,14 +194,35 @@ export async function importVoterRows(
       ? (campaign.wardBoundary as unknown as Polygon | MultiPolygon)
       : null;
 
+  // Build set of valid custom field ids to validate incoming values
+  type CampaignCustomField = { id: string; label: string };
+  const validCustomFieldIds = new Set<string>(
+    ((campaign?.customFields as CampaignCustomField[] | null) ?? []).map((f) => f.id)
+  );
+
   let matched = 0;
   let created = 0;
   let skipped = 0;
+  let reviewCount = 0;
   const flaggedRows: FlaggedRow[] = [];
   const newAddressIds: string[] = [];
+  let listImportId!: string;
 
   await db.$transaction(
     async (tx) => {
+      // Create the ListImport record first so we can link memberships to it.
+      const listImport = await tx.listImport.create({
+        data: {
+          campaignId,
+          name: listImportType === "official_voters_list" ? "Official Voters List" : listName.trim(),
+          type: listImportType,
+          importedById: auth.session.user.id,
+          totalRows: rows.length,
+        },
+        select: { id: true },
+      });
+      listImportId = listImport.id;
+
       for (const row of rows) {
         const firstName   = row.firstName.trim();
         const lastName    = row.lastName.trim();
@@ -206,10 +236,193 @@ export async function importVoterRows(
         const phoneMobile = sanitizePhone(row.phoneMobile);
         const email       = sanitizeEmail(row.email);
         const birthYear   = sanitizeBirthYear(row.birthYear);
+        const pollNumber  = row.pollNumber?.trim() || null;
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
           skipped++;
           continue;
+        }
+
+        // ── Official Voters List matching ─────────────────────────────────────
+        if (listImportType === "official_voters_list") {
+          // 1. Normalize name: join firstName+lastName, take first and last token
+          //    so "JOHN MICHAEL SMITH" → normFirst="john", normLast="smith"
+          const nameTokens = `${firstName} ${lastName}`.trim().split(/\s+/).filter(Boolean);
+          const normFirst = (nameTokens[0] ?? firstName).toLowerCase();
+          const normLast  = (nameTokens.length > 1 ? nameTokens[nameTokens.length - 1] : lastName).toLowerCase();
+
+          // 2. Normalize incoming address (strips units, expands abbreviations)
+          const incomingAddrKey = normalizeFullAddress(`${streetNumber} ${streetName}`, city);
+          const incomingUnit    = (unitNumber ?? "").toLowerCase().trim();
+
+          // 3a. Query candidates by name
+          const nameMatchRows = await tx.person.findMany({
+            where: {
+              campaignId,
+              deletedAt: null,
+              firstName: { equals: normFirst, mode: "insensitive" },
+              lastName:  { equals: normLast,  mode: "insensitive" },
+            },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              household: { select: { address: { select: { streetNumber: true, streetName: true, unitNumber: true, city: true } } } },
+            },
+          });
+
+          // 3b. Query candidates by street number + city as a pre-filter for address-only matches
+          const addrCandidateRows = await tx.person.findMany({
+            where: {
+              campaignId,
+              deletedAt: null,
+              household: {
+                address: {
+                  streetNumber: { equals: streetNumber, mode: "insensitive" },
+                  city:         { equals: city,         mode: "insensitive" },
+                },
+              },
+            },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              household: { select: { address: { select: { streetNumber: true, streetName: true, unitNumber: true, city: true } } } },
+            },
+          });
+
+          // 4. Classify — merge both result sets, deduplicate by id
+          const seen = new Set<string>();
+          const allCandidates = [...nameMatchRows, ...addrCandidateRows].filter((p) => {
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+          });
+
+          type MatchKind = "full" | "unit_mismatch" | "name_only" | "addr_only";
+          let bestKind: MatchKind | null = null;
+          let bestCandidateId: string | null = null;
+
+          for (const candidate of allCandidates) {
+            const addr = candidate.household?.address;
+            const candNormAddr = addr
+              ? normalizeFullAddress(`${addr.streetNumber} ${addr.streetName}`, addr.city)
+              : null;
+            const candUnit      = (addr?.unitNumber ?? "").toLowerCase().trim();
+            const candFirstNorm = candidate.firstName.toLowerCase();
+            const candLastNorm  = candidate.lastName.toLowerCase();
+
+            const nameMatch = candFirstNorm === normFirst && candLastNorm === normLast;
+            const addrMatch = candNormAddr !== null && candNormAddr === incomingAddrKey;
+            const unitMatch = candUnit === incomingUnit;
+
+            let kind: MatchKind | null = null;
+            if (nameMatch && addrMatch && unitMatch)  kind = "full";
+            else if (nameMatch && addrMatch)          kind = "unit_mismatch";
+            else if (nameMatch)                       kind = "name_only";
+            else if (addrMatch)                       kind = "addr_only";
+
+            // Prefer more specific matches (full > unit_mismatch > name_only / addr_only)
+            const priority: Record<MatchKind, number> = { full: 0, unit_mismatch: 1, name_only: 2, addr_only: 2 };
+            if (kind && (bestKind === null || priority[kind] < priority[bestKind])) {
+              bestKind = kind;
+              bestCandidateId = candidate.id;
+            }
+
+            if (bestKind === "full") break; // can't do better
+          }
+
+          if (bestKind === "full" && bestCandidateId) {
+            // Full match — confirm voter, no review needed
+            matched++;
+            await tx.person.update({ where: { id: bestCandidateId }, data: { isConfirmedVoter: true, ...(pollNumber ? { pollNumber } : {}) } });
+            await tx.personListMembership.create({
+              data: { personId: bestCandidateId, listImportId, campaignId, status: "matched" },
+            });
+
+          } else if (bestKind !== null && bestCandidateId) {
+            // Partial match — flag for review with reason
+            reviewCount++;
+            const reviewReason =
+              bestKind === "unit_mismatch" ? "Same address, different unit" :
+              bestKind === "name_only"     ? "Name matches, address differs" :
+                                             "Address matches, name differs";
+            await tx.personListMembership.create({
+              data: { personId: bestCandidateId, listImportId, campaignId, status: "pending_review", reviewReason },
+            });
+
+          } else {
+            // No match anywhere — create a new confirmed-voter record
+            const existingOvlAddress = await tx.address.findFirst({
+              where: {
+                campaignId,
+                deletedAt: null,
+                streetNumber: { equals: streetNumber, mode: "insensitive" },
+                streetName:   { equals: streetName,   mode: "insensitive" },
+                unitNumber:   unitNumber ? { equals: unitNumber, mode: "insensitive" } : null,
+                postalCode:   { equals: postalCode,   mode: "insensitive" },
+              },
+              select: { id: true },
+            });
+
+            let ovlAddressId: string;
+            if (existingOvlAddress) {
+              ovlAddressId = existingOvlAddress.id;
+            } else {
+              const newAddr = await tx.address.create({
+                data: { campaignId, streetNumber, streetName, unitNumber, city, province, postalCode },
+                select: { id: true },
+              });
+              ovlAddressId = newAddr.id;
+              newAddressIds.push(ovlAddressId);
+            }
+
+            let ovlHousehold = await tx.household.findFirst({
+              where: { campaignId, addressId: ovlAddressId, deletedAt: null },
+              select: { id: true },
+            });
+            if (!ovlHousehold) {
+              ovlHousehold = await tx.household.create({
+                data: { campaignId, addressId: ovlAddressId },
+                select: { id: true },
+              });
+            }
+
+            const sanitisedCfv: Record<string, string> | null = (() => {
+              const incoming = row.customFieldValues;
+              if (!incoming || validCustomFieldIds.size === 0) return null;
+              const safe: Record<string, string> = {};
+              for (const [k, v] of Object.entries(incoming)) {
+                if (validCustomFieldIds.has(k) && v.trim()) safe[k] = v.trim();
+              }
+              return Object.keys(safe).length > 0 ? safe : null;
+            })();
+
+            const ovlPerson = await tx.person.create({
+              data: {
+                campaignId,
+                householdId:      ovlHousehold.id,
+                firstName,
+                lastName,
+                phoneHome:        phoneHome   ?? undefined,
+                phoneMobile:      phoneMobile ?? undefined,
+                email:            email       ?? undefined,
+                birthYear:        birthYear   ?? undefined,
+                importSource:     "Official Voters List",
+                isConfirmedVoter: true,
+                pollNumber:       pollNumber ?? undefined,
+                ...(sanitisedCfv ? { customFieldValues: sanitisedCfv } : {}),
+              },
+              select: { id: true },
+            });
+
+            await tx.personListMembership.create({
+              data: { personId: ovlPerson.id, listImportId, campaignId, status: "created" },
+            });
+            created++;
+          }
+
+          continue; // skip regular-list logic below
         }
 
         // 1. Try to match an existing person by name + address
@@ -235,6 +448,14 @@ export async function importVoterRows(
 
         if (existingPerson) {
           matched++;
+          await tx.personListMembership.create({
+            data: {
+              personId:     existingPerson.id,
+              listImportId: listImportId,
+              campaignId,
+              status:       "matched",
+            },
+          });
           continue;
         }
 
@@ -312,7 +533,18 @@ export async function importVoterRows(
         }
 
         // 4. Create person
-        await tx.person.create({
+        // Filter incoming custom field values to only known field ids
+        const sanitisedCustomFieldValues: Record<string, string> | null = (() => {
+          const incoming = row.customFieldValues;
+          if (!incoming || validCustomFieldIds.size === 0) return null;
+          const safe: Record<string, string> = {};
+          for (const [k, v] of Object.entries(incoming)) {
+            if (validCustomFieldIds.has(k) && v.trim()) safe[k] = v.trim();
+          }
+          return Object.keys(safe).length > 0 ? safe : null;
+        })();
+
+        const newPerson = await tx.person.create({
           data: {
             campaignId,
             householdId: household.id,
@@ -324,6 +556,18 @@ export async function importVoterRows(
             birthYear:    birthYear ?? undefined,
             importSource: importSource.trim() || "voter-list-import",
             wardStatus,
+            pollNumber:   pollNumber ?? undefined,
+            ...(sanitisedCustomFieldValues ? { customFieldValues: sanitisedCustomFieldValues } : {}),
+          },
+          select: { id: true },
+        });
+
+        await tx.personListMembership.create({
+          data: {
+            personId:     newPerson.id,
+            listImportId: listImportId,
+            campaignId,
+            status:       "created",
           },
         });
 
@@ -332,6 +576,12 @@ export async function importVoterRows(
     },
     { timeout: 60_000 }
   );
+
+  // Update ListImport with final row counts
+  await db.listImport.update({
+    where: { id: listImportId },
+    data: { matchedCount: matched, newCount: created, reviewCount },
+  });
 
   // Fire and forget — geocode newly created addresses in the background
   if (newAddressIds.length > 0) {
@@ -350,7 +600,7 @@ export async function importVoterRows(
     });
   }
 
-  return { matched, created, skipped, flaggedRows };
+  return { matched, created, skipped, reviewCount, flaggedRows };
 }
 
 // ── mergePersons ──────────────────────────────────────────────────────────
