@@ -85,7 +85,7 @@ export function canViewDonorAmounts(role: Role): boolean {
 
 // Creating, editing, and deleting walk lists.
 export function canManageWalkLists(role: Role): boolean {
-  return FIELD_AND_ABOVE.includes(role);
+  return FIELD_AND_ABOVE.includes(role) || role === Role.volunteer_coordinator || role === Role.co_chair;
 }
 
 // Assigning canvassers to lists (field organizer and above).
