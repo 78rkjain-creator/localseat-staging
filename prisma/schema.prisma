@@ -17,6 +17,7 @@ enum Role {
   canvasser
   volunteer_coordinator
   finance_lead
+  sign_installer
 }
 
 enum SupportLevel {
@@ -72,6 +73,21 @@ enum ElectionType {
   federal
   provincial
   municipal
+}
+
+enum SignStatus {
+  to_be_installed
+  installed
+}
+
+enum TaskType {
+  general
+  volunteer_follow_up
+}
+
+enum SignLocationType {
+  residential
+  non_residential
 }
 
 enum ListImportType {
@@ -132,6 +148,7 @@ model Campaign {
   voterChangeRequests   VoterChangeRequest[]
   listImports           ListImport[]
   personListMemberships PersonListMembership[]
+  signs                 Sign[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -174,6 +191,8 @@ model User {
   submittedVoterChanges VoterChangeRequest[]   @relation("VoterChangeSubmitter")
   reviewedVoterChanges  VoterChangeRequest[]   @relation("VoterChangeReviewer")
   listImports           ListImport[]           @relation("ListImportUser")
+  signsAdded            Sign[]                 @relation("SignsAdded")
+  signsInstalled        Sign[]                 @relation("SignsInstalled")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -219,6 +238,7 @@ model Address {
 
   campaign   Campaign    @relation(fields: [campaignId], references: [id])
   households Household[]
+  signs      Sign[]
 
   @@map("addresses")
 }
@@ -341,6 +361,7 @@ model Task {
   campaignId  String
   personId    String?
   assignedTo  String?
+  type        TaskType  @default(general)
   title       String
   notes       String?
   dueDate     DateTime?
@@ -724,6 +745,33 @@ model CampaignCompetitor {
   @@index([campaignId])
   @@index([deletedAt])
   @@map("campaign_competitors")
+}
+
+// ─── Sign ─────────────────────────────────────────────────────────────────────
+
+model Sign {
+  id             String          @id @default(cuid())
+  campaignId     String
+  status         SignStatus      @default(to_be_installed)
+  locationType   SignLocationType
+  addressId      String?
+  locationText   String?
+  notes          String?
+  addedById      String
+  installedById  String?
+  installedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  address     Address? @relation(fields: [addressId], references: [id])
+  addedBy     User     @relation("SignsAdded", fields: [addedById], references: [id])
+  installedBy User?    @relation("SignsInstalled", fields: [installedById], references: [id])
+
+  @@index([campaignId])
+  @@index([deletedAt])
+  @@map("signs")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

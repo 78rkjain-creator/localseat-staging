@@ -3,14 +3,15 @@ import { Role } from "@prisma/client";
 // ── Role hierarchy ────────────────────────────────────────────────────────────
 //
 // Strict top-down hierarchy. Every role inherits all permissions of the roles
-// below it. Roles outside the active hierarchy (co_chair, finance_lead) receive
-// the lowest rank and no explicit permissions.
+// below it. Roles outside the active hierarchy (co_chair, finance_lead,
+// sign_installer) receive the lowest rank and no explicit permissions.
 //
 //   candidate (100)
 //     └─ campaign_manager (90)
 //          └─ field_organizer (70)
 //               └─ volunteer_coordinator (60)
 //                    └─ canvasser (10)
+//                         └─ sign_installer (3) — signs section only
 
 const ROLE_RANK: Record<Role, number> = {
   candidate:            100,
@@ -21,6 +22,7 @@ const ROLE_RANK: Record<Role, number> = {
   // Outside the active hierarchy — no operational permissions granted
   co_chair:               5,
   finance_lead:           5,
+  sign_installer:         3,
 };
 
 // Returns true if role is at least as privileged as the minimum threshold.
@@ -158,14 +160,26 @@ export function canExportData(role: Role): boolean {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-// All roles at or above canvasser, plus co_chair and finance_lead (who have rank
-// below canvasser but still need dashboard access for their respective views).
+// All roles at or above canvasser, plus co_chair, finance_lead, and sign_installer.
 export function canViewDashboard(role: Role): boolean {
   return (
     ROLE_RANK[role] >= ROLE_RANK[Role.canvasser] ||
     role === Role.co_chair ||
-    role === Role.finance_lead
+    role === Role.finance_lead ||
+    role === Role.sign_installer
   );
+}
+
+// ── Signs ─────────────────────────────────────────────────────────────────────
+
+// All campaign members can view signs.
+export function canViewSigns(role: Role): boolean {
+  return true;
+}
+
+// All roles except co_chair (read-only) can manage signs.
+export function canManageSigns(role: Role): boolean {
+  return role !== Role.co_chair;
 }
 
 // ── Special flags ─────────────────────────────────────────────────────────────

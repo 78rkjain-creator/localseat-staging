@@ -138,7 +138,7 @@ export async function saveCanvassResponse(
     console.error("[saveCanvassResponse] Failed to auto-log outreach entry:", err);
   }
 
-  // Auto-create volunteer record when volunteer interest is flagged (idempotent)
+  // Auto-create/update volunteer record when volunteer interest is flagged
   if (isContacted && input.volunteerInterest) {
     try {
       await db.volunteerRecord.upsert({
@@ -149,10 +149,60 @@ export async function saveCanvassResponse(
           status: "interested",
           notes: noteText,
         },
-        update: {},
+        // If a record exists, bump status back to interested and refresh notes/timestamp
+        update: {
+          status: "interested",
+          updatedAt: new Date(),
+          ...(noteText ? { notes: noteText } : {}),
+        },
       });
     } catch (err) {
-      console.error("[saveCanvassResponse] Failed to create volunteer record:", err);
+      console.error("[saveCanvassResponse] Failed to upsert volunteer record:", err);
+    }
+
+    // Auto-create a volunteer_follow_up task if none is already pending for this person
+    try {
+      const existingTask = await db.task.findFirst({
+        where: {
+          campaignId: activeCampaignId,
+          personId: input.personId,
+          type: "volunteer_follow_up",
+          completed: false,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!existingTask) {
+        // Find the best person to assign: first active field organizer, else campaign manager, else candidate
+        const assignee = await (async () => {
+          for (const role of ["field_organizer", "campaign_manager", "candidate"] as const) {
+            const membership = await db.campaignMembership.findFirst({
+              where: { campaignId: activeCampaignId, role, deletedAt: null, user: { isActive: true } },
+              select: { userId: true },
+              orderBy: { createdAt: "asc" },
+            });
+            if (membership) return membership.userId;
+          }
+          return null;
+        })();
+
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 3);
+
+        await db.task.create({
+          data: {
+            campaignId: activeCampaignId,
+            personId: input.personId,
+            type: "volunteer_follow_up",
+            assignedTo: assignee,
+            title: `Follow up with volunteer: ${person.firstName} ${person.lastName}`,
+            dueDate,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[saveCanvassResponse] Failed to create volunteer follow-up task:", err);
     }
   }
 

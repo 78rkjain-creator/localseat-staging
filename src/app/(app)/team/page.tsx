@@ -46,6 +46,7 @@ const ROLE_ORDER: Role[] = [
   "field_organizer",
   "volunteer_coordinator",
   "canvasser",
+  "sign_installer",
   "finance_lead",
 ];
 
@@ -54,6 +55,7 @@ const ALL_ASSIGNABLE_ROLES: Role[] = [
   "field_organizer",
   "volunteer_coordinator",
   "canvasser",
+  "sign_installer",
   "finance_lead",
 ];
 
@@ -66,6 +68,7 @@ const ROLE_BADGE: Record<Role, string> = {
   field_organizer:       "bg-emerald-50 text-emerald-700 border-emerald-200",
   volunteer_coordinator: "bg-teal-50 text-teal-700 border-teal-200",
   canvasser:             "bg-sky-50 text-sky-700 border-sky-200",
+  sign_installer:        "bg-orange-50 text-orange-700 border-orange-200",
   finance_lead:          "bg-amber-50 text-amber-700 border-amber-200",
 };
 
@@ -95,9 +98,11 @@ export default function TeamPage() {
   const viewerIsCandidate = activeRole === "candidate";
   const isFieldOrganizer = activeRole === "field_organizer";
 
-  // candidate sees all roles; campaign_manager sees all except candidate
+  // candidate sees all roles; field_organizer limited to canvasser/sign_installer; campaign_manager sees all except candidate
   const dropdownRoles: Role[] = viewerIsCandidate
     ? ROLE_ORDER
+    : isFieldOrganizer
+    ? (["canvasser", "sign_installer"] as Role[])
     : ROLE_ORDER.filter((r) => r !== "candidate");
 
   // roles usable in the "add member" form — never includes candidate
@@ -218,6 +223,7 @@ export default function TeamPage() {
               isCurrentUser={m.user.id === currentUserId}
               canManage={canManage}
               viewerIsCandidate={viewerIsCandidate}
+              isFieldOrganizer={isFieldOrganizer}
               dropdownRoles={dropdownRoles}
               currentCandidateMembershipId={candidateMember?.membershipId}
               currentCandidateName={
@@ -396,11 +402,14 @@ function AddMemberForm({
 
 // ── Member row ────────────────────────────────────────────────────────────────
 
+const FIELD_ORG_EDITABLE_ROLES: Role[] = ["canvasser", "sign_installer"];
+
 function MemberRow({
   member,
   isCurrentUser,
   canManage,
   viewerIsCandidate,
+  isFieldOrganizer,
   dropdownRoles,
   currentCandidateMembershipId,
   currentCandidateName,
@@ -410,6 +419,7 @@ function MemberRow({
   isCurrentUser: boolean;
   canManage: boolean;
   viewerIsCandidate: boolean;
+  isFieldOrganizer: boolean;
   dropdownRoles: Role[];
   currentCandidateMembershipId: string | undefined;
   currentCandidateName: string | undefined;
@@ -417,10 +427,13 @@ function MemberRow({
 }) {
   const memberIsCandidate = member.role === "candidate";
 
-  // candidate can edit any non-self row; campaign_manager can edit non-candidate non-self rows
+  // candidate can edit any non-self row; campaign_manager can edit non-candidate non-self rows;
+  // field_organizer can only edit canvasser and sign_installer rows
   const canEdit =
     !isCurrentUser &&
-    (viewerIsCandidate || (canManage && !memberIsCandidate));
+    (viewerIsCandidate ||
+      (canManage && !memberIsCandidate) ||
+      (isFieldOrganizer && FIELD_ORG_EDITABLE_ROLES.includes(member.role)));
 
   const canRemove = canManage && !memberIsCandidate && !isCurrentUser;
 

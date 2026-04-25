@@ -8,7 +8,8 @@ export type Role =
   | "field_organizer"
   | "canvasser"
   | "volunteer_coordinator"
-  | "finance_lead";
+  | "finance_lead"
+  | "sign_installer";
 
 export type SupportLevel =
   | "strong_yes"
@@ -74,6 +75,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   canvasser: "Canvasser",
   volunteer_coordinator: "Volunteer Coordinator",
   finance_lead: "Finance Lead",
+  sign_installer: "Sign Installer",
 };
 
 export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {

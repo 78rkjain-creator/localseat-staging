@@ -21,6 +21,17 @@ const CANVASSER_ALLOW_PREFIXES = [
   "/api/auth",       // NextAuth internal routes (session refresh, signout, etc.)
 ];
 
+// Sign installers can only access the Signs section and account management.
+const SIGN_INSTALLER_ALLOW_PREFIXES = [
+  "/signs",
+  "/dashboard",
+  "/select-campaign",
+  "/onboarding",
+  "/account",
+  "/verify-email",
+  "/api/auth",
+];
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -58,6 +69,16 @@ export default withAuth(
       );
       if (!allowed) {
         return redirect("/canvassing");
+      }
+    }
+
+    // Sign installer deny-list — redirect to /signs for any disallowed route.
+    if (token.activeRole === "sign_installer") {
+      const allowed = SIGN_INSTALLER_ALLOW_PREFIXES.some((prefix) =>
+        pathname.startsWith(prefix)
+      );
+      if (!allowed) {
+        return redirect("/signs");
       }
     }
 

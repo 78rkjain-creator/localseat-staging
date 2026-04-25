@@ -12,7 +12,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel, SignStatus, SignLocationType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -821,19 +821,21 @@ async function main() {
     kevinLafleur,
     amyZhang,
     tomOkonkwo,
+    mikeDavidson,
   ] = await Promise.all([
-    db.user.create({ data: { email: "alex.chen@example.com",    passwordHash: HASH, firstName: "Alex",   lastName: "Chen",     phoneHome: "613-555-0100", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "maria.santos@example.com", passwordHash: HASH, firstName: "Maria",  lastName: "Santos",   phoneHome: "613-555-0101", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "james.okafor@example.com", passwordHash: HASH, firstName: "James",  lastName: "Okafor",   phoneHome: "613-555-0102", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "sarah.kim@example.com",    passwordHash: HASH, firstName: "Sarah",  lastName: "Kim",      phoneHome: "613-555-0103", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "claire.morgan@example.com",passwordHash: HASH, firstName: "Claire", lastName: "Morgan",   phoneHome: "613-555-0104", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "robert.bell@example.com",  passwordHash: HASH, firstName: "Robert", lastName: "Bell",     phoneHome: "613-555-0105", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "dan.wu@example.com",       passwordHash: HASH, firstName: "Dan",    lastName: "Wu",       phoneHome: "613-555-0106", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "sara.bishop@example.com",  passwordHash: HASH, firstName: "Sara",   lastName: "Bishop",   phoneHome: "613-555-0107", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "priya.nair@example.com",   passwordHash: HASH, firstName: "Priya",  lastName: "Nair",     phoneHome: "613-555-0108", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "kevin.lafleur@example.com",passwordHash: HASH, firstName: "Kevin",  lastName: "Lafleur",  phoneHome: "613-555-0109", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "amy.zhang@example.com",    passwordHash: HASH, firstName: "Amy",    lastName: "Zhang",    phoneHome: "613-555-0110", emailVerified: VERIFIED } }),
-    db.user.create({ data: { email: "tom.okonkwo@example.com",  passwordHash: HASH, firstName: "Tom",    lastName: "Okonkwo",  phoneHome: "613-555-0111", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "alex.chen@example.com",      passwordHash: HASH, firstName: "Alex",   lastName: "Chen",     phoneHome: "613-555-0100", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "maria.santos@example.com",   passwordHash: HASH, firstName: "Maria",  lastName: "Santos",   phoneHome: "613-555-0101", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "james.okafor@example.com",   passwordHash: HASH, firstName: "James",  lastName: "Okafor",   phoneHome: "613-555-0102", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "sarah.kim@example.com",      passwordHash: HASH, firstName: "Sarah",  lastName: "Kim",      phoneHome: "613-555-0103", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "claire.morgan@example.com",  passwordHash: HASH, firstName: "Claire", lastName: "Morgan",   phoneHome: "613-555-0104", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "robert.bell@example.com",    passwordHash: HASH, firstName: "Robert", lastName: "Bell",     phoneHome: "613-555-0105", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "dan.wu@example.com",         passwordHash: HASH, firstName: "Dan",    lastName: "Wu",       phoneHome: "613-555-0106", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "sara.bishop@example.com",    passwordHash: HASH, firstName: "Sara",   lastName: "Bishop",   phoneHome: "613-555-0107", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "priya.nair@example.com",     passwordHash: HASH, firstName: "Priya",  lastName: "Nair",     phoneHome: "613-555-0108", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "kevin.lafleur@example.com",  passwordHash: HASH, firstName: "Kevin",  lastName: "Lafleur",  phoneHome: "613-555-0109", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "amy.zhang@example.com",      passwordHash: HASH, firstName: "Amy",    lastName: "Zhang",    phoneHome: "613-555-0110", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "tom.okonkwo@example.com",    passwordHash: HASH, firstName: "Tom",    lastName: "Okonkwo",  phoneHome: "613-555-0111", emailVerified: VERIFIED } }),
+    db.user.create({ data: { email: "mike.davidson@example.com",  passwordHash: HASH, firstName: "Mike",   lastName: "Davidson", phoneHome: "613-555-0112", emailVerified: VERIFIED } }),
   ]);
 
   await db.user.upsert({
@@ -847,7 +849,7 @@ async function main() {
     create: { email: "demo@localseat.io", passwordHash: HASH, firstName: "Demo", lastName: "Login", isActive: true, emailVerified: VERIFIED },
     update: { passwordHash: HASH, emailVerified: VERIFIED },
   });
-  console.log("  ✓ Users: 14 (including platform superuser and demo account)");
+  console.log("  ✓ Users: 15 (including platform superuser, demo account, and sign installer)");
 
   // ── Campaign memberships ──────────────────────────────────────────────────
   await db.campaignMembership.createMany({
@@ -864,10 +866,11 @@ async function main() {
       { userId: kevinLafleur.id, campaignId: campaign.id, role: "canvasser"             },
       { userId: amyZhang.id,     campaignId: campaign.id, role: "canvasser"             },
       { userId: tomOkonkwo.id,   campaignId: campaign.id, role: "canvasser"             },
+      { userId: mikeDavidson.id, campaignId: campaign.id, role: "sign_installer"        },
       { userId: demoUser.id,     campaignId: campaign.id, role: "candidate"             },
     ],
   });
-  console.log("  ✓ Campaign memberships: 13");
+  console.log("  ✓ Campaign memberships: 14");
 
   // ── Tags ──────────────────────────────────────────────────────────────────
   await db.tag.createMany({
@@ -1680,6 +1683,85 @@ async function main() {
   });
   console.log("  ✓ Address change requests: 3 pending");
 
+  // ── Signs ─────────────────────────────────────────────────────────────────
+  // Fetch a handful of residential addresses to link to.
+  const signAddresses = await db.address.findMany({
+    where: { campaignId: campaign.id },
+    take: 5,
+    orderBy: { createdAt: "asc" },
+  });
+
+  const installedAt1 = new Date(nowMs - 5 * 24 * 60 * 60 * 1000);
+  const installedAt2 = new Date(nowMs - 3 * 24 * 60 * 60 * 1000);
+  const installedAt3 = new Date(nowMs - 1 * 24 * 60 * 60 * 1000);
+  const installedAt4 = new Date(nowMs - 2 * 24 * 60 * 60 * 1000);
+
+  await db.sign.createMany({
+    data: [
+      // Residential — to be installed (5)
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.residential, addressId: signAddresses[0]?.id, addedById: mariaSantos.id },
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.residential, addressId: signAddresses[1]?.id, addedById: jamesOkafor.id },
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.residential, addressId: signAddresses[2]?.id, addedById: mariaSantos.id, notes: "Resident requested large sign" },
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.residential, addressId: signAddresses[3]?.id, addedById: sarahKim.id },
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.residential, addressId: signAddresses[4]?.id, addedById: jamesOkafor.id, notes: "Near school — confirm placement rules" },
+      // Non-residential — to be installed (1)
+      { campaignId: campaign.id, status: SignStatus.to_be_installed, locationType: SignLocationType.non_residential, locationText: "Corner of 10th St E and Highway 26", addedById: mariaSantos.id },
+      // Residential — installed (2)
+      { campaignId: campaign.id, status: SignStatus.installed, locationType: SignLocationType.residential, addressId: signAddresses[0]?.id, addedById: mariaSantos.id, installedById: mikeDavidson.id, installedAt: installedAt1, notes: "Standard yard sign" },
+      { campaignId: campaign.id, status: SignStatus.installed, locationType: SignLocationType.residential, addressId: signAddresses[1]?.id, addedById: jamesOkafor.id, installedById: mikeDavidson.id, installedAt: installedAt3 },
+      // Non-residential — installed (2)
+      { campaignId: campaign.id, status: SignStatus.installed, locationType: SignLocationType.non_residential, locationText: "Owen Sound Farmers Market entrance", addedById: alexChen.id, installedById: mikeDavidson.id, installedAt: installedAt2 },
+      { campaignId: campaign.id, status: SignStatus.installed, locationType: SignLocationType.non_residential, locationText: "Inglis Falls Road near Conservation Area", addedById: mariaSantos.id, installedById: mikeDavidson.id, installedAt: installedAt4, notes: "Large format sign approved by property owner" },
+    ],
+  });
+  console.log("  ✓ Signs: 10 (6 to_be_installed, 4 installed)");
+
+  // ── Volunteer follow-up tasks ─────────────────────────────────────────────
+  // 3 open volunteer_follow_up tasks assigned to the field organizer, linked
+  // to distinct persons who haven't been used in the general follow-up queue.
+  const volFollowUpPersons = await db.person.findMany({
+    where: { campaignId: campaign.id },
+    take: 3,
+    skip: 120,
+  });
+
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+  const FOUR_DAYS_MS  = 4 * 24 * 60 * 60 * 1000;
+  const FIVE_DAYS_MS  = 5 * 24 * 60 * 60 * 1000;
+
+  await db.task.createMany({
+    data: [
+      {
+        campaignId: campaign.id,
+        personId:   volFollowUpPersons[0].id,
+        type:       "volunteer_follow_up",
+        assignedTo: jamesOkafor.id,
+        title:      `Follow up with volunteer: ${volFollowUpPersons[0].firstName} ${volFollowUpPersons[0].lastName}`,
+        notes:      "Flagged by Priya Nair\n\nInterested in canvassing on weekends.",
+        dueDate:    new Date(nowMs + THREE_DAYS_MS),
+      },
+      {
+        campaignId: campaign.id,
+        personId:   volFollowUpPersons[1].id,
+        type:       "volunteer_follow_up",
+        assignedTo: jamesOkafor.id,
+        title:      `Follow up with volunteer: ${volFollowUpPersons[1].firstName} ${volFollowUpPersons[1].lastName}`,
+        notes:      "Flagged by Kevin Lafleur\n\nCan help with sign installation.",
+        dueDate:    new Date(nowMs + FOUR_DAYS_MS),
+      },
+      {
+        campaignId: campaign.id,
+        personId:   volFollowUpPersons[2].id,
+        type:       "volunteer_follow_up",
+        assignedTo: jamesOkafor.id,
+        title:      `Follow up with volunteer: ${volFollowUpPersons[2].firstName} ${volFollowUpPersons[2].lastName}`,
+        notes:      "Flagged by Amy Zhang",
+        dueDate:    new Date(nowMs + FIVE_DAYS_MS),
+      },
+    ],
+  });
+  console.log("  ✓ Volunteer follow-up tasks: 3 open (assigned to field organizer)");
+
   console.log("\n✅ Foundation seed complete.\n");
   console.log("Test credentials (all passwords: 'password'):");
   console.log("  demo_entry            → demo@localseat.io");
@@ -1696,6 +1778,7 @@ async function main() {
   console.log("  canvasser             → kevin.lafleur@example.com");
   console.log("  canvasser             → amy.zhang@example.com");
   console.log("  canvasser             → tom.okonkwo@example.com");
+  console.log("  sign_installer        → mike.davidson@example.com");
 
   // ── Platform Settings ─────────────────────────────────────────────────────
   const SETTINGS: { key: string; value: string }[] = [

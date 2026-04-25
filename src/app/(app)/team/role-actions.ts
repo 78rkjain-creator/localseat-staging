@@ -25,8 +25,11 @@ export async function changeUserRole(
 
   if (!activeCampaignId) return { error: "No active campaign." };
 
+  const isFieldOrg = activeRole === Role.field_organizer;
   const callerCanManage =
-    canManageRolesExceptCandidate(activeRole as Role) || isSuperUser(platformRole);
+    canManageRolesExceptCandidate(activeRole as Role) ||
+    isSuperUser(platformRole) ||
+    isFieldOrg;
   if (!callerCanManage) return { error: "Insufficient permissions." };
 
   // campaign_manager cannot assign the candidate role — only candidate/super_user can
@@ -34,6 +37,12 @@ export async function changeUserRole(
     canManageRoles(activeRole as Role) || isSuperUser(platformRole);
   if (newRole === Role.candidate && !callerCanAssignCandidate) {
     return { error: "Only the candidate may assign the candidate role." };
+  }
+
+  // field_organizer can only assign canvasser or sign_installer
+  const FIELD_ORG_ALLOWED_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
+  if (isFieldOrg && !FIELD_ORG_ALLOWED_ROLES.includes(newRole)) {
+    return { error: "Field organizers can only assign canvasser or sign installer roles." };
   }
 
   // Verify the target membership belongs to the caller's campaign
@@ -46,6 +55,11 @@ export async function changeUserRole(
   // Prevent changing your own role
   if (membership.userId === session.user.id) {
     return { error: "You cannot change your own role." };
+  }
+
+  // field_organizer can only act on canvasser or sign_installer rows
+  if (isFieldOrg && !FIELD_ORG_ALLOWED_ROLES.includes(membership.role)) {
+    return { error: "Field organizers can only change canvasser or sign installer roles." };
   }
 
   const previousRole = membership.role;
