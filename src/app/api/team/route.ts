@@ -19,7 +19,7 @@ import type { Role as AppRole } from "@/types";
 // field_organizer: canvasser and volunteer_coordinator members only.
 // All other roles: 403.
 
-const FIELD_ORGANIZER_VISIBLE_ROLES: Role[] = [Role.canvasser, Role.volunteer_coordinator];
+const FIELD_ORGANIZER_VISIBLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer, Role.volunteer_coordinator];
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -80,7 +80,8 @@ export async function POST(req: NextRequest) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return NextResponse.json({ error: "No active campaign" }, { status: 400 });
-  if (!activeRole || !canManageTeam(activeRole as AppRole)) {
+  const isFieldOrg = activeRole === Role.field_organizer;
+  if (!activeRole || (!canManageTeam(activeRole as AppRole) && !isFieldOrg)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -112,6 +113,15 @@ export async function POST(req: NextRequest) {
   if (role === Role.campaign_manager && !canAssignCampaignManager(activeRole as AppRole)) {
     return NextResponse.json(
       { error: "Only the candidate may assign the campaign_manager role" },
+      { status: 403 }
+    );
+  }
+
+  // Field organizers may only add canvasser or sign_installer members
+  const FIELD_ORG_ADDABLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
+  if (isFieldOrg && !FIELD_ORG_ADDABLE_ROLES.includes(role)) {
+    return NextResponse.json(
+      { error: "Field organizers can only add canvasser or sign installer members." },
       { status: 403 }
     );
   }

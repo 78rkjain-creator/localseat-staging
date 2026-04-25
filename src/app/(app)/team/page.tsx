@@ -97,6 +97,8 @@ export default function TeamPage() {
   const canManage = activeRole === "candidate" || activeRole === "campaign_manager";
   const viewerIsCandidate = activeRole === "candidate";
   const isFieldOrganizer = activeRole === "field_organizer";
+  // field_organizer can add canvasser and sign_installer but cannot remove or manage other roles
+  const canAddMember = canManage || isFieldOrganizer;
 
   // candidate sees all roles; field_organizer limited to canvasser/sign_installer; campaign_manager sees all except candidate
   const dropdownRoles: Role[] = viewerIsCandidate
@@ -108,6 +110,8 @@ export default function TeamPage() {
   // roles usable in the "add member" form — never includes candidate
   const addableRoles: Role[] = viewerIsCandidate
     ? ["campaign_manager", ...ALL_ASSIGNABLE_ROLES]
+    : isFieldOrganizer
+    ? (["canvasser", "sign_installer"] as Role[])
     : ALL_ASSIGNABLE_ROLES;
 
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -179,7 +183,7 @@ export default function TeamPage() {
             {members.length} member{members.length !== 1 ? "s" : ""}
           </p>
         </div>
-        {canManage && (
+        {canAddMember && (
           <button
             onClick={() => setShowAddForm((v) => !v)}
             className={primaryBtn + " inline-flex items-center gap-1.5"}
@@ -193,7 +197,7 @@ export default function TeamPage() {
       </div>
 
       {/* Add member form */}
-      {showAddForm && canManage && (
+      {showAddForm && canAddMember && (
         <AddMemberForm
           assignableRoles={addableRoles}
           onSuccess={() => {
