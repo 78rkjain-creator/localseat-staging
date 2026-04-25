@@ -14,6 +14,7 @@ import {
   assignSuperAdmin,
   revokePlatformRole,
 } from "./actions";
+import { MembershipRolePanel } from "./membership-role-panel";
 
 async function getUserDetail(userId: string) {
   return db.user.findUnique({
@@ -30,7 +31,22 @@ async function getUserDetail(userId: string) {
       createdAt: true,
       memberships: {
         include: {
-          campaign: { select: { id: true, name: true, municipality: true, city: true } },
+          campaign: {
+            select: {
+              id: true,
+              name: true,
+              municipality: true,
+              city: true,
+              memberships: {
+                where: { role: "candidate", deletedAt: null },
+                select: {
+                  id: true,
+                  user: { select: { firstName: true, lastName: true } },
+                },
+                take: 1,
+              },
+            },
+          },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -144,15 +160,40 @@ export default async function AdminUserDetailPage({
 
           {/* Campaign memberships */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">
                 Campaign Memberships ({user.memberships.length})
               </h2>
+              {callerIsSuperUser && (
+                <span className="text-xs text-slate-400">Role editing enabled</span>
+              )}
             </div>
             {user.memberships.length === 0 ? (
               <p className="px-6 py-8 text-sm text-slate-400 text-center">
                 No campaign memberships.
               </p>
+            ) : callerIsSuperUser ? (
+              <MembershipRolePanel
+                memberships={user.memberships.map((m) => {
+                  const candidateMembership = m.campaign.memberships[0];
+                  return {
+                    id: m.id,
+                    role: m.role,
+                    deletedAt: m.deletedAt,
+                    createdAt: m.createdAt,
+                    campaign: {
+                      id: m.campaign.id,
+                      name: m.campaign.name,
+                      municipality: m.campaign.municipality,
+                      city: m.campaign.city,
+                    },
+                    currentCandidateMembershipId: candidateMembership?.id ?? null,
+                    currentCandidateName: candidateMembership
+                      ? `${candidateMembership.user.firstName} ${candidateMembership.user.lastName}`
+                      : null,
+                  };
+                })}
+              />
             ) : (
               <table className="w-full text-sm">
                 <thead>

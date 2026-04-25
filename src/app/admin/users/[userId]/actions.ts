@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
+import { Role } from "@prisma/client";
 import crypto from "crypto";
 import { sendPasswordResetEmail } from "@/lib/email";
 
@@ -224,5 +225,136 @@ export async function hardDeleteUser(
   });
 
   revalidatePath("/admin/users");
+  return {};
+}
+
+// ── Campaign role management (super_user only) ────────────────────────────────
+
+export async function adminChangeUserRoleFromUserPanel(
+  membershipId: string,
+  newRole: Role
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const membership = await db.campaignMembership.findFirst({
+    where: { id: membershipId, deletedAt: null },
+    select: { id: true, userId: true, role: true, campaignId: true },
+  });
+  if (!membership) return { error: "Membership not found." };
+
+  if (membership.role === Role.candidate) {
+    return { error: "Use the campaign panel to reassign the candidate role." };
+  }
+
+  if (newRole === Role.candidate) {
+    const existingCandidate = await db.campaignMembership.findFirst({
+      where: {
+        campaignId: membership.campaignId,
+        role: Role.candidate,
+        deletedAt: null,
+        id: { not: membershipId },
+      },
+      select: { id: true },
+    });
+    if (existingCandidate) {
+      return { error: "Use transfer to assign the candidate role when one already exists." };
+    }
+  }
+
+  const previousRole = membership.role;
+  await db.campaignMembership.update({
+    where: { id: membershipId },
+    data: { role: newRole },
+  });
+
+  await createAuditLog({
+    campaignId: membership.campaignId,
+    userId: auth.session.user.id,
+    action: "ROLE_CHANGED",
+    entityType: "campaign_membership",
+    entityId: membershipId,
+    details: { targetUserId: membership.userId, previousRole, newRole, changedByAdmin: true },
+  });
+
+  revalidatePath(`/admin/users/${membership.userId}`);
+  return {};
+}
+
+export async function adminTransferCandidateRoleFromUserPanel(
+  currentCandidateMembershipId: string,
+  newCandidateMembershipId: string,
+  formerCandidateNewRole: Role
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  if (formerCandidateNewRole === Role.candidate) {
+    return { error: "The former candidate must be assigned a non-candidate role." };
+  }
+  if (currentCandidateMembershipId === newCandidateMembershipId) {
+    return { error: "New candidate must be a different member." };
+  }
+
+  const [current, incoming] = await Promise.all([
+    db.campaignMembership.findFirst({
+      where: { id: currentCandidateMembershipId, deletedAt: null },
+      select: { id: true, userId: true, role: true, campaignId: true },
+    }),
+    db.campaignMembership.findFirst({
+      where: { id: newCandidateMembershipId, deletedAt: null },
+      select: { id: true, userId: true, role: true, campaignId: true },
+    }),
+  ]);
+
+  if (!current) return { error: "Current candidate membership not found." };
+  if (!incoming) return { error: "Incoming candidate membership not found." };
+  if (current.campaignId !== incoming.campaignId) {
+    return { error: "Memberships must belong to the same campaign." };
+  }
+
+  const campaignId = incoming.campaignId;
+
+  await db.$transaction([
+    db.campaignMembership.update({
+      where: { id: newCandidateMembershipId },
+      data: { role: Role.candidate },
+    }),
+    db.campaignMembership.update({
+      where: { id: currentCandidateMembershipId },
+      data: { role: formerCandidateNewRole },
+    }),
+  ]);
+
+  await Promise.all([
+    createAuditLog({
+      campaignId,
+      userId: auth.session.user.id,
+      action: "CANDIDATE_ROLE_TRANSFERRED",
+      entityType: "campaign_membership",
+      entityId: newCandidateMembershipId,
+      details: {
+        targetUserId: incoming.userId,
+        previousRole: incoming.role,
+        newRole: Role.candidate,
+        changedByAdmin: true,
+      },
+    }),
+    createAuditLog({
+      campaignId,
+      userId: auth.session.user.id,
+      action: "CANDIDATE_ROLE_RELINQUISHED",
+      entityType: "campaign_membership",
+      entityId: currentCandidateMembershipId,
+      details: {
+        targetUserId: current.userId,
+        previousRole: current.role,
+        newRole: formerCandidateNewRole,
+        changedByAdmin: true,
+      },
+    }),
+  ]);
+
+  revalidatePath(`/admin/users/${incoming.userId}`);
   return {};
 }
