@@ -109,7 +109,8 @@ export default async function VoterListPage({ searchParams }: PageProps) {
     }),
   ]);
 
-  const customFieldDefs = (campaignData?.customFields as CustomFieldDef[] | null) ?? [];
+  const rawCfDefs = campaignData?.customFields;
+  const customFieldDefs: CustomFieldDef[] = Array.isArray(rawCfDefs) ? (rawCfDefs as CustomFieldDef[]) : [];
 
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);

@@ -580,38 +580,42 @@ const GEOCODED_COORDS: Record<string, { lat: number; lng: number }> = {
 };
 const VERIFIED = new Date();
 
-// ── Cultural name pools ───────────────────────────────────────────────────────
-const GROUPS = [
-  {
-    first: ["James","William","Thomas","Robert","David","Michael","John","Richard","Charles","George","Mary","Patricia","Linda","Barbara","Elizabeth","Jennifer","Susan","Margaret","Dorothy","Helen","Daniel","Matthew","Andrew","Joshua","Ryan","Emma","Olivia","Sophia","Charlotte","Grace"],
-    last:  ["Smith","Johnson","Brown","Wilson","Taylor","Anderson","Thomas","Martin","White","Harris"],
-  },
-  {
-    first: ["Jean","Pierre","Michel","François","Philippe","André","Louis","Jacques","Henri","Luc","Marie","Isabelle","Sophie","Camille","Amélie","Claire","Nathalie","Céline","Monique","Brigitte"],
-    last:  ["Tremblay","Gagnon","Roy","Côté","Bouchard","Lavoie","Fortin","Gauthier","Morin","Pelletier"],
-  },
-  {
-    first: ["Rahul","Arjun","Vikram","Suresh","Rajesh","Amit","Priya","Anjali","Deepa","Sunita","Neha","Pooja","Kavya","Ravi","Anil","Sanjay","Meera","Divya","Kiran","Manish"],
-    last:  ["Patel","Singh","Kumar","Sharma","Jain","Shah","Mehta","Gupta","Verma","Agarwal"],
-  },
-  {
-    first: ["Wei","Ming","Jun","Fang","Yan","Hui","Lin","Ying","Hong","Xiao","Jing","Tao","Yong","Feng","Lei","Na","Hua","Bo","Chen","Li"],
-    last:  ["Chen","Wang","Li","Zhang","Liu","Huang","Wu","Yang","Zhou","Xu"],
-  },
-  {
-    first: ["Kwame","Kofi","Emeka","Chidi","Tunde","Yaw","Ade","Bayo","Seun","Dele","Amara","Nkechi","Fatima","Zainab","Aisha","Yewande","Folake","Ngozi","Chiamaka","Abena"],
-    last:  ["Okafor","Mensah","Diallo","Nkosi","Owusu","Adeyemi","Ibrahim","Kamara","Diop","Asante"],
-  },
+// ── Name pools — interleaved across origins so generated records don't cluster ─
+// Groups represented: English/Irish/Scottish, French-Canadian, South Asian,
+// East Asian, African/Caribbean, Eastern European, Middle Eastern.
+const FIRST_NAMES = [
+  "James",     "Jean",      "Rahul",    "Wei",      "Kwame",    "Aleksei",  "Omar",
+  "William",   "Pierre",    "Priya",    "Lin",      "Amara",    "Marek",    "Layla",
+  "Thomas",    "François",  "Arjun",    "Ming",     "Kofi",     "Natasha",  "Tariq",
+  "Robert",    "Marie",     "Anjali",   "Junho",    "Fatima",   "Ivan",     "Yasmin",
+  "David",     "Isabelle",  "Amit",     "Yan",      "Emeka",    "Miriam",
+  "Mary",      "Sophie",    "Neha",     "Linh",     "Aisha",
+  "Elizabeth", "André",     "Vikram",   "Hong",     "Yaw",
+  "Catherine", "Céline",    "Deepa",    "Min",      "Ngozi",
+  "Grace",     "Philippe",  "Ravi",     "Yuki",     "Abena",
+  "Liam",      "Sunita",
+  "Connor",
+  "Fiona",
+  "Margaret",
+  "Sarah",
 ];
 
-function culturalGroup(hhIdx: number) {
-  const pos = hhIdx % 100;
-  if (pos < 30) return GROUPS[0];
-  if (pos < 50) return GROUPS[1];
-  if (pos < 70) return GROUPS[2];
-  if (pos < 85) return GROUPS[3];
-  return GROUPS[4];
-}
+const LAST_NAMES = [
+  "Smith",     "Tremblay",  "Patel",    "Chen",     "Okafor",   "Kowalski", "Hassan",
+  "Thompson",  "Bouchard",  "Singh",    "Kim",      "Mensah",   "Petrov",   "Khalil",
+  "Brown",     "Gagnon",    "Sharma",   "Nguyen",   "Baptiste", "Novak",    "Mansour",
+  "Wilson",    "Leblanc",   "Nair",     "Wong",     "Diallo",   "Kovac",    "Aziz",
+  "MacLeod",   "Côté",      "Kumar",    "Park",     "Asante",   "Popescu",
+  "O'Brien",   "Lavoie",    "Kaur",     "Zhang",    "Nkosi",
+  "Campbell",  "Fortin",    "Mehta",    "Li",       "Adeyemi",
+  "Taylor",    "Roy",       "Gupta",    "Wu",       "Kamara",
+  "Anderson",  "Gauthier",  "Shah",     "Tanaka",   "Diop",
+  "Harris",    "Verma",
+  "Clarke",
+  "Murphy",
+  "Stewart",
+  "Walsh",
+];
 
 function supportLevel(personIdx: number): string | null {
   if (personIdx <  225) return "strong_yes";
@@ -886,11 +890,10 @@ async function main() {
     }, 0);
     const poll  = STREETS[streetIdx].poll;
     const size  = hhSize(hhIdx);
-    const group = culturalGroup(hhIdx);
-    const lastName = group.last[hhIdx % group.last.length];
+    const lastName = LAST_NAMES[hhIdx % LAST_NAMES.length];
 
     for (let p = 0; p < size; p++) {
-      const firstName = group.first[(hhIdx * 7 + p) % group.first.length];
+      const firstName = FIRST_NAMES[(hhIdx * 7 + p) % FIRST_NAMES.length];
       const pIdx = personRows.length;
       const sl   = supportLevel(pIdx);
       const ph   = phoneHome(pIdx);
