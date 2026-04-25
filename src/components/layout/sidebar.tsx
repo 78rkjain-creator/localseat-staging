@@ -178,7 +178,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             ))
           )}
         </nav>
-        <div className="border-t border-slate-100 pt-3 mt-3" ref={accountRef}>
+        <div className="border-t border-slate-100 pt-3 mt-3 relative" ref={accountRef}>
           {accountOpen && (
             <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <Link href="/account/profile" onClick={() => setAccountOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
