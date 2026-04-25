@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { OutreachChannel } from "@/types";
+import type { OutreachChannel, SupportLevel } from "@/types";
 
 // ── Filters ────────────────────────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ export async function getAllOutreachLogsForExport(campaignId: string) {
 
 export async function getPeopleForExportTemplate(
   campaignId: string,
-  supportLevel?: string
+  supportLevel?: SupportLevel
 ) {
   // When a support level filter is requested, restrict to people whose most
   // recent canvass response has that support level.

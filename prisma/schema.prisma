@@ -149,6 +149,7 @@ model Campaign {
   listImports           ListImport[]
   personListMemberships PersonListMembership[]
   signs                 Sign[]
+  tags                  Tag[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -273,7 +274,7 @@ model Person {
   phoneHome   String?
   phoneMobile String?
   birthYear    Int?
-  supportLevel String?
+  supportLevel SupportLevel?
   gender       String?
   pollNumber   String?
   importSource String?
@@ -311,13 +312,16 @@ model Person {
 // ─── Tag ─────────────────────────────────────────────────────────────────────
 
 model Tag {
-  id    String  @id @default(cuid())
-  name  String  @unique
-  color     String?
-  deletedAt DateTime?
+  id         String    @id @default(cuid())
+  campaignId String
+  name       String
+  color      String?
+  deletedAt  DateTime?
 
+  campaign   Campaign   @relation(fields: [campaignId], references: [id])
   personTags PersonTag[]
 
+  @@unique([campaignId, name])
   @@index([deletedAt])
   @@map("tags")
 }

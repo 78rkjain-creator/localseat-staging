@@ -1,7 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
 ## How I Work
-
 - Provide prompts for VS Code Claude plugin — not raw source code
 - Read existing files only when information is not already known from context
 - Run commands one at a time — PowerShell does not support &&
@@ -10,19 +9,18 @@
 ---
 
 ## What This Is
-
-A lightweight Canada-focused municipal campaign CRM and canvassing platform. Built with Next.js, TypeScript, Tailwind CSS, PostgreSQL, and Prisma. Production on Hostinger VPS.
+Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.js, TypeScript, Tailwind CSS, PostgreSQL, Prisma. Production on Hostinger VPS.
 
 ---
 
 ## Tech Stack
-
-- **Frontend/Backend:** Next.js 16 with TypeScript and Tailwind CSS
-- **Database:** PostgreSQL with Prisma ORM (v5 — do not upgrade)
-- **Auth:** NextAuth.js v4 with credentials provider
-- **Email:** Nodemailer via Hostinger SMTP
-- **SMS:** Telnyx (decided, not yet built)
-- **Payments:** Stripe (decided, not yet built)
+- **Frontend/Backend:** Next.js 16, TypeScript, Tailwind CSS
+- **Database:** PostgreSQL + Prisma ORM v5 — do not upgrade
+- **Auth:** NextAuth.js v4, credentials provider
+- **Email:** Nodemailer v8, Hostinger SMTP
+- **SMS:** Telnyx (decided, not built)
+- **Payments:** Stripe (decided, not built)
+- **Maps:** Mapbox GL JS
 - **Production:** Hostinger VPS (app.localseat.io)
 - **Demo:** Hostinger VPS (demo.localseat.io)
 - **Staging:** Vercel + Neon PostgreSQL (localseat-staging.vercel.app)
@@ -30,10 +28,9 @@ A lightweight Canada-focused municipal campaign CRM and canvassing platform. Bui
 
 ---
 
-## Repository and URLs
-
-- **GitHub production:** git@github.com:78rkjain-creator/localseat.io.git
-- **GitHub staging:** https://github.com/78rkjain-creator/localseat-staging.git
+## Repos and URLs
+- **Prod repo:** git@github.com:78rkjain-creator/localseat.io.git
+- **Staging repo:** https://github.com/78rkjain-creator/localseat-staging.git
 - **Local path:** C:\Users\rkjai\OneDrive\Desktop\localseat.io
 - **Production:** https://app.localseat.io
 - **Demo:** https://demo.localseat.io
@@ -42,30 +39,25 @@ A lightweight Canada-focused municipal campaign CRM and canvassing platform. Bui
 ---
 
 ## Infrastructure
-
 - Hostinger VPS KVM2: IP 2.24.212.25, Ubuntu 24.04, 8GB RAM, 100GB NVMe
-- Production app: /var/www/localseat, PM2 process `localseat`, port 3000
-- Demo app: /var/www/demo, PM2 process `localseat-demo`, port 3001
-- Deploy script: /var/www/localseat/deploy.sh
-- nginx routing app.localseat.io → 3000, demo.localseat.io → 3001
-- SSL via certbot for both domains, auto-renews
-- Firewall: ports 22, 80, 443 open — port 5432 blocked
-- Daily demo reset cron: 3am via crontab (`npx prisma db seed`)
-- PostgreSQL on VPS: `localseat_prod` (production), `localseat_demo` (demo)
-- Staging DB: Neon PostgreSQL (free tier)
+- Production: /var/www/localseat, PM2 `localseat`, port 3000
+- Demo: /var/www/demo, PM2 `localseat-demo`, port 3001
+- nginx: app.localseat.io → 3000, demo.localseat.io → 3001
+- SSL: certbot, auto-renews
+- Firewall: ports 22, 80, 443 open — 5432 blocked
+- Demo reset cron: 3am (`npx prisma db seed`)
+- DBs: `localseat_prod` (prod), `localseat_demo` (demo), Neon (staging)
 
 ---
 
 ## Deployment Workflow
+1. Dev work → `git push staging main`
+2. Vercel auto-deploys staging
+3. **Test on staging before every production deploy**
+4. `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
+5. **Always deploy app and demo together — never leave out of sync**
 
-1. All development work → `git push staging main`
-2. Vercel auto-deploys staging on every push
-3. **TEST on staging** (https://localseat-staging.vercel.app) before every production deploy
-4. Only push to production after staging passes
-5. `git push origin main` → SSH into VPS and run `cd /var/www/localseat && ./deploy.sh`
-6. **Never push directly to production without testing on staging first**
-7. Demo site pulls from localseat-staging repo — deploy with:
-
+Demo deploy:
 ```
 cd /var/www/demo
 git pull origin main
@@ -75,18 +67,14 @@ npx prisma migrate deploy
 npx prisma db seed
 ```
 
-8. **Always deploy app and demo together.** Whenever a change is deployed to `app.localseat.io`, the demo site at `demo.localseat.io` must also be updated in the same session. The two sites must always run the same code. Never leave them out of sync.
-
 ---
 
-## Local Development Commands
-
+## Local Dev Commands
 ```
 taskkill /F /IM node.exe
 npm run dev
-npx next dev -H 0.0.0.0
 npx prisma generate
-npx prisma migrate dev --name <migration-name>
+npx prisma migrate dev --name <name>
 npx prisma migrate reset --force
 npx prisma db seed
 npm run typecheck
@@ -96,83 +84,69 @@ npm run typecheck
 
 ## Environment Variables
 
-### Local `.env`
-
+**Local `.env`**
 ```
 DATABASE_URL="postgresql://postgres:!Kasliwal78!@localhost:5432/localseat_dev"
 NEXTAUTH_SECRET="localseat-dev-secret-change-in-production"
 NEXTAUTH_URL="http://localhost:3000"
-SMTP_HOST="smtp.hostinger.com"
-SMTP_PORT="465"
-SMTP_SECURE="true"
-SMTP_USER="info@localseat.io"
-SMTP_PASS="<password>"
+SMTP_HOST="smtp.hostinger.com" | SMTP_PORT="465" | SMTP_SECURE="true"
+SMTP_USER="info@localseat.io" | SMTP_PASS="<password>"
 SMTP_FROM_WELCOME="hello@localseat.io"
 SMTP_FROM_APPROVALS="approvals@localseat.io"
-NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
+NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
-### Production VPS (`/var/www/localseat/.env`)
-
+**Production** (`/var/www/localseat/.env`)
 ```
 DATABASE_URL="postgresql://localseat:LS_Prod_2026x@localhost:5432/localseat_prod"
-NEXTAUTH_SECRET="<generated secret>"
 NEXTAUTH_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
-SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM_WELCOME, SMTP_FROM_APPROVALS
-NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
+NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
-### Demo VPS (`/var/www/demo/.env`)
-
+**Demo** (`/var/www/demo/.env`)
 ```
 DATABASE_URL="postgresql://demo:LS_Demo_2026x@localhost:5432/localseat_demo"
 NEXTAUTH_SECRET="localseat-demo-secret-2026"
 NEXTAUTH_URL="https://demo.localseat.io"
 DEMO_MODE="true"
-PRODUCTION_API_URL="https://app.localseat.io"
-DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
-SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM_WELCOME, SMTP_FROM_APPROVALS
-NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
+NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
-### Staging (Vercel)
-
+**Staging (Vercel)**
 ```
 DATABASE_URL="<Neon connection string>"
-NEXTAUTH_SECRET="<staging secret>"
 NEXTAUTH_URL="https://localseat-staging.vercel.app"
-SMTP vars same as above
-NEXT_PUBLIC_STRIPE_ENABLED="false"   # set to "true" when Stripe is wired
+NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
 ---
 
-## Seed Users (all passwords: `password`)
+## Seed Users (password: `password`)
 
-| Email | Role | Name |
-|---|---|---|
-| superuser@localseat.io | super_user (platform) | Super User |
-| demo@localseat.io | candidate (demo entry) | Demo Login |
-| alex.chen@example.com | candidate | Alex Chen |
-| maria.santos@example.com | campaign_manager | Maria Santos |
-| claire.morgan@example.com | co_chair | Claire Morgan |
-| robert.bell@example.com | co_chair | Robert Bell |
-| james.okafor@example.com | field_organizer | James Okafor |
-| sarah.kim@example.com | field_organizer | Sarah Kim |
-| priya.nair@example.com | canvasser | Priya Nair |
-| kevin.lafleur@example.com | canvasser | Kevin Lafleur |
-| amy.zhang@example.com | canvasser | Amy Zhang |
-| tom.okonkwo@example.com | canvasser | Tom Okonkwo |
-| sara.bishop@example.com | volunteer_coordinator | Sara Bishop |
-| dan.wu@example.com | finance_lead | Dan Wu |
+| Email | Role |
+|---|---|
+| superuser@localseat.io | super_user |
+| demo@localseat.io | candidate (demo entry) |
+| alex.chen@example.com | candidate |
+| maria.santos@example.com | campaign_manager |
+| claire.morgan@example.com | co_chair |
+| robert.bell@example.com | co_chair |
+| james.okafor@example.com | field_organizer |
+| sarah.kim@example.com | field_organizer |
+| priya.nair@example.com | canvasser |
+| kevin.lafleur@example.com | canvasser |
+| amy.zhang@example.com | canvasser |
+| tom.okonkwo@example.com | canvasser |
+| sara.bishop@example.com | volunteer_coordinator |
+| dan.wu@example.com | finance_lead |
+| mike.davidson@example.com | sign_installer |
 
 After any reseed: sign out and back in to refresh JWT.
 
 ---
 
 ## Role Hierarchy
-
 ```
 Candidate
   └── Campaign Manager
@@ -181,453 +155,284 @@ Candidate
                     └── Canvasser
                     └── Volunteer Coordinator
                     └── Finance Lead
+                    └── Sign Installer
+```
+
+**Role permissions summary:**
+- candidate + campaign_manager: full access
+- co_chair: read-only on most things, write on canvassing/ward/competitors/script
+- field_organizer: canvassing, follow-ups, outreach, volunteers, team (add canvasser/sign_installer only)
+- canvasser: canvassing only
+- volunteer_coordinator: volunteers, canvassing
+- finance_lead: donors only
+- sign_installer: signs only
+
+**Role management:**
+- Candidate and campaign_manager can change roles on /team page
+- Campaign_manager cannot assign or change candidate role
+- Superuser can change roles from /admin/users/[userId]
+- Transferring candidate role requires choosing former candidate's new role (modal)
+- Field organizer can add canvassers and sign installers only
+
+---
+
+## Migrations (in order)
+```
+20260412210149_init
+20260413131552_add_canvass_list_entries
+20260413173043_rename_support_levels
+20260414013251_outreach_log_updates
+20260414020402_donor_tracking
+20260414130234_add_co_chair_role
+20260414134633_volunteer_coordinator
+20260415135131_rename_phone_fields
+20260415183445_add_support_level_to_person
+20260415201732_add_performance_indexes
+20260415230050_add_soft_delete
+20260415233405_add_platform_role
+20260416000001_add_email_verification
+20260416000002_add_address_change_requests
+20260416000003_add_terms_acceptance
+20260416000005_add_password_reset_token
+20260416183449_add_address_change_requests
+20260417000001_add_canvass_response_unique_constraint
+20260417000002_add_poll_number_and_import_source
+20260419203313_add_demo_registration
+20260420004502_add_demo_registration_emailed_at
+20260420132115_add_plan_tiers_and_overrides
+20260420155334_add_contact_submission
+20260420201655_add_turf_polygon_to_canvass_list
+20260421164841_add_ward_boundary
+20260422155416_add_other_candidate_outcome
+20260422164218_add_campaign_competitors
+20260423151852_add_voting_records
+20260424143652_add_voter_change_requests
+20260424150256_add_voter_change_request_type
+20260424182540_add_canvass_script
+20260424220740_add_custom_fields
+20260424222844_add_list_import_models
+20260424225222_add_is_confirmed_voter
+20260424230216_add_telephone_list_type
+20260424230755_add_review_reason
+20260425044820_add_sign_installer_role
+20260425044915_add_signs_model
+20260425045245_add_volunteer_follow_up_task_type
 ```
 
 ---
 
-## Session Log — April 22, 2026 (UI Overhaul + Competitor Tracking)
+## Key Models
+- Campaign, User, CampaignMembership, AuditLog, PlatformSettings
+- Person, Household, Address, Tag, Note, Task
+- CanvassList, CanvassListEntry, CanvassAssignment, CanvassResponse
+- OutreachLog, DonorRecord, VolunteerRecord, VolunteerShift
+- VotingRecord (ElectionType: federal/provincial/municipal)
+- ListImport, PersonListMembership (list import tracking)
+- Sign (SignStatus: to_be_installed/installed; SignLocationType: residential/non_residential)
+- CampaignCompetitor, AddressChangeRequest, ContactSubmission
 
-**Commit: 0217167 — 34 files changed, 1,271 insertions**
+**Key enums:**
+- Role: candidate, campaign_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer, super_user
+- ListImportType: list, telephone_list, official_voters_list
+- PersonListMembershipStatus: matched, created, pending_review, accepted
+- SignStatus: to_be_installed, installed
+- TaskType: includes volunteer_follow_up
 
-### Bundle A — Token foundation + quick wins
+**Key Person fields:**
+- isConfirmedVoter (bool) — set true on OVL match
+- pollNumber — wired through full import pipeline
+- wardStatus: not_checked | inside | outside | outside_accepted | pending_review
+- customFieldValues (Json) — up to 5 campaign-defined fields
 
-- sentiment and ink color tokens added to `tailwind.config.ts`
-- `.tabular` and `.display` utility classes added to `globals.css`
-- Sidebar active nav pattern: `bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500 rounded-r-xl`
-- Active nav uses `rounded-r-xl` (not `rounded-xl`) so the left border sits flush
-- Progress bar fills → `bg-slate-800` across all dashboard files
-- Metric numbers → `text-slate-900 font-bold`
-- Support rate → semantic color (emerald ≥50%, amber 30–49%, red <30%)
-- Inline text links → `text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900`
-- "More options" → "Other outcome" on canvass screen
-- Touch targets already compliant at h-11/h-12
-
-### Bundle B — Canvass screen rewrite
-
-- Shared `ListRow` component at `src/components/ui/list-row.tsx`
-- Household-first canvass screen — address as headline, not person name
-- 1–5 sentiment scale with new sentiment tokens (emerald → amber → red)
-- Resident queue showing co-residents with progress dots
-- Interest chips (Sign / Volunteer / Donate) inline, visible for support levels 1–3
-- Offline status pill replacing SyncStatusBar amber strip
-- `SUPPORT_LEVELS` config array and `handleNotHome` kept as unused locals intentionally per spec (TS6133 hints only, not errors)
-
-### Bundle C — Dashboard + sidebar
-
-- Sidebar grouping with dividers between nav groups
-- "Dashboard" nav label renamed to "Today"
-- Collapsible "Admin" section in sidebar (cog icon, chevron rotates) containing: Team, Address Changes, Ward Boundary, Competitors
-- Admin section visible to: candidate, campaign_manager, co_chair, field_organizer
-- Candidate dashboard hero card: dark `bg-slate-900` with orange glow, race status headline, three stats
-- Voter ID donut ring (hand-rolled SVG, no chart library) with For/Undecided/Against segments
-- Needs-you queue: overdue follow-ups, pledged donors, walk lists >50% incomplete, address changes
-- `getNeedsYouQueue(campaignId)` added to `src/lib/dashboard.ts`
-- `canvassersOutToday` added to `getCandidateDashboardData` return value
-
-### Competitor tracking (full feature — complete)
-
-- Schema: `CampaignCompetitor` model + optional `competitorId` FK on `CanvassResponse`
-- Migration: `20260422155416_add_other_candidate_outcome`
-- Migration: `20260422164218_add_campaign_competitors`
-- `src/lib/competitors.ts` — getCompetitors, addCompetitor, updateCompetitor, deleteCompetitor (soft delete)
-- `src/app/(app)/campaign-settings/competitors/` — full settings page with add/edit/remove UI, optimistic updates
-- Canvass screen: competitor picker (pill buttons) appears when "Other candidate" is selected and competitors exist
-- `competitorId` flows through: offline queue → server action → sync → database
-- Voter list row shows "Other candidate" outcome label
-- Person detail shows "Supporting: [name]" on canvass history
-- Walk list detail shows "Supporting: [name]" on canvass results
-- Dashboard buckets `other_candidate` into Against Us in voter ID breakdown
-- Dashboard competitor breakdown panel: count per competitor, sorted by count desc, max 5 rows + overflow
-- CSV export includes "Competitor" column (populated when outcome is `other_candidate`)
-
-### Voter list improvements
-
-- Contact date ("Contacted Apr 2") and support level badge on each row
-- "Not contacted" label for voters with no canvass response
-- Status filter pills: All / Supporting / Undecided / Not supporting / Not contacted
-- "After date" filter — shows as pill, opens native date picker on click, clears with ×
-- Filter state managed via URL params (q, tag, supportFilter, contactedAfter)
-- "Clear" filter link updated to slate underline pattern (T-03 consistency)
-
-### Bug fixes
-
-- Pre-existing Next.js 15 params bug fixed in `src/app/api/contact/[id]/read/route.ts` — params now awaited
-- `other_candidate` badge style: `bg-slate-100 text-slate-700 border-slate-200`
+**Key Campaign fields:**
+- customFields (Json) — defines up to 5 field labels
+- wardBoundary (Json) — Polygon or MultiPolygon
+- canvassScript (String)
 
 ---
 
-## Session Log — April 24, 2026 (Auth Flow, Canvass Screen, Ward Boundary)
-
-### Auth flow fixes
-
-- `src/proxy.ts` — `skipVerificationCheck` now covers `onboarding/choose-plan` only (not all of `/onboarding`), so unverified users cannot access `/onboarding/create-campaign` before verifying their email
-- `src/proxy.ts` — `atCampaignGate` now includes `/verify-email/*` and `/resend-verification` so the `activeCampaignId` gate never fires on verification pages, preventing a redirect loop between `/verify-email/pending` and `/onboarding/create-campaign`
-- `src/proxy.ts` — `/onboarding/choose-plan` added to `atCampaignGate` so users can reach plan selection even if the session cookie hasn't fully propagated after campaign creation
-- `src/app/(auth)/verify-email/page.tsx` — post-verification redirect changed to `/login` for all cases (success and already_verified); removed `success_logged_out` status; updated heading copy to "Email verified / Your account is active. Taking you to sign in…"
-- `src/app/(auth)/verify-email/page.tsx` — removed unused `useRouter` and `session` references; `router.push` replaced with `window.location.href` throughout
-- `src/app/(auth)/verify-email/pending/page.tsx` — fixed blank screen: replaced `shadow-card` → `shadow-sm`, `shadow-soft` → `shadow-md`, `bg-brand-500` → `bg-orange-500`; updated copy and promoted "Resend verification email" to filled primary button; added amber spam warning box
-- `src/app/(auth)/verify-email/page.tsx` — fixed blank screen: same custom token replacements in `AuthCard`, `bg-brand-500`/`hover:bg-brand-600` → `bg-orange-500`/`hover:bg-orange-600` on buttons
-- `src/app/onboarding/create-campaign/page.tsx` — fixed blank screen: same custom token replacements; added 500ms delay after `session.update()` before `window.location.href` to allow JWT cookie to propagate before navigation
-
-### Correct registration flow (post-fix)
-
-```
-Register → /verify-email/pending
-Click verify link → /verify-email?token=… → /login
-Sign in → no campaign → /onboarding/create-campaign
-Create campaign → /onboarding/choose-plan
-Choose plan → /dashboard
-```
-
-### Canvassing script
-
-- `prisma/schema.prisma` — `canvassScript String?` added to Campaign model
-- Migration: `20260424182540_add_canvass_script`
-- `src/app/(app)/campaign-settings/script/page.tsx` — new settings page (candidate, campaign_manager, co_chair only)
-- `src/app/(app)/campaign-settings/script/ScriptFormClient.tsx` — client component, textarea + save/clear buttons
-- `src/app/(app)/campaign-settings/script/actions.ts` — `saveCanvassScript` server action
-- `src/components/layout/sidebar.tsx` — "Canvassing Script" admin item added (candidate/campaign_manager/co_chair only)
-- `src/app/(app)/canvassing/[listId]/canvass/page.tsx` — fetches and passes `canvassScript` to CanvassScreen
-- `src/app/(app)/canvassing/[listId]/canvass/canvass-screen.tsx` — collapsible "View script / Hide script" panel above support scale
-
-### Canvass screen behaviour redesign
-
-- `selectedPersonId` state separates "who the response is recorded for" (API call) from "which queue entry is marked done" (`savedSet`)
-- Resident queue rows are now tappable buttons — tap to select who you're speaking with at the door
-- Support scale levels 1/2 → Sign / Volunteer / Potential Donor chips (renamed from "Donate")
-- Support scale level 3 (Undecided) → Refused / Moved / Unavailable / Deceased immediate-save buttons via `handleQuickOutcomeSave`
-- Support scale levels 4/5 → Other Candidate toggle with inline competitor picker
-- "Other outcome" collapsible section removed entirely
-- Details panel simplified to notes + needs follow-up only
-- Inline "Add person at door" form removed (replaced by Add Resident modal)
-
-### Ward boundary improvements
-
-- `src/lib/ward.ts` — `isPointInWard` now accepts `Polygon | MultiPolygon`; MultiPolygon returns true if point is inside any component polygon
-- `src/app/(app)/campaign-settings/ward/actions.ts` — `saveWardBoundary` parameter widened to `Polygon | MultiPolygon`
-- `src/app/(app)/campaign-settings/ward/page.tsx`, `canvassing/[listId]/canvass/actions.ts`, `voter-import/actions.ts` — boundary casts updated to `Polygon | MultiPolygon`
-- `src/app/(app)/campaign-settings/ward/WardMapClient.tsx` — full rewrite:
-  - `getBoundsFromGeometry` helper handles both geometry types
-  - `loadGeometryOntoMap` splits MultiPolygon into individual Polygon features for MapboxGL Draw
-  - `evaluatePolygon` merges multiple draw features back into MultiPolygon
-  - GeoJSON file upload now accepts MultiPolygon and Feature\<MultiPolygon\>
-  - KMZ file upload via dynamically imported JSZip
-  - **Represent API boundary picker** — province → municipality → ward (multi-select checkboxes) → Load; all client-side, no API key required
-  - Multiple ward selection merges shapes into a single MultiPolygon via `Promise.all`
-  - Page layout order: Represent picker → divider → toolbar → instruction banner → map → file type note
-
-### Walk list / canvassing page fixes
-
-- Geocoding changed to parallel batch processing (10 concurrent, 600ms between batches)
-- Fire-and-forget geocoding triggered after list creation and when people are added
-- Walk list map: removed `geocodedCount < 2` hard block — map shows with whatever is geocoded; amber banner for ungeocoded addresses
-- Labels: "Draw turf" → "Create walk list from map", "Map view" → "View list on map", "New list" → "Create list from addresses"
-
-### Known issue added
-
-- `jszip` was installed directly on the demo server (`npm install jszip`) to support KMZ file upload — it needs to be added to `package.json` properly and committed so production builds include it. Currently only works on the demo server.
-
----
-
-## Session Log — April 23, 2026 (Mobile Nav, Canvass Screen, Voting History)
-
-**Commits: ba6c171, bdaaffd, 88ff1de, 05c43c3, ec6ba3e**
-
-### Mobile bottom navigation bar
-- `src/components/layout/mobile-nav.tsx` — new component, role-aware bottom tab bar for mobile (below `md:` breakpoint only)
-- `src/app/(app)/layout.tsx` — MobileNav imported and rendered, `pb-16 md:pb-0` added to main content wrapper
-- Desktop sidebar untouched — mobile nav only renders below `md:` breakpoint
-- Tab sets are role-aware: canvasser, field_organizer, volunteer_coordinator, finance_lead, super_user/super_admin each get a tailored set; candidate/campaign_manager/co_chair get a More sheet with overflow links
-- Fixed build failure: `lucide-react` was missing from `package.json` — added via `npm install lucide-react`
-- Fixed build failure: `Role` import from `@/types` caused Vercel module-not-found error — replaced with inline type definition in `mobile-nav.tsx`
-
-### Mobile canvassing screen viewport fix
-- `src/app/(app)/canvassing/[listId]/canvass/canvass-screen.tsx` — full viewport layout fix
-- Outer wrapper changed to `h-screen [height:100dvh]` for Safari mobile browser chrome support
-- Zone 2 (controls): removed `overflow-y-auto`, kept `flex-1 min-h-0 overflow-hidden` — controls no longer scroll
-- Spacing tightened throughout: household card, resident queue, scale buttons, interest chips, other outcome toggle
-- `showDetails` panel moved inside `<main>` content flow
-- Footer `pb-3` → `pb-16` to clear mobile nav bar
-- OfflinePill `bottom-20` → `bottom-36`
-- All controls and Save & Next button now visible on one screen without scrolling
-
-### Negative remaining count fix
-- `src/app/(app)/canvassing/page.tsx` and `src/app/(app)/dashboard/_canvasser.tsx`
-- `remaining` clamped with `Math.max(0, a.totalEntries - a.totalResponses)` to prevent negative values
-
-### Voting history feature
-- New `ElectionType` enum (`federal`, `provincial`, `municipal`) and `VotingRecord` model added to `prisma/schema.prisma`
-- Migration: `20260423151852_add_voting_records`
-- `src/lib/voting-records.ts` — `getVotingRecordsForPerson`, `addVotingRecord`, `updateVotingRecord`, `deleteVotingRecord`, `importVotingRecords`, `ELECTION_TYPE_LABELS`
-- `src/app/(app)/voter-list/[personId]/page.tsx` — Voting History section added, visible to candidate/campaign_manager/co_chair only
-- `src/lib/people.ts` and `src/app/(app)/voter-list/page.tsx` — `votedIn` filter added, visible to candidate/campaign_manager/co_chair only
-- `src/app/(app)/voter-list/actions.ts` — `importVotingRecordRows` server action
-- `src/app/(app)/voter-list/voting-history-template/route.ts` — template CSV download
-- `src/app/(app)/voter-list/import-modal.tsx` — voting history note and template download link added
-
-### Voters with history — hero card metric
-- `src/lib/dashboard.ts` — `votingRecord.groupBy` query added to `getCandidateDashboardData`, returns `votersWithHistory`
-- `src/app/(app)/dashboard/_candidate.tsx` — fourth stat added to hero card: "voters with history"
-
-### Municipal voting history seed data
-- `prisma/seed.ts` — 1,080 voting records across 480 voters (municipal only: 2014, 2018, 2022 Owen Sound Municipal Elections)
-- Distribution: 15% of voters (225) have all three elections, 10% (150) have two, 7% (105) have one, 68% have none
-- Deterministic — no `Math.random()`, same result every run
-- Old mixed federal/provincial/municipal seed replaced entirely
-
-### Infrastructure
-- Migration applied to staging (Neon), production (localseat_prod), and demo (localseat_demo) databases
-- All three environments reseeded with 1,080 voting records
-- Demo repo pulled and rebuilt to match staging at commit `ec6ba3e`
-- `git config core.autocrlf false` set on local repo to suppress line ending warnings
-- Railway DATABASE_URL confirmed as local dev DB — Neon URL is the correct staging target
-
-### Known issue added
-- Staging DATABASE_URL must be the Neon connection string from Vercel environment variables, not the Railway URL in local `.env`
-
----
-
-## Design System — Current Token Rules
-
-### Active nav item
-```
-rounded-r-xl bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500
-```
-Note: `rounded-r-xl` not `rounded-xl` — flat left edge required for `border-l-2` to sit flush.
-
-### Inactive nav item hover
-```
-rounded-xl font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900
-```
-
-### Orange usage rule (T-03)
-Orange (`brand-*`) is reserved for: brand logo mark, primary CTA buttons, focus rings, overdue/behind-pace states **only**.
-
-Do NOT use orange for: progress bars, active nav, inline metric text, icon accents, text links.
-
-### Progress bars
-```
-bg-slate-800  (not bg-brand-500)
-```
-
-### Inline text links
-```
-text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900
-```
-
-### Support rate colors
-
-- ≥ 50%: `text-emerald-600`
-- 30–49%: `text-amber-600`
-- < 30%: `text-red-600`
-
-### Sentiment scale (canvass screen 1–5)
-
-```js
-sentiment: {
-  1: '#10b981',  // Strong Yes — emerald 500
-  2: '#34d399',  // Soft Yes   — emerald 400
-  3: '#f59e0b',  // Undecided  — amber 500
-  4: '#f97316',  // Soft No    — orange 500
-  5: '#ef4444',  // Strong No  — red 500
-}
-```
-
----
-
-## Known Issues / Technical Debt
-
-- `jszip` installed directly on demo server (`npm install jszip`) for KMZ upload support — must be added to `package.json` and committed before next production deploy or the KMZ upload button will silently fail in production
-- `as unknown as` casts in several files where Prisma client types are stale — resolves automatically on next `npx prisma generate` when dev server is not holding the DLL (Windows EPERM issue)
-- Voter list capped at 50 results — pagination is a follow-up item
-- `SUPPORT_LEVELS` and `handleNotHome` in `canvass-screen.tsx` are unused locals (TS6133 hints only, not errors) — kept intentionally per spec
-- Rate limiter resets on server restart (needs Redis for production scale)
-- Offline queue is per-device only
-- Demo site shares one database — multiple simultaneous users see each other's changes (deferred to Option 3)
-- `localseat-staging` and `localseat.io` repos can drift out of sync — always copy `seed.ts` and key shared files when making changes that affect both
-- Staging (Vercel/Neon) does not run migrations automatically — must be applied manually with `prisma migrate deploy` against the Neon `DATABASE_URL` whenever new migrations are added
-- Seed guard added to `prisma/seed.ts` — exits with code 1 if `DATABASE_URL` contains `localseat_prod`. Runs before `bcrypt.hash` and before any `db.$transaction` calls.
-
----
-
-## Map-Based Turf Cutting
-
-- `src/lib/geocoding.ts` — `geocodeAddress(addressId)` and `geocodeAddressesForCanvassList(canvassListId)`
-- Mapbox Geocoding API, country=ca, cached on Address record (lat/lng already set = no API call)
-- Sequential geocoding with 600ms delay to respect rate limits
-- `geocodeNewAddresses(campaignId, addressIds)` — fire-and-forget triggered after voter CSV import completes
-- Migration: `20260420201655_add_turf_polygon_to_canvass_list` — adds `turfPolygon Json?` and `turfCreatedAt DateTime?` to CanvassList
-- `/canvassing/turf` — map-based turf cutting page, managers only
-- `TurfMapClient` — Mapbox GL JS + MapboxDraw, polygon-only draw, ray-cast point-in-polygon (no turf.js), orange circle markers, side panel with address preview and walk list creation
-- `createTurfCanvassList` server action — creates CanvassList with turfPolygon, bulk-creates CanvassListEntries for all people at selected addresses
-- "Draw turf" button added to `/canvassing` page, managers only
-- `/canvassing/[listId]/map` — walk list map view, accessible to managers and assigned canvassers
-- `ListMapClient` — colour-coded markers by support level then outcome, click → popup with name/address/support level/outcome/"View record" link, bottom-left legend, summary bar (total/contacted/not home/remaining)
-- Auto-refresh every 30s on turf page when geocoding is in progress
-- Warning banner when ungeocoded addresses exist
-- "Map view" button added to `/canvassing/[listId]` page, visible to all roles
-- All 555 Owen Sound seed addresses have pre-baked lat/lng in `GEOCODED_COORDS` in `prisma/seed.ts`
-- `scripts/geocode-demo.ts` — one-time bulk geocoding script
-- `scripts/export-geocoded-coords.ts` — exports geocoded coords from DB as TypeScript object
-- Ward boundary overlay on `ListMapClient` and `TurfMapClient` — grey mask outside boundary, black line traces edge
-
----
-
-## Ward Boundary
-
-- `WardStatus` enum on `Person`: `not_checked | inside | outside | outside_accepted | pending_review`
-- `wardBoundary Json?` and `wardBoundarySetAt DateTime?` added to Campaign model
-- Migration: `20260421164841_add_ward_boundary`
-- `src/lib/ward.ts` — `isPointInWard` (ray-cast), `campaignHasWard`, `parseKmlToGeoJsonPolygon`
-- `/campaign-settings/ward` — manager page to draw or upload GeoJSON/KML ward boundary
-- `/campaign-settings/ward/review` — review queue for outside-ward voters
-- Ward check wired into voter CSV import and `addPersonAtDoor`
-- Accessible to candidate, campaign_manager, co_chair only
-- All save, clear, accept, and discard actions are audit logged
-
----
-
-## Automated Tests (`src/__tests__/`)
-
-- `canvass-response-dedup.test.ts`
-- `canvasser-route-protection.test.ts`
-- `export-membership-check.test.ts`
-- `export-membership-revocation.test.ts`
-- `outreach-import-batching.test.ts`
-- `volunteer-shift-ownership.test.ts`
-
----
-
-## Production Data Events
-
-**April 23, 2026** — Production database manually cleaned via psql. Seed data (1,500 people, 555 addresses, 4 walk lists, 1 campaign, 13 seed users) was found in `localseat_prod` and removed. Superuser account preserved. Actual table names confirmed: `voting_records`, `volunteer_shifts`, `volunteer_shift_attendees`. Production is now empty and ready for real campaign data to be entered through the app UI.
-
----
-
-## Remaining Work
-
-### V1 — Not yet built
-
-| Item | Priority | Effort |
-|---|---|---|
-| Voter list pagination (currently capped at 50) | High | Small |
-| Activity timeline on person detail — unified chronological view | High | Small |
-| PWA manifest, install prompt, offline fallback page | High | Small |
-| Field organizer / canvasser / finance / volunteer coordinator dashboard hero cards | Medium | Medium |
-| Donor tracking polish — add/edit flows review | Medium | Small |
-| Address changes workflow end-to-end testing | Medium | Small |
-| Deduplication UI review and testing | Low | Small |
-
-### Active
-
-| Item | Effort |
-|---|---|
-| Marketing site at localseat.io | Done |
-| Operations guide document | Small |
-| Text messaging (Telnyx + Stripe + approval + CRTC) | Large |
-| Admin platform settings page | Done |
-| Stripe payment integration on choose-plan page | Dev tier selector done. Stripe wiring remaining. |
-| Update HANDOFF.md at end of each session | Ongoing |
-| Map-based turf cutting | Done |
-| Mobile bottom navigation bar | Done |
-| Canvass screen viewport fix | Done |
-| Voting history data model, import, and UI | Done |
-| Voters with history hero card metric | Done |
-| Municipal seed data | Done |
-| Canvassing script (settings page + canvass screen panel) | Done |
-| Ward boundary MultiPolygon support | Done |
-| Represent API ward boundary picker | Done |
-| Auth flow redirect loop fixes | Done |
-| Auth page blank screen fixes (custom Tailwind tokens) | Done |
-| Add jszip to package.json (KMZ upload — currently demo-server-only) | Pending |
-| Automated PostgreSQL backup to external storage (Backblaze B2 + rclone + cron) | Small |
-| Demo instance isolation — Option 3 (unique DB per visitor) | Large |
-
----
-
-## Roadmap Priority Order
-
-1. Stripe payment integration (dev tier selector done, Stripe wiring remaining)
-2. Telnyx SMS broadcast (decided, not built)
-3. Two-factor authentication (2FA)
-4. Events + public RSVP flows → feeds volunteer roster
-5. Custom canvass survey fields
-6. Simple automation rules (soft yes → auto follow-up)
-7. Public volunteer signup / petition pages → feeds CRM
-8. Automated PostgreSQL backups (Backblaze B2 + rclone)
-9. Demo instance isolation (unique DB per visitor)
-
-### Defined — Ready to Build When Scheduled
-
-| Item | Effort |
-|---|---|
-| Official voter list reconciliation engine (4 prompts) — address normalization, fuzzy name matching, phone preservation, field-level merge control, manual review screen, unmatched record handling, audit trail, data quality scoring, import source labeling | Large |
-
-### V2+ Backlog — Out of Scope for V1
-
-Payment processing, online donations, mass texting, email broadcasts, predictive voter scoring, advanced analytics, native iOS/Android apps, social media publishing tools, party integrations (federal/provincial), multilingual interface, campaign branding/custom theming, federal/provincial compliance workflows.
+## Key Features
+
+### Import System
+- Three import types: List (named), Telephone List (named), Official Voters List
+- OVL matching: full match (name+address) → auto confirm voter; partial match → review queue; no match → auto create
+- Address normalization: `src/lib/address-normalize.ts` — handles abbreviations, directionals, unit numbers
+- Review queue at `/voter-import/review` with bulk accept
+- ListImport + PersonListMembership track every import event per person
+
+### Residents List vs Voter List
+- `/voter-list` — all residents (Residents List in sidebar)
+- `/voter-list/confirmed` — confirmed voters only (isConfirmedVoter === true)
+- `/voter-list/confirmed/[personId]` — read-only voter summary with "View full record" link
+- Person detail shows Residents List section (all named list memberships) and Voter List section (OVL matches)
+
+### Custom Fields
+- Defined at campaign level in `/campaign-settings/custom-fields` (candidate/campaign_manager only)
+- Up to 5 fields per campaign, each a label + text value per person
+- Editable on person detail, importable via CSV (column headers match field labels)
+- Filter buttons on Residents List page filter by field presence (AND logic)
+- Orphan cleanup runs on definition save
+
+### Signs
+- `/signs` — accessible to all roles including sign_installer
+- Residential signs linked to address record; non-residential use free-form text
+- Status toggle: to_be_installed → installed (sets installedBy + installedAt)
+- All roles can add signs
+
+### Volunteer Pipeline
+- Canvass volunteer interest → upserts VolunteerRecord (fixes silent no-op on re-canvass)
+- Auto-creates volunteer_follow_up Task assigned to field_organizer (cascade: field_org → campaign_manager → candidate)
+
+### Pagination
+- Residents List: 50/page, desktop numbered buttons (7 max with ellipsis), mobile prev/next
+- Filter counts show "X of Y" when filters active
+- Page in URL (?page=N), filter change resets to page 1
+
+### Map / Turf
+- `src/lib/geocoding.ts` — Mapbox geocoding, cached on Address, 600ms delay
+- `/canvassing/turf` — polygon draw, ray-cast point-in-polygon, managers only
+- `/canvassing/[listId]/map` — colour-coded markers, 30s auto-refresh
+- Ward boundary: Polygon or MultiPolygon, Represent API picker, GeoJSON/KML upload
+- All 555 Owen Sound addresses have pre-baked lat/lng in seed
+
+### Security
+- Security headers in next.config.ts: X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy
+- Session timeout: 8h all roles, 4h canvassers (checked in proxy.ts)
+- Rate limiting on auth routes
+- Input sanitization on canvassing and outreach actions
+- nodemailer v8 (SMTP injection CVEs patched)
+- CSP (Content Security Policy) — NOT YET APPLIED, test on staging first
 
 ---
 
 ## Key Files
-
 ```
-/prisma
-  schema.prisma        (includes PlatformSettings, CampaignOverride, CampaignCompetitor, PlanTier enum)
-  seed.ts
-/src
-  /app
-    /(auth)/login, /register, /verify-email, /resend-verification, /account-expired, /reset-password
-    /(app)/dashboard, /voter-list, /voter-import, /canvassing, /follow-ups
-             /outreach, /donors, /volunteers, /team, /campaigns, /account, /address-changes
-    /(app)/campaign-settings/ward, /campaign-settings/competitors, /campaign-settings/script
-    /admin/campaigns, /users, /audit-log, /export, /demo-leads, /account, /settings
-    /admin/contact-submissions
-    /onboarding/choose-plan, /create-campaign
-    /demo
-    /api/demo-leads
-    /api/contact (POST — public)
-    /api/contact/[id]/read (PATCH — super_user or super_admin)
-  /lib
-    auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
-    email.ts, verification.ts, audit.ts, audit-descriptions.ts
-    address-changes.ts, people.ts, canvassing.ts, outreach.ts, activity.ts
-    offline-queue.ts, terms.ts, plan-limits.ts
-    geocoding.ts, ward.ts, competitors.ts, dashboard.ts
-  /components
-    /layout/sidebar.tsx (collapsible Admin section — Team, Address Changes, Ward Boundary, Competitors, Canvassing Script)
-    /ui/list-row.tsx (shared list row component — new April 22)
-    /ui/badge.tsx (OutcomeBadge includes other_candidate)
-    /ui/SyncStatusBar.tsx (replaced by inline offline pill on canvass screen)
-  /hooks/useOfflineSync.ts
-  /app/(app)/canvassing/[listId]/canvass/canvass-screen.tsx (household-first, 1-5 scale)
-  /app/(app)/voter-list/filters-client.tsx (status + date filters — new April 22)
-  /app/(app)/dashboard/_candidate.tsx (hero card, donut ring, needs-you queue)
-/scripts/geocode-demo.ts
-/scripts/export-geocoded-coords.ts
+/prisma/schema.prisma, seed.ts
+/src/app/(auth)/login, register, verify-email, resend-verification, reset-password
+/src/app/(app)/
+  dashboard, voter-list, voter-import, canvassing, follow-ups
+  outreach, donors, volunteers, team, signs, campaigns, account, address-changes
+  campaign-settings/ward, competitors, script, custom-fields
+  voter-list/confirmed, voter-list/confirmed/[personId]
+  voter-import/review
+/src/app/admin/campaigns, users, audit-log, export, demo-leads, settings
+/src/app/onboarding/choose-plan, create-campaign
+/src/lib/
+  auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
+  people.ts, canvassing.ts, outreach.ts, activity.ts, dashboard.ts
+  geocoding.ts, ward.ts, address-normalize.ts, competitors.ts
+  email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
+/src/components/layout/sidebar.tsx, mobile-nav.tsx
+/src/hooks/useOfflineSync.ts
 /public/sw.js
+/scripts/geocode-demo.ts, export-geocoded-coords.ts
 /var/www/marketing/
 ```
 
 ---
 
-## How to Start the Next Session
+## Design System
+**Active nav:** `rounded-r-xl bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500`
+**Inactive nav hover:** `rounded-xl font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900`
+**Orange rule:** brand-* reserved for logo, primary CTA, focus rings, overdue states only. Never for progress bars, nav, metrics, links.
+**Progress bars:** `bg-slate-800`
+**Text links:** `text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900`
+**Support rate:** ≥50% emerald-600, 30-49% amber-600, <30% red-600
+**Sentiment scale:** 1=emerald-500, 2=emerald-400, 3=amber-500, 4=orange-500, 5=red-500
 
+---
+
+## Automated Tests (`src/__tests__/`)
+- canvass-response-dedup.test.ts
+- canvasser-route-protection.test.ts
+- export-membership-check.test.ts
+- export-membership-revocation.test.ts
+- outreach-import-batching.test.ts
+- volunteer-shift-ownership.test.ts
+
+---
+
+## Known Issues / Technical Debt
+- `jszip` installed directly on demo server only — must add to package.json before next prod deploy or KMZ upload silently fails
+- `as unknown as` Prisma casts in several files — resolves on next `npx prisma generate` when dev server not holding DLL
+- Rate limiter resets on server restart — needs Redis for production scale
+- Offline queue is per-device only
+- Demo site shares one DB — multiple simultaneous users see each other's changes (deferred)
+- staging and localseat.io repos can drift — always copy seed.ts and key shared files
+- Staging Neon DB must have migrations applied manually (`prisma migrate deploy`) — Vercel does not auto-run migrations
+- EPERM on Windows during `prisma generate` = known DLL lock from running dev server, not a real error
+
+---
+
+## Production Data Events
+**April 23, 2026** — Production DB manually cleaned. Seed data removed. Superuser preserved. Production is empty and ready for real campaign data.
+
+---
+
+## Remaining Work
+
+### High Priority
+| Item | Effort |
+|---|---|
+| Activity timeline on person detail | Small |
+| PWA manifest, install prompt, offline fallback | Small |
+| Content Security Policy (CSP) — prompt written, test on staging first | Small |
+
+### Medium Priority
+| Item | Effort |
+|---|---|
+| Codex cleanup prompts 3–8 (auth centralization, import contracts, person detail split, custom field lifecycle, naming, maintainability audit) | Medium |
+| Role-specific dashboard hero cards (field_org, canvasser, finance, volunteer_coord) | Medium |
+| Donor tracking polish | Small |
+| Address changes end-to-end testing | Small |
+
+### Low Priority
+| Item | Effort |
+|---|---|
+| Deduplication UI review | Small |
+| jszip to package.json (KMZ upload prod support) | Small |
+| Automated PostgreSQL backups (Backblaze B2 + rclone) | Small |
+
+### Active / In Progress
+| Item | Status |
+|---|---|
+| Stripe payment integration | Dev tier selector done, Stripe wiring remaining |
+| Telnyx SMS (+ Stripe + CRTC approval) | Decided, not built |
+| Demo instance isolation (unique DB per visitor) | Large, deferred |
+| Operations guide document | Small |
+| Update HANDOFF.md each session | Ongoing |
+
+---
+
+## Roadmap
+1. Stripe payment integration
+2. Telnyx SMS broadcast
+3. Two-factor authentication (2FA)
+4. Events + public RSVP → feeds volunteer roster
+5. Custom canvass survey fields
+6. Simple automation rules (soft yes → auto follow-up)
+7. Public volunteer signup / petition pages → feeds CRM
+8. Automated PostgreSQL backups
+9. Demo instance isolation
+
+### Defined — Ready to Build
+| Item | Effort |
+|---|---|
+| Official voter list reconciliation engine — address normalization, fuzzy name matching, phone preservation, field-level merge, manual review, unmatched handling, audit trail, data quality scoring | Large |
+
+### V2+ Out of Scope
+Payment processing, online donations, mass texting, email broadcasts, predictive scoring, advanced analytics, native apps, social media tools, party integrations, multilingual, custom theming, federal/provincial compliance.
+
+---
+
+## How to Start the Next Session
 1. `npm run dev`
-2. Sign in at http://localhost:3001 (or 3000 if port is free)
-3. Candidate access: alex.chen@example.com / password
-4. Canvasser access: priya.nair@example.com / password
-5. Admin access: superuser@localseat.io / password
-6. Production: https://app.localseat.io
-7. Demo: https://demo.localseat.io
-8. Staging: https://localseat-staging.vercel.app
-9. Provide prompts for the VS Code Claude plugin — not raw source code
-10. All new development goes to `localseat-staging` repo first
-11. Always test on staging before deploying to production
-12. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
-13. If staging DB schema is out of sync after pulling new migrations:
-    ```
-    $env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy
-    ```
-    Get the Neon URL from Vercel → localseat-staging → Settings → Environment Variables → DATABASE_URL
-14. Run `npx prisma generate` after any migration to clear stale type casts in the codebase
+2. Sign in at http://localhost:3001 (or 3000)
+3. Candidate: alex.chen@example.com / password
+4. Canvasser: priya.nair@example.com / password
+5. Admin: superuser@localseat.io / password
+6. All new dev → localseat-staging repo first
+7. Test on staging before production deploy
+8. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
+9. If staging DB schema out of sync: `$env:DATABASE_URL='<neon-url>' ; npx prisma migrate deploy`
+10. Run `npx prisma generate` after any migration

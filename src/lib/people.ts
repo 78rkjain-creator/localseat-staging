@@ -117,17 +117,15 @@ export async function getPeopleCount(campaignId: string): Promise<number> {
 }
 
 /**
- * Fetch all tags that exist in the campaign (via people in that campaign).
+ * Fetch all tags belonging to this campaign.
  * Used for the filter dropdown.
  */
 export async function getCampaignTags(campaignId: string) {
-  // Tags are global but we only show ones used in this campaign
-  const rows = await db.personTag.findMany({
-    where: { deletedAt: null, person: { campaignId, deletedAt: null } },
-    select: { tag: { select: { id: true, name: true, color: true } } },
-    distinct: ["tagId"],
+  return db.tag.findMany({
+    where: { campaignId, deletedAt: null },
+    select: { id: true, name: true, color: true },
+    orderBy: { name: "asc" },
   });
-  return rows.map((r) => r.tag);
 }
 
 /**

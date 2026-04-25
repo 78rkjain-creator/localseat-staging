@@ -632,7 +632,7 @@ export async function mergePersons(input: {
   if (!loser)  return { error: "Record to merge away not found." };
 
   const outdatedTag = await db.tag.findFirst({
-    where: { name: "record-outdated", deletedAt: null },
+    where: { campaignId, name: "record-outdated", deletedAt: null },
     select: { id: true },
   });
 

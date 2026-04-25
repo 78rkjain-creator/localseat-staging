@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { exportVoters, exportCampaigns, exportUsers, exportAuditLogs } from "./actions";
 import type { ExportResult } from "./actions";
+import type { SupportLevel } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ export function ExportClient({ campaigns, tags, users }: Props) {
           await exportVoters({
             campaignId: (data.get("campaignId") as string) || undefined,
             city: (data.get("city") as string) || undefined,
-            supportLevel: (data.get("supportLevel") as string) || undefined,
+            supportLevel: ((data.get("supportLevel") as string) || undefined) as SupportLevel | undefined,
             tagIds: tagIds.length ? tagIds : undefined,
             dateFrom: (data.get("dateFrom") as string) || undefined,
             dateTo: (data.get("dateTo") as string) || undefined,

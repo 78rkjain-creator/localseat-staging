@@ -7,6 +7,7 @@ import { isSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { formatAuditDescription } from "@/lib/audit-descriptions";
 import { Role } from "@prisma/client";
+import type { SupportLevel } from "@/types";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ async function requireSuperUser() {
 export async function exportVoters(input: {
   campaignId?: string;
   city?: string;
-  supportLevel?: string;
+  supportLevel?: SupportLevel;
   tagIds?: string[];
   dateFrom?: string;
   dateTo?: string;

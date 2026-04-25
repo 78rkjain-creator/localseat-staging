@@ -320,11 +320,11 @@ export async function addPersonAtDoor(input: {
     return { error: "Constituent limit reached. Contact your campaign manager." };
   }
 
-  // Look up the field-entry system tag (tags are global, not campaign-scoped).
+  // Look up the field-entry system tag for this campaign.
   // If the tag is missing (seed data not run or tag deleted) we refuse rather
   // than silently creating an untagged record that would be hard to identify.
   const fieldEntryTag = await db.tag.findFirst({
-    where: { name: "field-entry", deletedAt: null },
+    where: { campaignId: activeCampaignId, name: "field-entry", deletedAt: null },
     select: { id: true },
   });
   if (!fieldEntryTag) {

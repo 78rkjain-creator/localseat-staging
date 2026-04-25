@@ -721,7 +721,7 @@ const PEOPLE: { firstName: string; lastName: string }[] = (() => {
   return entries;
 })();
 
-function supportLevel(personIdx: number): string | null {
+function supportLevel(personIdx: number): SupportLevel | null {
   if (personIdx <  225) return "strong_yes";
   if (personIdx <  405) return "soft_yes";
   if (personIdx <  630) return "undecided";
@@ -875,12 +875,12 @@ async function main() {
   // ── Tags ──────────────────────────────────────────────────────────────────
   await db.tag.createMany({
     data: [
-      { name: "field-entry",        color: "#475569" },
-      { name: "record-outdated",    color: "#dc2626" },
-      { name: "strong-supporter",   color: "#16a34a" },
-      { name: "needs-sign",         color: "#2563eb" },
-      { name: "volunteer-interest", color: "#7c3aed" },
-      { name: "donor-prospect",     color: "#ea6c0a" },
+      { name: "field-entry",        color: "#475569", campaignId: campaign.id },
+      { name: "record-outdated",    color: "#dc2626", campaignId: campaign.id },
+      { name: "strong-supporter",   color: "#16a34a", campaignId: campaign.id },
+      { name: "needs-sign",         color: "#2563eb", campaignId: campaign.id },
+      { name: "volunteer-interest", color: "#7c3aed", campaignId: campaign.id },
+      { name: "donor-prospect",     color: "#ea6c0a", campaignId: campaign.id },
     ],
   });
   console.log("  ✓ Tags: 6");
@@ -984,7 +984,7 @@ async function main() {
     lastName:           string;
     pollNumber:         string;
     importSource:       string;
-    supportLevel?:      string;
+    supportLevel?:      SupportLevel;
     phoneHome?:         string;
     phoneMobile?:       string;
     customFieldValues?: Record<string, string>;

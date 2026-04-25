@@ -14,7 +14,7 @@ interface PersonEditFormProps {
   phoneHome: string | null;
   phoneMobile: string | null;
   birthYear: number | null;
-  supportLevel: string | null;
+  supportLevel: SupportLevel | null;
 }
 
 export function PersonEditForm({

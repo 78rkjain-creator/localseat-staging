@@ -347,9 +347,9 @@ export async function mergePersons(input: {
   if (!winner) return { error: "Winning record not found." };
   if (!loser)  return { error: "Record to merge away not found." };
 
-  // Find the record-outdated system tag
+  // Find the record-outdated system tag for this campaign
   const outdatedTag = await db.tag.findFirst({
-    where: { name: "record-outdated", deletedAt: null },
+    where: { campaignId, name: "record-outdated", deletedAt: null },
     select: { id: true },
   });
 

@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { canManageFollowUps } from "@/lib/permissions";
 import { getPeopleForExportTemplate } from "@/lib/outreach";
 import type { NextRequest } from "next/server";
-import type { Role, OutreachChannel } from "@/types";
+import type { Role, OutreachChannel, SupportLevel } from "@/types";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   const channel = (req.nextUrl.searchParams.get("channel") ?? "phone_call") as OutreachChannel;
-  const supportLevel = req.nextUrl.searchParams.get("supportLevel") || undefined;
+  const supportLevel = (req.nextUrl.searchParams.get("supportLevel") || undefined) as SupportLevel | undefined;
   const people = await getPeopleForExportTemplate(activeCampaignId, supportLevel);
 
   const headers = [
