@@ -580,42 +580,146 @@ const GEOCODED_COORDS: Record<string, { lat: number; lng: number }> = {
 };
 const VERIFIED = new Date();
 
-// ── Name pools — interleaved across origins so generated records don't cluster ─
-// Groups represented: English/Irish/Scottish, French-Canadian, South Asian,
-// East Asian, African/Caribbean, Eastern European, Middle Eastern.
-const FIRST_NAMES = [
-  "James",     "Jean",      "Rahul",    "Wei",      "Kwame",    "Aleksei",  "Omar",
-  "William",   "Pierre",    "Priya",    "Lin",      "Amara",    "Marek",    "Layla",
-  "Thomas",    "François",  "Arjun",    "Ming",     "Kofi",     "Natasha",  "Tariq",
-  "Robert",    "Marie",     "Anjali",   "Junho",    "Fatima",   "Ivan",     "Yasmin",
-  "David",     "Isabelle",  "Amit",     "Yan",      "Emeka",    "Miriam",
-  "Mary",      "Sophie",    "Neha",     "Linh",     "Aisha",
-  "Elizabeth", "André",     "Vikram",   "Hong",     "Yaw",
-  "Catherine", "Céline",    "Deepa",    "Min",      "Ngozi",
-  "Grace",     "Philippe",  "Ravi",     "Yuki",     "Abena",
-  "Liam",      "Sunita",
-  "Connor",
-  "Fiona",
-  "Margaret",
-  "Sarah",
-];
+// ── Pre-built person name pool ─────────────────────────────────────────────
+// 1,500 {firstName, lastName} pairs — first and last always share the same
+// cultural origin so combinations read naturally.
+//
+// Groups and targets:
+//   English/Irish/Scottish  375  (25%)   50 first × 25 last = 1 250 combos
+//   French-Canadian         225  (15%)   30 first × 15 last =   450 combos
+//   South Asian             225  (15%)   30 first × 15 last =   450 combos
+//   East Asian              225  (15%)   30 first × 15 last =   450 combos
+//   African/Caribbean       150  (10%)   25 first × 15 last =   375 combos
+//   Eastern European        150  (10%)   25 first × 15 last =   375 combos
+//   Middle Eastern          150  (10%)   25 first × 15 last =   375 combos
+//
+// Within each group all combinations are generated, shuffled with a seeded
+// LCG, and then truncated to the target count.  A second global shuffle
+// distributes groups so no cultural cluster runs in sequence.
+const PEOPLE: { firstName: string; lastName: string }[] = (() => {
+  const groups: { first: string[]; last: string[]; count: number }[] = [
+    {
+      count: 375,
+      first: [
+        "James","William","Thomas","Robert","David","Liam","Connor","Patrick","Sean","Scott",
+        "Ian","Fraser","Callum","Neil","Graham","Stuart","Kevin","Brian","Andrew","Matthew",
+        "Brendan","Craig","Christopher","Paul","Angus",
+        "Mary","Elizabeth","Sarah","Catherine","Emma","Fiona","Siobhan","Grace","Margaret","Laura",
+        "Emily","Claire","Karen","Wendy","Janet","Sheila","Hannah","Rachel","Jessica","Lucy",
+        "Aoife","Niamh","Catriona","Bridget","Sharon",
+      ],
+      last: [
+        "Smith","Thompson","Brown","Wilson","MacLeod","O'Brien","Campbell","Taylor","Anderson","Harris",
+        "Clarke","Murphy","Stewart","Walsh","Robertson","Henderson","Ross","Fleming","Murray","Sinclair",
+        "MacDonald","Boyd","Grant","Reid","Hamilton",
+      ],
+    },
+    {
+      count: 225,
+      first: [
+        "Jean","Pierre","Michel","François","Philippe","André","Marc","Luc","Bruno","Rémi",
+        "Alain","Denis","Yves","Gilles","Serge","Sylvain","Pascal","Laurent","Olivier","Mathieu",
+        "Marie","Isabelle","Sophie","Céline","Nathalie","Camille","Amélie","Chantal","Véronique","Josée",
+      ],
+      last: [
+        "Tremblay","Gagnon","Roy","Côté","Bouchard","Lavoie","Fortin","Gauthier","Morin","Pelletier",
+        "Leblanc","Bélanger","Bergeron","Girard","Ouellet",
+      ],
+    },
+    {
+      count: 225,
+      first: [
+        "Rahul","Arjun","Amit","Vikram","Sanjay","Ravi","Manish","Rohit","Deepak","Nikhil",
+        "Anil","Pradeep","Sachin","Gaurav","Tarun",
+        "Priya","Anjali","Neha","Deepa","Sunita","Kavya","Divya","Meera","Anita","Shalini",
+        "Rekha","Geeta","Usha","Leela","Radha",
+      ],
+      last: [
+        "Patel","Singh","Sharma","Nair","Kumar","Mehta","Gupta","Shah","Verma","Jain",
+        "Agarwal","Chopra","Malhotra","Rao","Iyer",
+      ],
+    },
+    {
+      count: 225,
+      first: [
+        "Wei","Lin","Ming","Yan","Hong","Fang","Tao","Hua","Bo","Jing",
+        "Junho","Minseo","Jisoo","Soyeon","Seojun",
+        "Yuki","Hana","Kenji","Akira","Haruki",
+        "Linh","Minh","Tuan","Thuy","Huong","Duc","Anh","Lan","Hoa","Mai",
+      ],
+      last: [
+        "Chen","Kim","Nguyen","Wong","Park","Zhang","Li","Wu","Tanaka","Yamamoto",
+        "Pham","Tran","Choi","Lim","Huang",
+      ],
+    },
+    {
+      count: 150,
+      first: [
+        "Kwame","Kofi","Emeka","Yaw","Obinna","Chidi","Tunde","Kojo","Nana","Kweku",
+        "Babatunde","Olumide","Adewale","Seun","Dele",
+        "Amara","Fatima","Aisha","Ngozi","Abena","Nkechi","Chiamaka","Yewande","Adaeze","Efua",
+      ],
+      last: [
+        "Okafor","Mensah","Diallo","Nkosi","Asante","Adeyemi","Kamara","Diop","Owusu","Ibrahim",
+        "Eze","Idowu","Osei","Abiodun","Olawale",
+      ],
+    },
+    {
+      count: 150,
+      first: [
+        "Aleksei","Marek","Ivan","Dmitri","Pavel","Viktor","Mikhail","Piotr","Tomasz","Lukasz",
+        "Miroslav","Stefan","Bogdan","Vladimir","Radoslav",
+        "Natasha","Elena","Katarzyna","Agnieszka","Magdalena","Monika","Joanna","Izabela","Oksana","Tatyana",
+      ],
+      last: [
+        "Kowalski","Petrov","Novak","Kovac","Popescu","Nowak","Wisniewski","Kaminski","Lewandowski","Malinowski",
+        "Kubiak","Zielinski","Szymanski","Wojciechowski","Wolski",
+      ],
+    },
+    {
+      count: 150,
+      first: [
+        "Omar","Hassan","Tariq","Ahmed","Khalid","Youssef","Mustafa","Karim","Bilal","Amir",
+        "Walid","Jamal","Samir","Rami","Adnan",
+        "Layla","Yasmin","Nour","Rania","Amira","Samira","Hiba","Dina","Leila","Maryam",
+      ],
+      last: [
+        "Mansour","Aziz","Rahman","Nasser","Khoury","Saleh","Haddad","Chaaban","Nassar","Farouk",
+        "Rashid","Amin","Zaki","Qasim","Bishara",
+      ],
+    },
+  ];
 
-const LAST_NAMES = [
-  "Smith",     "Tremblay",  "Patel",    "Chen",     "Okafor",   "Kowalski", "Hassan",
-  "Thompson",  "Bouchard",  "Singh",    "Kim",      "Mensah",   "Petrov",   "Khalil",
-  "Brown",     "Gagnon",    "Sharma",   "Nguyen",   "Baptiste", "Novak",    "Mansour",
-  "Wilson",    "Leblanc",   "Nair",     "Wong",     "Diallo",   "Kovac",    "Aziz",
-  "MacLeod",   "Côté",      "Kumar",    "Park",     "Asante",   "Popescu",
-  "O'Brien",   "Lavoie",    "Kaur",     "Zhang",    "Nkosi",
-  "Campbell",  "Fortin",    "Mehta",    "Li",       "Adeyemi",
-  "Taylor",    "Roy",       "Gupta",    "Wu",       "Kamara",
-  "Anderson",  "Gauthier",  "Shah",     "Tanaka",   "Diop",
-  "Harris",    "Verma",
-  "Clarke",
-  "Murphy",
-  "Stewart",
-  "Walsh",
-];
+  // Seeded LCG — deterministic so the list is stable across reseeds
+  let s = 2718281828;
+  const rand = (n: number) => { s = (s * 1664525 + 1013904223) >>> 0; return s % n; };
+
+  const entries: { firstName: string; lastName: string }[] = [];
+
+  for (const { first, last, count } of groups) {
+    // Generate all combinations for this group
+    const combos: { firstName: string; lastName: string }[] = [];
+    for (const fn of first) {
+      for (const ln of last) {
+        combos.push({ firstName: fn, lastName: ln });
+      }
+    }
+    // Shuffle within group so every first name appears proportionally
+    for (let i = combos.length - 1; i > 0; i--) {
+      const j = rand(i + 1);
+      [combos[i], combos[j]] = [combos[j], combos[i]];
+    }
+    entries.push(...combos.slice(0, count));
+  }
+
+  // Global shuffle — eliminates cultural clustering across the full list
+  for (let i = entries.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [entries[i], entries[j]] = [entries[j], entries[i]];
+  }
+
+  return entries;
+})();
 
 function supportLevel(personIdx: number): string | null {
   if (personIdx <  225) return "strong_yes";
@@ -890,11 +994,9 @@ async function main() {
     }, 0);
     const poll  = STREETS[streetIdx].poll;
     const size  = hhSize(hhIdx);
-    const lastName = LAST_NAMES[hhIdx % LAST_NAMES.length];
-
     for (let p = 0; p < size; p++) {
-      const firstName = FIRST_NAMES[(hhIdx * 7 + p) % FIRST_NAMES.length];
       const pIdx = personRows.length;
+      const { firstName, lastName } = PEOPLE[pIdx % PEOPLE.length];
       const sl   = supportLevel(pIdx);
       const ph   = phoneHome(pIdx);
       const pm   = phoneMobile(pIdx);
