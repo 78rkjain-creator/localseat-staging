@@ -971,7 +971,6 @@ async function main() {
     runningIdx += count;
   });
 
-  const CF_MUNICIPAL  = ["Voted", "Did not vote"] as const;
   const CF_PROVINCIAL = ["Liberal", "Conservative", "NDP", "Green"] as const;
   let cfGroupIdx = 0;
 
@@ -1003,7 +1002,8 @@ async function main() {
       const isSelected = pIdx % 3 === 0;
       const cfv: Record<string, string> | undefined = isSelected
         ? {
-            cf_2022_mun:  CF_MUNICIPAL[cfGroupIdx % 2],
+            // Municipal: only record "Voted" — absence means no data / did not vote
+            ...(cfGroupIdx % 2 === 0 ? { cf_2022_mun: "Voted" } : {}),
             cf_2025_prov: CF_PROVINCIAL[cfGroupIdx % 4],
           }
         : undefined;
@@ -1025,8 +1025,9 @@ async function main() {
   });
 
   await db.person.createMany({ data: personRows });
-  const cfCount = personRows.filter((r) => r.customFieldValues !== undefined).length;
-  console.log(`  ✓ Placeholder voters: ${personRows.length} (${cfCount} with custom field values)`);
+  const cfProvincial = personRows.filter((r) => r.customFieldValues?.cf_2025_prov).length;
+  const cfMunicipal  = personRows.filter((r) => r.customFieldValues?.cf_2022_mun).length;
+  console.log(`  ✓ Placeholder voters: ${personRows.length} (cf_2025_prov: ${cfProvincial}, cf_2022_mun "Voted": ${cfMunicipal})`);
 
   // ── Walk lists, assignments, entries, canvass responses ───────────────────
   const NOTE_POOL = [
