@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import type { Role } from "@/types";
 import { ROLE_LABELS } from "@/types";
+import { changeUserRole, transferCandidateRole } from "./role-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ const ALL_ASSIGNABLE_ROLES: Role[] = [
   "finance_lead",
 ];
 
+const NON_CANDIDATE_ROLES: Role[] = ROLE_ORDER.filter((r) => r !== "candidate");
+
 const ROLE_BADGE: Record<Role, string> = {
   candidate:             "bg-brand-50 text-brand-700 border-brand-200",
   campaign_manager:      "bg-slate-800 text-white border-slate-800",
@@ -72,7 +75,7 @@ function sortMembers(members: TeamMember[]): TeamMember[] {
   );
 }
 
-// ── Shared input/button styles ────────────────────────────────────────────────
+// ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputCls =
   "h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500";
@@ -89,8 +92,18 @@ export default function TeamPage() {
   const currentUserId = session?.user?.id;
 
   const canManage = activeRole === "candidate" || activeRole === "campaign_manager";
-  const isCandidate = activeRole === "candidate";
+  const viewerIsCandidate = activeRole === "candidate";
   const isFieldOrganizer = activeRole === "field_organizer";
+
+  // candidate sees all roles; campaign_manager sees all except candidate
+  const dropdownRoles: Role[] = viewerIsCandidate
+    ? ROLE_ORDER
+    : ROLE_ORDER.filter((r) => r !== "candidate");
+
+  // roles usable in the "add member" form — never includes candidate
+  const addableRoles: Role[] = viewerIsCandidate
+    ? ["campaign_manager", ...ALL_ASSIGNABLE_ROLES]
+    : ALL_ASSIGNABLE_ROLES;
 
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [removedMembers, setRemovedMembers] = useState<RemovedMember[]>([]);
@@ -111,7 +124,6 @@ export default function TeamPage() {
       const data: TeamMember[] = await activeRes.json();
       setMembers(sortMembers(data));
 
-      // 403 means user lacks access to removed members — silently ignore
       if (removedRes.ok) {
         const removedData: RemovedMember[] = await removedRes.json();
         setRemovedMembers(removedData);
@@ -150,9 +162,7 @@ export default function TeamPage() {
     );
   }
 
-  const assignableRoles: Role[] = isCandidate
-    ? ["campaign_manager", ...ALL_ASSIGNABLE_ROLES]
-    : ALL_ASSIGNABLE_ROLES;
+  const candidateMember = members.find((m) => m.role === "candidate");
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
@@ -180,7 +190,7 @@ export default function TeamPage() {
       {/* Add member form */}
       {showAddForm && canManage && (
         <AddMemberForm
-          assignableRoles={assignableRoles}
+          assignableRoles={addableRoles}
           onSuccess={() => {
             setShowAddForm(false);
             loadMembers();
@@ -188,7 +198,6 @@ export default function TeamPage() {
         />
       )}
 
-      {/* Scoped view label for field organizer */}
       {isFieldOrganizer && members.length > 0 && (
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
           Your team
@@ -208,7 +217,14 @@ export default function TeamPage() {
               member={m}
               isCurrentUser={m.user.id === currentUserId}
               canManage={canManage}
-              assignableRoles={assignableRoles}
+              viewerIsCandidate={viewerIsCandidate}
+              dropdownRoles={dropdownRoles}
+              currentCandidateMembershipId={candidateMember?.membershipId}
+              currentCandidateName={
+                candidateMember
+                  ? `${candidateMember.user.firstName} ${candidateMember.user.lastName}`
+                  : undefined
+              }
               onChanged={loadMembers}
             />
           ))}
@@ -241,7 +257,6 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* New accounts note */}
       {canManage && (
         <p className="mt-6 text-xs text-slate-400">
           New accounts use a temporary password of{" "}
@@ -385,50 +400,90 @@ function MemberRow({
   member,
   isCurrentUser,
   canManage,
-  assignableRoles,
+  viewerIsCandidate,
+  dropdownRoles,
+  currentCandidateMembershipId,
+  currentCandidateName,
   onChanged,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
   canManage: boolean;
-  assignableRoles: Role[];
+  viewerIsCandidate: boolean;
+  dropdownRoles: Role[];
+  currentCandidateMembershipId: string | undefined;
+  currentCandidateName: string | undefined;
   onChanged: () => void;
 }) {
-  const isCandidate = member.role === "candidate";
-  const canEdit = canManage && !isCandidate;
-  const canRemove = canManage && !isCandidate && !isCurrentUser;
+  const memberIsCandidate = member.role === "candidate";
 
-  const [roleValue, setRoleValue] = useState<Role>(member.role);
-  const [roleError, setRoleError] = useState<string | null>(null);
-  const [savingRole, setSavingRole] = useState(false);
+  // candidate can edit any non-self row; campaign_manager can edit non-candidate non-self rows
+  const canEdit =
+    !isCurrentUser &&
+    (viewerIsCandidate || (canManage && !memberIsCandidate));
+
+  const canRemove = canManage && !memberIsCandidate && !isCurrentUser;
+
+  // pending role = the role the user has selected but not yet confirmed
+  const [pendingRole, setPendingRole] = useState<Role | null>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  async function handleRoleChange(newRole: Role) {
-    setRoleValue(newRole);
-    setRoleError(null);
-    setSavingRole(true);
-    try {
-      const res = await fetch(`/api/team/${member.user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        setRoleError(body.error ?? "Failed to update role");
-        setRoleValue(member.role);
-        return;
-      }
-      onChanged();
-    } catch {
-      setRoleError("Network error");
-      setRoleValue(member.role);
-    } finally {
-      setSavingRole(false);
+  function handleSelect(newRole: Role) {
+    if (newRole === member.role) return;
+    setError(null);
+    setSuccessMsg(null);
+    if (newRole === "candidate") {
+      // Candidate transfer — requires a modal to choose former candidate's new role
+      setShowTransferModal(true);
+    } else {
+      setPendingRole(newRole);
     }
+  }
+
+  async function handleConfirmChange() {
+    if (!pendingRole) return;
+    setSaving(true);
+    setError(null);
+    const result = await changeUserRole(member.membershipId, pendingRole as import("@prisma/client").Role);
+    setSaving(false);
+    if (result.error) {
+      setError(result.error);
+      setPendingRole(null);
+      return;
+    }
+    setPendingRole(null);
+    setSuccessMsg("Role updated");
+    setTimeout(() => setSuccessMsg(null), 2500);
+    onChanged();
+  }
+
+  function handleCancelChange() {
+    setPendingRole(null);
+  }
+
+  async function handleConfirmTransfer(formerCandidateNewRole: import("@prisma/client").Role) {
+    if (!currentCandidateMembershipId) return;
+    setSaving(true);
+    setError(null);
+    const result = await transferCandidateRole(
+      currentCandidateMembershipId,
+      member.membershipId,
+      formerCandidateNewRole
+    );
+    setSaving(false);
+    setShowTransferModal(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    onChanged();
   }
 
   async function handleRemove() {
@@ -452,104 +507,205 @@ function MemberRow({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Avatar */}
-        <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-          <span className="text-xs font-semibold text-slate-500">
-            {member.user.firstName[0]}{member.user.lastName[0]}
-          </span>
-        </div>
+    <>
+      {showTransferModal && currentCandidateName && (
+        <TransferModal
+          incomingName={`${member.user.firstName} ${member.user.lastName}`}
+          currentCandidateName={currentCandidateName}
+          saving={saving}
+          onConfirm={handleConfirmTransfer}
+          onCancel={() => setShowTransferModal(false)}
+        />
+      )}
 
-        {/* Identity */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-slate-900">
-              {member.user.firstName} {member.user.lastName}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Avatar */}
+          <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-semibold text-slate-500">
+              {member.user.firstName[0]}{member.user.lastName[0]}
             </span>
-            {isCurrentUser && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
-                you
-              </span>
-            )}
           </div>
-          <p className="text-xs text-slate-400 truncate">{member.user.email}</p>
-          {member.user.phoneHome && (
-            <p className="text-xs text-slate-400">{member.user.phoneHome}</p>
-          )}
-          {member.user.phoneMobile && (
-            <p className="text-xs text-slate-400">{member.user.phoneMobile}</p>
-          )}
-        </div>
 
-        {/* Role — editable select or static badge */}
-        <div className="flex-shrink-0">
-          {canEdit ? (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={roleValue}
-                onChange={(e) => handleRoleChange(e.target.value as Role)}
-                disabled={savingRole}
-                className={selectCls + " disabled:opacity-60"}
-                aria-label="Change role"
-              >
-                {assignableRoles.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </select>
-              {savingRole && (
-                <svg className="h-4 w-4 text-slate-400 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
+          {/* Identity */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-slate-900">
+                {member.user.firstName} {member.user.lastName}
+              </span>
+              {isCurrentUser && (
+                <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
+                  you
+                </span>
+              )}
+              {successMsg && (
+                <span className="text-[10px] font-semibold uppercase tracking-wide bg-emerald-50 text-emerald-600 rounded-full px-2 py-0.5">
+                  {successMsg}
+                </span>
               )}
             </div>
-          ) : (
-            <RoleBadge role={member.role} />
+            <p className="text-xs text-slate-400 truncate">{member.user.email}</p>
+            {member.user.phoneHome && (
+              <p className="text-xs text-slate-400">{member.user.phoneHome}</p>
+            )}
+            {member.user.phoneMobile && (
+              <p className="text-xs text-slate-400">{member.user.phoneMobile}</p>
+            )}
+          </div>
+
+          {/* Role — editable dropdown or static badge */}
+          <div className="flex-shrink-0">
+            {canEdit ? (
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={pendingRole ?? member.role}
+                  onChange={(e) => handleSelect(e.target.value as Role)}
+                  disabled={saving}
+                  className={selectCls + " disabled:opacity-60"}
+                  aria-label="Change role"
+                >
+                  {dropdownRoles.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+                {saving && (
+                  <svg className="h-4 w-4 text-slate-400 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                )}
+              </div>
+            ) : (
+              <RoleBadge role={member.role} />
+            )}
+          </div>
+
+          {/* Remove button */}
+          {canRemove && (
+            <div className="flex-shrink-0">
+              {!confirmRemove ? (
+                <button
+                  onClick={() => setConfirmRemove(true)}
+                  className="h-8 w-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                  aria-label="Remove member"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">Remove?</span>
+                  <button
+                    onClick={handleRemove}
+                    disabled={removing}
+                    className="h-7 px-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                  >
+                    {removing ? "…" : "Yes"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(false)}
+                    className="h-7 px-2 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    No
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Remove button */}
-        {canRemove && (
-          <div className="flex-shrink-0">
-            {!confirmRemove ? (
-              <button
-                onClick={() => setConfirmRemove(true)}
-                className="h-8 w-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-                aria-label="Remove member"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">Remove?</span>
-                <button
-                  onClick={handleRemove}
-                  disabled={removing}
-                  className="h-7 px-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium disabled:opacity-50 transition-colors"
-                >
-                  {removing ? "…" : "Yes"}
-                </button>
-                <button
-                  onClick={() => setConfirmRemove(false)}
-                  className="h-7 px-2 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  No
-                </button>
-              </div>
-            )}
+        {/* Inline role change confirmation */}
+        {pendingRole && (
+          <div className="mt-3 flex items-center gap-2 pt-3 border-t border-slate-100">
+            <span className="text-xs text-slate-500 flex-1">
+              Change role to <strong>{ROLE_LABELS[pendingRole]}</strong>?
+            </span>
+            <button
+              onClick={handleConfirmChange}
+              disabled={saving}
+              className="h-7 px-3 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving…" : "Confirm"}
+            </button>
+            <button
+              onClick={handleCancelChange}
+              disabled={saving}
+              className="h-7 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Inline errors */}
-      {(roleError || removeError) && (
-        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
-          {roleError ?? removeError}
+        {/* Inline errors */}
+        {(error || removeError) && (
+          <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+            {error ?? removeError}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Transfer modal ────────────────────────────────────────────────────────────
+
+function TransferModal({
+  incomingName,
+  currentCandidateName,
+  saving,
+  onConfirm,
+  onCancel,
+}: {
+  incomingName: string;
+  currentCandidateName: string;
+  saving: boolean;
+  onConfirm: (formerRole: import("@prisma/client").Role) => void;
+  onCancel: () => void;
+}) {
+  const [formerRole, setFormerRole] = useState<Role>("campaign_manager");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-1">Transfer candidate role</h2>
+        <p className="text-sm text-slate-500 mb-5">
+          <strong>{incomingName}</strong> will become the new candidate for this campaign.
         </p>
-      )}
+
+        <div className="mb-5">
+          <label className="text-xs font-medium text-slate-500 mb-1.5 block">
+            What role should <strong>{currentCandidateName}</strong> take on?
+          </label>
+          <select
+            value={formerRole}
+            onChange={(e) => setFormerRole(e.target.value as Role)}
+            className={selectCls + " w-full"}
+          >
+            {NON_CANDIDATE_ROLES.map((r) => (
+              <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => onConfirm(formerRole as import("@prisma/client").Role)}
+            disabled={saving}
+            className={primaryBtn + " flex-1"}
+          >
+            {saving ? "Transferring…" : "Confirm transfer"}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-1 h-9 px-4 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

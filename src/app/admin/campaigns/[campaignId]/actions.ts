@@ -8,14 +8,24 @@ import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import type { CampaignOverride } from "@prisma/client";
+import { Role } from "@prisma/client";
 
-// ── Auth guard ────────────────────────────────────────────────────────────────
+// ── Auth guards ───────────────────────────────────────────────────────────────
 
 async function requirePlatformAdmin() {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "Not authenticated." } as const;
   if (!isSuperAdmin(session.user.platformRole)) {
     return { error: "Platform admin access required." } as const;
+  }
+  return { session } as const;
+}
+
+async function requireSuperUser() {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." } as const;
+  if (!isSuperUser(session.user.platformRole)) {
+    return { error: "Super user access required." } as const;
   }
   return { session } as const;
 }
@@ -221,6 +231,131 @@ export async function upsertCampaignOverride(
     entityId:   campaignId,
     details:    { isNew, changed, notesInternal: data.notesInternal?.trim() || null },
   });
+
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+// ── Admin role management (super_user only) ───────────────────────────────────
+
+export async function adminChangeUserRole(
+  campaignId: string,
+  membershipId: string,
+  newRole: Role
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const membership = await db.campaignMembership.findFirst({
+    where: { id: membershipId, campaignId, deletedAt: null },
+    select: { id: true, userId: true, role: true },
+  });
+  if (!membership) return { error: "Membership not found." };
+
+  // Reassigning away from candidate requires the transfer flow
+  if (membership.role === Role.candidate) {
+    return { error: "Use transfer to reassign the candidate role." };
+  }
+
+  // Assigning to candidate only allowed when no existing candidate
+  if (newRole === Role.candidate) {
+    const existingCandidate = await db.campaignMembership.findFirst({
+      where: { campaignId, role: Role.candidate, deletedAt: null, id: { not: membershipId } },
+      select: { id: true },
+    });
+    if (existingCandidate) {
+      return { error: "Use transfer to assign the candidate role when one already exists." };
+    }
+  }
+
+  const previousRole = membership.role;
+  await db.campaignMembership.update({
+    where: { id: membershipId },
+    data: { role: newRole },
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: "ROLE_CHANGED",
+    entityType: "campaign_membership",
+    entityId: membershipId,
+    details: { targetUserId: membership.userId, previousRole, newRole, changedByAdmin: true },
+  });
+
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+export async function adminTransferCandidateRole(
+  campaignId: string,
+  currentCandidateMembershipId: string,
+  newCandidateMembershipId: string,
+  formerCandidateNewRole: Role
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  if (formerCandidateNewRole === Role.candidate) {
+    return { error: "The former candidate must be assigned a non-candidate role." };
+  }
+  if (currentCandidateMembershipId === newCandidateMembershipId) {
+    return { error: "New candidate must be a different member." };
+  }
+
+  const [current, incoming] = await Promise.all([
+    db.campaignMembership.findFirst({
+      where: { id: currentCandidateMembershipId, campaignId, deletedAt: null },
+      select: { id: true, userId: true, role: true },
+    }),
+    db.campaignMembership.findFirst({
+      where: { id: newCandidateMembershipId, campaignId, deletedAt: null },
+      select: { id: true, userId: true, role: true },
+    }),
+  ]);
+
+  if (!current) return { error: "Current candidate membership not found." };
+  if (!incoming) return { error: "Incoming candidate membership not found." };
+
+  await db.$transaction([
+    db.campaignMembership.update({
+      where: { id: newCandidateMembershipId },
+      data: { role: Role.candidate },
+    }),
+    db.campaignMembership.update({
+      where: { id: currentCandidateMembershipId },
+      data: { role: formerCandidateNewRole },
+    }),
+  ]);
+
+  await Promise.all([
+    createAuditLog({
+      campaignId,
+      userId: auth.session.user.id,
+      action: "CANDIDATE_ROLE_TRANSFERRED",
+      entityType: "campaign_membership",
+      entityId: newCandidateMembershipId,
+      details: {
+        targetUserId: incoming.userId,
+        previousRole: incoming.role,
+        newRole: Role.candidate,
+        changedByAdmin: true,
+      },
+    }),
+    createAuditLog({
+      campaignId,
+      userId: auth.session.user.id,
+      action: "CANDIDATE_ROLE_RELINQUISHED",
+      entityType: "campaign_membership",
+      entityId: currentCandidateMembershipId,
+      details: {
+        targetUserId: current.userId,
+        previousRole: current.role,
+        newRole: formerCandidateNewRole,
+        changedByAdmin: true,
+      },
+    }),
+  ]);
 
   revalidatePath(`/admin/campaigns/${campaignId}`);
   return {};

@@ -52,6 +52,20 @@ export function canAssignCampaignManager(role: Role): boolean {
   return role === Role.candidate;
 }
 
+// ── Role management ───────────────────────────────────────────────────────────
+
+// Only the candidate may change roles freely (including assigning candidate).
+// super_user access is checked separately at the call site via isSuperUser().
+export function canManageRoles(role: Role): boolean {
+  return role === Role.candidate;
+}
+
+// campaign_manager may change any role except candidate.
+// candidate and super_user have full access — handled here and via isSuperUser().
+export function canManageRolesExceptCandidate(role: Role): boolean {
+  return role === Role.candidate || role === Role.campaign_manager;
+}
+
 // ── Donors ────────────────────────────────────────────────────────────────────
 
 // Donor records: senior leadership + finance_lead + co_chair (read-only).

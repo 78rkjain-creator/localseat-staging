@@ -15,6 +15,7 @@ import {
   getCampaignEffectiveLimits,
 } from "./actions";
 import { OverridePanel } from "./override-panel";
+import { MembersPanel } from "./members-panel";
 
 async function getCampaignDetail(campaignId: string) {
   const [campaign, voterCount, responseCount, donorCount, listCount] =
@@ -192,13 +193,27 @@ export default async function AdminCampaignDetailPage({
 
           {/* Members */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">
                 Members ({campaign.memberships.length})
               </h2>
+              {callerIsSuperUser && (
+                <span className="text-xs text-slate-400">Role editing enabled</span>
+              )}
             </div>
             {campaign.memberships.length === 0 ? (
               <p className="px-6 py-8 text-sm text-slate-400 text-center">No members.</p>
+            ) : callerIsSuperUser ? (
+              <MembersPanel
+                campaignId={campaignId}
+                members={campaign.memberships.map((m) => ({
+                  id: m.id,
+                  role: m.role,
+                  deletedAt: m.deletedAt,
+                  createdAt: m.createdAt,
+                  user: m.user,
+                }))}
+              />
             ) : (
               <table className="w-full text-sm">
                 <thead>

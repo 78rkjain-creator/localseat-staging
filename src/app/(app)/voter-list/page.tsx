@@ -36,12 +36,15 @@ const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[
   { label: "Not contacted", value: "not_contacted" },
 ];
 
+// Filter pill links omit `page` so any filter change resets to page 1.
+// Pagination links pass `page` explicitly.
 function buildUrl(params: {
   q?: string;
   tag?: string;
   supportFilter?: string;
   contactedAfter?: string;
   cfFilters?: string;
+  page?: number;
 }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
@@ -49,6 +52,7 @@ function buildUrl(params: {
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
   if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
   if (params.cfFilters) p.set("cfFilters", params.cfFilters);
+  if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/voter-list${s ? `?${s}` : ""}`;
 }
@@ -60,6 +64,15 @@ function toggleCfFilter(fieldId: string, active: string[]): string {
   return next.join(",");
 }
 
+// Returns at most 7 visible items (numbers + "..." markers) for the desktop
+// pagination row. Always includes first and last page.
+function getPageRange(current: number, total: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, "...", total];
+  if (current >= total - 3) return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+  return [1, "...", current - 1, current, current + 1, "...", total];
+}
+
 interface PageProps {
   searchParams: Promise<{
     q?: string;
@@ -67,13 +80,23 @@ interface PageProps {
     supportFilter?: string;
     contactedAfter?: string;
     cfFilters?: string;
+    page?: string;
   }>;
 }
 
 type CustomFieldDef = { id: string; label: string };
 
 export default async function VoterListPage({ searchParams }: PageProps) {
-  const { q, tag, supportFilter: rawSupportFilter, contactedAfter, cfFilters: rawCfFilters } = await searchParams;
+  const {
+    q,
+    tag,
+    supportFilter: rawSupportFilter,
+    contactedAfter,
+    cfFilters: rawCfFilters,
+    page: rawPage,
+  } = await searchParams;
+
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
   const supportFilter = (rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS)
     ? rawSupportFilter as SupportFilter
@@ -92,7 +115,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
 
-  const [people, totalCount, allTags, campaignData] = await Promise.all([
+  const [{ people, total: filteredTotal }, totalCount, allTags, campaignData] = await Promise.all([
     getPeopleList({
       campaignId: activeCampaignId,
       q,
@@ -100,6 +123,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
       supportFilter,
       contactedAfter,
       customFieldFilters: activeCfFilters.length > 0 ? activeCfFilters : undefined,
+      page,
     }),
     getPeopleCount(activeCampaignId),
     getCampaignTags(activeCampaignId),
@@ -112,6 +136,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
   const rawCfDefs = campaignData?.customFields;
   const customFieldDefs: CustomFieldDef[] = Array.isArray(rawCfDefs) ? (rawCfDefs as CustomFieldDef[]) : [];
 
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
   const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter || activeCfFilters.length > 0;
@@ -123,16 +148,10 @@ export default async function VoterListPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Residents List</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {totalCount.toLocaleString()} total
-            {isFiltered && people.length < totalCount && (
-              <> &mdash; showing {people.length} result{people.length !== 1 ? "s" : ""}</>
-            )}
-            {supportFilter && (
-              <> &middot; filtered by: {SUPPORT_FILTER_LABELS[supportFilter]}</>
-            )}
-            {contactedAfter && (
-              <> &middot; contacted after {new Date(contactedAfter).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}</>
-            )}
+            {isFiltered
+              ? <>{filteredTotal.toLocaleString()} of {totalCount.toLocaleString()}</>
+              : <>{totalCount.toLocaleString()} total</>
+            }
           </p>
         </div>
         {canExport && (
@@ -335,11 +354,122 @@ export default async function VoterListPage({ searchParams }: PageProps) {
             })}
           </ul>
 
-          {people.length === 50 && (
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
-              <p className="text-sm text-slate-500 text-center">
-                Showing first 50 results &mdash; use search to narrow down
-              </p>
+          {/* Pagination — only rendered when there is more than one page */}
+          {totalPages > 1 && (
+            <div className="border-t border-slate-100">
+
+              {/* Mobile: ← Previous | Page X of Y | Next → */}
+              <div className="flex md:hidden items-center justify-between px-5 py-4">
+                {page > 1 ? (
+                  <Link
+                    href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: rawCfFilters, page: page - 1 })}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-sm text-slate-300">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Previous
+                  </span>
+                )}
+
+                <span className="text-sm text-slate-500">
+                  Page {page} of {totalPages}
+                </span>
+
+                {page < totalPages ? (
+                  <Link
+                    href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: rawCfFilters, page: page + 1 })}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Next
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-sm text-slate-300">
+                    Next
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+
+              {/* Desktop: numbered pages with ellipsis */}
+              <div className="hidden md:flex items-center justify-center gap-1 px-5 py-4">
+
+                {/* Prev arrow */}
+                {page > 1 ? (
+                  <Link
+                    href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: rawCfFilters, page: page - 1 })}
+                    className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                    aria-label="Previous page"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </Link>
+                ) : (
+                  <span className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-300" aria-hidden>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </span>
+                )}
+
+                {/* Page number buttons */}
+                {getPageRange(page, totalPages).map((pageNum, i) =>
+                  pageNum === "..." ? (
+                    <span
+                      key={`el-${i}`}
+                      className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm select-none"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <Link
+                      key={pageNum}
+                      href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: rawCfFilters, page: pageNum })}
+                      aria-current={pageNum === page ? "page" : undefined}
+                      className={
+                        pageNum === page
+                          ? "h-9 w-9 flex items-center justify-center rounded-xl bg-brand-500 text-white text-sm font-semibold"
+                          : "h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors"
+                      }
+                    >
+                      {pageNum}
+                    </Link>
+                  )
+                )}
+
+                {/* Next arrow */}
+                {page < totalPages ? (
+                  <Link
+                    href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: rawCfFilters, page: page + 1 })}
+                    className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                    aria-label="Next page"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                ) : (
+                  <span className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-300" aria-hidden>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+
             </div>
           )}
         </div>

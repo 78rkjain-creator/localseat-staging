@@ -8,14 +8,12 @@ export interface PeopleListFilters {
   supportFilter?: "supporting" | "undecided" | "not_supporting" | "not_contacted";
   contactedAfter?: string; // ISO date string
   customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
+  page?: number;
 }
 
-/**
- * Fetch a flat list of people for the list page.
- * Returns up to 50 results. Full pagination is a follow-up.
- */
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters }: PeopleListFilters) {
-  // Build additive AND conditions for canvass-based filters.
+const PEOPLE_PAGE_SIZE = 50;
+
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -32,7 +30,6 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
         some: {
           OR: [
             { supportLevel: { in: ["soft_no", "strong_no"] as SupportLevel[] } },
-            // other_candidate outcome — cast resolves after prisma generate
             { outcome: "other_candidate" as unknown as CanvassOutcome },
           ],
         },
@@ -54,59 +51,65 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
     } as Prisma.PersonWhereInput);
   }
 
-  const people = await db.person.findMany({
-    where: {
-      campaignId,
-      deletedAt: null,
-      ...(q && q.trim().length > 0
-        ? {
-            OR: [
-              { firstName: { contains: q.trim(), mode: "insensitive" } },
-              { lastName: { contains: q.trim(), mode: "insensitive" } },
-              { email: { contains: q.trim(), mode: "insensitive" } },
-              { phoneHome: { contains: q.trim(), mode: "insensitive" } },
-              { phoneMobile: { contains: q.trim(), mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(tagId ? { tags: { some: { tagId } } } : {}),
-      ...(andFilters.length > 0 ? { AND: andFilters } : {}),
-    },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phoneHome: true,
-      phoneMobile: true,
-      household: {
-        select: {
-          address: {
-            select: {
-              streetNumber: true,
-              streetName: true,
-              unitNumber: true,
-              city: true,
+  const where: Prisma.PersonWhereInput = {
+    campaignId,
+    deletedAt: null,
+    ...(q && q.trim().length > 0
+      ? {
+          OR: [
+            { firstName: { contains: q.trim(), mode: "insensitive" } },
+            { lastName: { contains: q.trim(), mode: "insensitive" } },
+            { email: { contains: q.trim(), mode: "insensitive" } },
+            { phoneHome: { contains: q.trim(), mode: "insensitive" } },
+            { phoneMobile: { contains: q.trim(), mode: "insensitive" } },
+          ],
+        }
+      : {}),
+    ...(tagId ? { tags: { some: { tagId } } } : {}),
+    ...(andFilters.length > 0 ? { AND: andFilters } : {}),
+  };
+
+  const [people, total] = await Promise.all([
+    db.person.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phoneHome: true,
+        phoneMobile: true,
+        household: {
+          select: {
+            address: {
+              select: {
+                streetNumber: true,
+                streetName: true,
+                unitNumber: true,
+                city: true,
+              },
             },
           },
         },
-      },
-      tags: {
-        select: {
-          tag: { select: { id: true, name: true, color: true } },
+        tags: {
+          select: {
+            tag: { select: { id: true, name: true, color: true } },
+          },
+        },
+        canvassResponses: {
+          orderBy: { respondedAt: "desc" },
+          take: 1,
+          select: { supportLevel: true, outcome: true, respondedAt: true },
         },
       },
-      canvassResponses: {
-        orderBy: { respondedAt: "desc" },
-        take: 1,
-        select: { supportLevel: true, outcome: true, respondedAt: true },
-      },
-    },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    take: 50,
-  });
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      skip: (page - 1) * PEOPLE_PAGE_SIZE,
+      take: PEOPLE_PAGE_SIZE,
+    }),
+    db.person.count({ where }),
+  ]);
 
-  return people;
+  return { people, total };
 }
 
 export async function getPeopleCount(campaignId: string): Promise<number> {
@@ -365,5 +368,5 @@ export async function findDuplicatePairs(campaignId: string) {
 export type VoterListItem = Awaited<ReturnType<typeof getVoterList>>["people"][number];
 export type DuplicatePair = Awaited<ReturnType<typeof findDuplicatePairs>>[number];
 
-export type PersonListItem = Awaited<ReturnType<typeof getPeopleList>>[number];
+export type PersonListItem = Awaited<ReturnType<typeof getPeopleList>>["people"][number];
 export type PersonDetail = NonNullable<Awaited<ReturnType<typeof getPersonDetail>>>;
