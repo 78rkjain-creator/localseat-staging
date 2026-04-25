@@ -125,6 +125,10 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
               </svg>
             ),
           },
+        ]
+      : []),
+    ...(role === "candidate" || role === "campaign_manager"
+      ? [
           {
             href: "/campaign-settings/custom-fields",
             label: "Custom Fields",
