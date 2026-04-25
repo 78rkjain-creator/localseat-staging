@@ -265,7 +265,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             },
           ]
         : []),
-      ...(role && (canViewAllPeople(role) || role === "canvasser")
+      ...(role && (canViewAllPeople(role) || role === "canvasser" || role === "volunteer_coordinator")
         ? [
             {
               href: "/canvassing",
