@@ -210,28 +210,6 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
             </p>
           </div>
 
-          {/* Voting history template */}
-          <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-4">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <p className="text-sm font-medium text-slate-700">Voting history (optional, separate file)</p>
-              <a
-                href="/voter-list/voting-history-template"
-                download
-                className="text-xs font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1 flex-shrink-0"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                </svg>
-                Download template
-              </a>
-            </div>
-            <p className="text-xs text-slate-500 font-mono leading-relaxed break-all">
-              FirstName, LastName, StreetNumber, StreetName, City, ElectionType, ElectionYear, ElectionName, Participated, PartySupport, Notes
-            </p>
-            <p className="text-xs text-slate-400 mt-2">
-              Import voting history as a separate file after importing your voter list. ElectionType must be: municipal, provincial, or federal. Participated: yes or no.
-            </p>
-          </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">

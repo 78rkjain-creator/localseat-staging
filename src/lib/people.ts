@@ -7,14 +7,14 @@ export interface PeopleListFilters {
   tagId?: string;
   supportFilter?: "supporting" | "undecided" | "not_supporting" | "not_contacted";
   contactedAfter?: string; // ISO date string
-  votedIn?: "municipal" | "provincial" | "federal"; // participated in this election type
+  customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
 }
 
 /**
  * Fetch a flat list of people for the list page.
  * Returns up to 50 results. Full pagination is a follow-up.
  */
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, votedIn }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters }: PeopleListFilters) {
   // Build additive AND conditions for canvass-based filters.
   const andFilters: Prisma.PersonWhereInput[] = [];
 
@@ -48,17 +48,10 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
     });
   }
 
-  if (votedIn) {
-    // ElectionType not yet in generated client (pending prisma generate after DLL release)
+  for (const fieldId of customFieldFilters ?? []) {
     andFilters.push({
-      votingRecords: {
-        some: {
-          electionType: votedIn as unknown as never,
-          participated: true,
-          deletedAt: null,
-        },
-      },
-    } as unknown as Prisma.PersonWhereInput);
+      customFieldValues: { path: [fieldId], string_contains: "" },
+    } as Prisma.PersonWhereInput);
   }
 
   const people = await db.person.findMany({

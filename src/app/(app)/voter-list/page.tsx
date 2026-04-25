@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, canExportData } from "@/lib/permissions";
+import { db } from "@/lib/db";
 import {
   getPeopleList,
   getPeopleCount,
@@ -19,13 +20,6 @@ import type { Role, SupportLevel } from "@/types";
 export const metadata: Metadata = { title: "Residents List" };
 
 type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
-type VotedInFilter = "municipal" | "provincial" | "federal";
-
-const VOTED_IN_LABELS: Record<VotedInFilter, string> = {
-  municipal: "Voted municipal",
-  provincial: "Voted provincial",
-  federal: "Voted federal",
-};
 
 const SUPPORT_FILTER_LABELS: Record<SupportFilter, string> = {
   supporting: "Supporting",
@@ -42,29 +36,52 @@ const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[
   { label: "Not contacted", value: "not_contacted" },
 ];
 
-function buildUrl(params: { q?: string; tag?: string; supportFilter?: string; contactedAfter?: string; votedIn?: string }) {
+function buildUrl(params: {
+  q?: string;
+  tag?: string;
+  supportFilter?: string;
+  contactedAfter?: string;
+  cfFilters?: string;
+}) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.tag) p.set("tag", params.tag);
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
   if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
-  if (params.votedIn) p.set("votedIn", params.votedIn);
+  if (params.cfFilters) p.set("cfFilters", params.cfFilters);
   const s = p.toString();
   return `/voter-list${s ? `?${s}` : ""}`;
 }
 
-interface PageProps {
-  searchParams: Promise<{ q?: string; tag?: string; supportFilter?: string; contactedAfter?: string; votedIn?: string }>;
+function toggleCfFilter(fieldId: string, active: string[]): string {
+  const next = active.includes(fieldId)
+    ? active.filter((id) => id !== fieldId)
+    : [...active, fieldId];
+  return next.join(",");
 }
 
+interface PageProps {
+  searchParams: Promise<{
+    q?: string;
+    tag?: string;
+    supportFilter?: string;
+    contactedAfter?: string;
+    cfFilters?: string;
+  }>;
+}
+
+type CustomFieldDef = { id: string; label: string };
+
 export default async function VoterListPage({ searchParams }: PageProps) {
-  const { q, tag, supportFilter: rawSupportFilter, contactedAfter, votedIn: rawVotedIn } = await searchParams;
+  const { q, tag, supportFilter: rawSupportFilter, contactedAfter, cfFilters: rawCfFilters } = await searchParams;
+
   const supportFilter = (rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS)
     ? rawSupportFilter as SupportFilter
     : undefined;
-  const votedIn = (rawVotedIn && rawVotedIn in VOTED_IN_LABELS)
-    ? rawVotedIn as VotedInFilter
-    : undefined;
+
+  const activeCfFilters: string[] = rawCfFilters
+    ? rawCfFilters.split(",").filter(Boolean)
+    : [];
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -75,27 +92,28 @@ export default async function VoterListPage({ searchParams }: PageProps) {
 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
 
-  const canSeeVotingFilter =
-    activeRole === "candidate" ||
-    activeRole === "campaign_manager" ||
-    activeRole === "co_chair";
-
-  const [people, totalCount, allTags] = await Promise.all([
+  const [people, totalCount, allTags, campaignData] = await Promise.all([
     getPeopleList({
       campaignId: activeCampaignId,
       q,
       tagId: tag,
       supportFilter,
       contactedAfter,
-      votedIn: canSeeVotingFilter ? votedIn : undefined,
+      customFieldFilters: activeCfFilters.length > 0 ? activeCfFilters : undefined,
     }),
     getPeopleCount(activeCampaignId),
     getCampaignTags(activeCampaignId),
+    db.campaign.findUnique({
+      where: { id: activeCampaignId },
+      select: { customFields: true },
+    }),
   ]);
+
+  const customFieldDefs = (campaignData?.customFields as CustomFieldDef[] | null) ?? [];
 
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
-  const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter || !!votedIn;
+  const isFiltered = !!q || !!activeTagId || !!supportFilter || !!contactedAfter || activeCfFilters.length > 0;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -142,7 +160,7 @@ export default async function VoterListPage({ searchParams }: PageProps) {
           return (
             <Link
               key={pill.label}
-              href={buildUrl({ q, tag, supportFilter: pill.value, contactedAfter })}
+              href={buildUrl({ q, tag, supportFilter: pill.value, contactedAfter, cfFilters: rawCfFilters })}
               className={
                 isActive
                   ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
@@ -158,26 +176,31 @@ export default async function VoterListPage({ searchParams }: PageProps) {
           tag={tag}
           supportFilter={supportFilter}
           contactedAfter={contactedAfter}
+          cfFilters={rawCfFilters}
         />
       </div>
 
-      {/* Voted-in filter pills — candidate/manager only */}
-      {canSeeVotingFilter && (
+      {/* Custom field filter pills */}
+      {customFieldDefs.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-slate-400 font-medium">Voting history:</span>
-          {(["municipal", "provincial", "federal"] as VotedInFilter[]).map((v) => (
-            <Link
-              key={v}
-              href={buildUrl({ q, tag, supportFilter, contactedAfter, votedIn: votedIn === v ? undefined : v })}
-              className={
-                votedIn === v
-                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              }
-            >
-              {VOTED_IN_LABELS[v]}
-            </Link>
-          ))}
+          <span className="text-xs text-slate-400 font-medium">Custom fields:</span>
+          {customFieldDefs.map((field) => {
+            const isActive = activeCfFilters.includes(field.id);
+            const nextCfFilters = toggleCfFilter(field.id, activeCfFilters) || undefined;
+            return (
+              <Link
+                key={field.id}
+                href={buildUrl({ q, tag, supportFilter, contactedAfter, cfFilters: nextCfFilters })}
+                className={
+                  isActive
+                    ? "bg-brand-500 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                    : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                }
+              >
+                {field.label}
+              </Link>
+            );
+          })}
         </div>
       )}
 
@@ -256,7 +279,6 @@ export default async function VoterListPage({ searchParams }: PageProps) {
                     </div>
 
                     <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      {/* Last contacted date */}
                       {latestResponse?.respondedAt ? (
                         <span className="text-xs text-slate-500">
                           Contacted{" "}
@@ -269,19 +291,16 @@ export default async function VoterListPage({ searchParams }: PageProps) {
                         <span className="text-xs text-slate-400">Not contacted</span>
                       )}
 
-                      {/* Support level badge */}
                       {latestResponse?.supportLevel && (
                         <SupportLevelBadge
                           level={latestResponse.supportLevel as SupportLevel}
                         />
                       )}
 
-                      {/* Other candidate label */}
                       {(latestResponse?.outcome as string) === "other_candidate" && (
                         <span className="text-xs text-slate-500">Other candidate</span>
                       )}
 
-                      {/* Tag chips */}
                       {person.tags.slice(0, 2).map(({ tag }) => (
                         <TagChip
                           key={tag.id}

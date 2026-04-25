@@ -8,9 +8,10 @@ interface Props {
   tag?: string;
   supportFilter?: string;
   contactedAfter?: string;
+  cfFilters?: string;
 }
 
-export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter }: Props) {
+export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter, cfFilters }: Props) {
   const router = useRouter();
   const [showPicker, setShowPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -21,6 +22,7 @@ export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter }: P
     if (tag) params.set("tag", tag);
     if (supportFilter) params.set("supportFilter", supportFilter);
     if (date) params.set("contactedAfter", date);
+    if (cfFilters) params.set("cfFilters", cfFilters);
     const s = params.toString();
     return `/voter-list${s ? `?${s}` : ""}`;
   }
