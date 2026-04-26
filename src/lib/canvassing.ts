@@ -13,7 +13,7 @@ export async function getCanvassLists(campaignId: string) {
         where: { deletedAt: null },
         include: {
           canvasser: { select: { id: true, firstName: true, lastName: true } },
-          _count: { select: { responses: true } },
+          responses: { select: { personId: true } },
         },
       },
       _count: { select: { entries: true } },
@@ -22,10 +22,11 @@ export async function getCanvassLists(campaignId: string) {
   });
 
   return lists.map((list) => {
-    const totalResponses = list.assignments.reduce(
-      (sum, a) => sum + a._count.responses,
-      0
+    // Count distinct people canvassed across all assignments on this list.
+    const allPersonIds = list.assignments.flatMap((a) =>
+      a.responses.map((r) => r.personId)
     );
+    const totalResponses = new Set(allPersonIds).size;
     return { ...list, totalResponses, totalEntries: list._count.entries };
   });
 }

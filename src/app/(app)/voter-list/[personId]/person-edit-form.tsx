@@ -151,14 +151,12 @@ export function PersonEditForm({
           <input name="email" type="email" defaultValue={email ?? ""} className={inputCls} />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Home phone">
-            <input name="phoneHome" type="tel" defaultValue={phoneHome ?? ""} className={inputCls} />
-          </Field>
-          <Field label="Mobile phone">
-            <input name="phoneMobile" type="tel" defaultValue={phoneMobile ?? ""} className={inputCls} />
-          </Field>
-        </div>
+        <Field label="Home phone">
+          <input name="phoneHome" type="tel" defaultValue={phoneHome ?? ""} className={inputCls} />
+        </Field>
+        <Field label="Mobile phone">
+          <input name="phoneMobile" type="tel" defaultValue={phoneMobile ?? ""} className={inputCls} />
+        </Field>
 
         <Field label="Birth date">
           <input

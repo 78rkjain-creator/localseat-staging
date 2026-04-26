@@ -63,7 +63,7 @@ export async function getCandidateDashboardData(campaignId: string) {
         _count: { select: { entries: true } },
         assignments: {
           select: {
-            _count: { select: { responses: true } },
+            responses: { select: { personId: true } },
             canvasser: { select: { firstName: true, lastName: true } },
           },
         },
@@ -163,7 +163,7 @@ export async function getCandidateDashboardData(campaignId: string) {
     id: l.id,
     name: l.name,
     totalEntries: l._count.entries,
-    totalResponses: l.assignments.reduce((sum, a) => sum + a._count.responses, 0),
+    totalResponses: new Set(l.assignments.flatMap((a) => a.responses.map((r) => r.personId))).size,
     canvasserNames: l.assignments.map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`),
   }));
 
@@ -208,7 +208,7 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
           _count: { select: { entries: true } },
           assignments: {
             select: {
-              _count: { select: { responses: true } },
+              responses: { select: { personId: true } },
               canvasser: { select: { id: true, firstName: true, lastName: true } },
             },
           },
@@ -261,7 +261,7 @@ export async function getFieldOrganizerDashboardData(campaignId: string) {
     id: l.id,
     name: l.name,
     totalEntries: l._count.entries,
-    totalResponses: l.assignments.reduce((sum, a) => sum + a._count.responses, 0),
+    totalResponses: new Set(l.assignments.flatMap((a) => a.responses.map((r) => r.personId))).size,
     canvassers: l.assignments.map((a) => a.canvasser),
   }));
 
@@ -418,7 +418,7 @@ export async function getNeedsYouQueue(campaignId: string): Promise<NeedsYouItem
       where: { campaignId, deletedAt: null },
       select: {
         _count: { select: { entries: true } },
-        assignments: { select: { _count: { select: { responses: true } } } },
+        assignments: { select: { responses: { select: { personId: true } } } },
       },
     }),
     db.addressChangeRequest.count({
@@ -428,7 +428,8 @@ export async function getNeedsYouQueue(campaignId: string): Promise<NeedsYouItem
 
   const walkListsInProgress = walkListsRaw.filter((l) => {
     if (l._count.entries === 0) return false;
-    const pct = l.assignments.reduce((sum, a) => sum + a._count.responses, 0) / l._count.entries;
+    const responded = new Set(l.assignments.flatMap((a) => a.responses.map((r) => r.personId))).size;
+    const pct = responded / l._count.entries;
     return pct >= 0.5 && pct < 1.0;
   }).length;
 

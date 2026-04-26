@@ -42,7 +42,8 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
         <div className="flex flex-col gap-3 mb-8">
           {assignments.map((a) => {
             const pct =
-              a.totalEntries > 0 ? Math.round((a.totalResponses / a.totalEntries) * 100) : 0;
+              a.totalEntries > 0 ? Math.min(100, Math.round((a.totalResponses / a.totalEntries) * 100)) : 0;
+            const capped = Math.min(a.totalResponses, a.totalEntries);
             const remaining = Math.max(0, a.totalEntries - a.totalResponses);
             const started = a.totalResponses > 0;
             const complete = remaining === 0 && a.totalEntries > 0;
@@ -74,7 +75,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
                     />
                   </div>
                   <div className="flex justify-between mt-1.5 text-xs text-slate-400">
-                    <span>{a.totalResponses} of {a.totalEntries} doors</span>
+                    <span>{capped} of {a.totalEntries} doors</span>
                     <span>{pct}%</span>
                   </div>
                 </div>

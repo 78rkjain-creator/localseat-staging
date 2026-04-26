@@ -19,7 +19,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
 
   const totalEntries = walkListProgress.reduce((s, l) => s + l.totalEntries, 0);
   const totalResponses = walkListProgress.reduce((s, l) => s + l.totalResponses, 0);
-  const overallPct = totalEntries > 0 ? Math.round((totalResponses / totalEntries) * 100) : 0;
+  const overallPct = totalEntries > 0 ? Math.min(100, Math.round((totalResponses / totalEntries) * 100)) : 0;
 
   return (
     <div className="px-6 py-8 max-w-5xl mx-auto">
@@ -107,7 +107,8 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {walkListProgress.map((l) => {
-                  const pct = l.totalEntries > 0 ? Math.round((l.totalResponses / l.totalEntries) * 100) : 0;
+                  const capped = Math.min(l.totalResponses, l.totalEntries);
+                  const pct = l.totalEntries > 0 ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100)) : 0;
                   const complete = l.totalEntries > 0 && l.totalResponses >= l.totalEntries;
                   return (
                     <tr key={l.id} className="hover:bg-slate-50/50">
@@ -137,7 +138,7 @@ export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) 
                             </div>
                           </div>
                           <span className="text-xs text-slate-500 whitespace-nowrap">
-                            {l.totalResponses}/{l.totalEntries}
+                            {capped}/{l.totalEntries}
                           </span>
                         </div>
                       </td>

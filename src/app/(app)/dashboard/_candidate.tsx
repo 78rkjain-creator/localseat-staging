@@ -257,7 +257,8 @@ export async function CandidateDashboard({ campaignId }: Props) {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {walkListProgress.map((l) => {
-                  const pctDone = l.totalEntries > 0 ? Math.round((l.totalResponses / l.totalEntries) * 100) : 0;
+                  const capped = Math.min(l.totalResponses, l.totalEntries);
+                  const pctDone = l.totalEntries > 0 ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100)) : 0;
                   return (
                     <tr key={l.id} className="hover:bg-slate-50/50">
                       <td className="px-4 py-3">
@@ -271,7 +272,7 @@ export async function CandidateDashboard({ campaignId }: Props) {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-sm text-slate-700">{l.totalResponses}/{l.totalEntries}</span>
+                        <span className="text-sm text-slate-700">{capped}/{l.totalEntries}</span>
                         <span className="text-xs text-slate-400 ml-1.5">{pctDone}%</span>
                       </td>
                     </tr>
