@@ -18,6 +18,7 @@ import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "./CustomFieldsEditor";
 import { ListSourceToggle } from "./list-source-toggle";
 import { PersonTagEditor } from "./person-tag-editor";
+import { OutOfDistrictControl } from "./out-of-district-control";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -44,6 +45,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const canEditTags = activeRole
     ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
     : false;
+  const canMarkOod = activeRole
+    ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
+    : false;
+  const canApproveOod =
+    activeRole === "candidate" || activeRole === "campaign_manager";
 
   const [person, campaign, listMemberships, campaignTags] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
@@ -108,6 +114,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
   );
 
   const isTeamMember = person.listSource === "team";
+
+  // New OOD fields are present at runtime but not yet in the generated Prisma types.
+  // These casts can be removed after running `prisma generate`.
+  const p = person as typeof person & {
+    outOfDistrictRequestedAt: Date | null;
+    outOfDistrictRejectionReason: string | null;
+    outOfDistrictRequester: { firstName: string; lastName: string } | null;
+  };
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto">
@@ -195,6 +209,18 @@ export default async function PersonDetailPage({ params }: PageProps) {
               <ListSourceToggle
                 personId={person.id}
                 initialValue={person.includeInWalkLists}
+              />
+            )}
+            {!isTeamMember && canMarkOod && (
+              <OutOfDistrictControl
+                personId={person.id}
+                isOutOfDistrict={person.isOutOfDistrict}
+                approvalStatus={person.outOfDistrictApprovalStatus ?? null}
+                requestedBy={p.outOfDistrictRequester}
+                requestedAt={p.outOfDistrictRequestedAt ?? null}
+                rejectionReason={p.outOfDistrictRejectionReason ?? null}
+                canMark={canMarkOod}
+                canApprove={canApproveOod}
               />
             )}
           </Card>

@@ -208,8 +208,9 @@ model User {
   reviewedVoterChanges  VoterChangeRequest[]   @relation("VoterChangeReviewer")
   listImports           ListImport[]           @relation("ListImportUser")
   personRecords         Person[]
-  signsAdded            Sign[]                 @relation("SignsAdded")
-  signsInstalled        Sign[]                 @relation("SignsInstalled")
+  signsAdded                Sign[]   @relation("SignsAdded")
+  signsInstalled            Sign[]   @relation("SignsInstalled")
+  outOfDistrictRequests     Person[] @relation("OodRequester")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -300,18 +301,22 @@ model Person {
   isConfirmedVoter    Boolean    @default(false)
   listSource          ListSource @default(manual)
   includeInWalkLists  Boolean    @default(false)
-  isOutOfDistrict             Boolean                      @default(false)
-  outOfDistrictApprovalStatus OutOfDistrictApprovalStatus?
-  userId                      String?
-  needsDistrictClassification Boolean                      @default(false)
+  isOutOfDistrict              Boolean                      @default(false)
+  outOfDistrictApprovalStatus  OutOfDistrictApprovalStatus?
+  outOfDistrictRequestedById   String?
+  outOfDistrictRequestedAt     DateTime?
+  outOfDistrictRejectionReason String?
+  userId                       String?
+  needsDistrictClassification  Boolean                      @default(false)
   customFieldValues   Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  campaign           Campaign           @relation(fields: [campaignId], references: [id])
-  household          Household?         @relation(fields: [householdId], references: [id])
-  user               User?              @relation(fields: [userId], references: [id])
+  campaign                 Campaign           @relation(fields: [campaignId], references: [id])
+  household                Household?         @relation(fields: [householdId], references: [id])
+  user                     User?              @relation(fields: [userId], references: [id])
+  outOfDistrictRequester   User?              @relation("OodRequester", fields: [outOfDistrictRequestedById], references: [id])
   tags               PersonTag[]
   notes              Note[]
   canvassResponses   CanvassResponse[]

@@ -23,6 +23,7 @@ interface SidebarProps {
   campaignName: string | null;
   campaignCount?: number;
   pendingDataCorrectionsCount?: number;
+  pendingOutOfDistrictCount?: number;
 }
 
 interface NavItem {
@@ -54,7 +55,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0 }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, pendingOutOfDistrictCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -413,26 +414,39 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                   { href: "/people/residents", label: "Residents" },
                   { href: "/people/voters", label: "Voter List" },
                   ...(role && canManageVoterList(role)
-                    ? [{ href: "/people/out-of-district", label: "Out-of-District" }]
+                    ? [{
+                        href: pendingOutOfDistrictCount > 0
+                          ? "/people/out-of-district/pending"
+                          : "/people/out-of-district",
+                        label: "Out-of-District",
+                        badge: pendingOutOfDistrictCount > 0 ? pendingOutOfDistrictCount : undefined,
+                      }]
                     : []),
                   { href: "/people/team", label: "Team" },
-                ] as { href: string; label: string }[]).map((item) => {
+                ] as { href: string; label: string; badge?: number }[]).map((item) => {
                   const isActive =
                     item.href === "/people"
                       ? pathname === "/people"
-                      : pathname.startsWith(item.href);
+                      : pathname.startsWith("/people/out-of-district")
+                        ? item.href.startsWith("/people/out-of-district")
+                        : pathname.startsWith(item.href);
                   return (
                     <Link
-                      key={item.href}
+                      key={item.label}
                       href={item.href}
                       className={[
-                        "flex items-center px-3 py-2 text-sm rounded-r-xl transition-colors",
+                        "flex items-center justify-between px-3 py-2 text-sm rounded-r-xl transition-colors",
                         isActive
                           ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
                           : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
                       ].join(" ")}
                     >
-                      {item.label}
+                      <span>{item.label}</span>
+                      {item.badge !== undefined && (
+                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-semibold bg-amber-500 text-white">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

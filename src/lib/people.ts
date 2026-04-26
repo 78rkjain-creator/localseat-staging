@@ -202,6 +202,16 @@ export async function getPersonDetail(personId: string, campaignId: string) {
   return person;
 }
 
+export async function getPendingOutOfDistrictCount(campaignId: string): Promise<number> {
+  return db.person.count({
+    where: {
+      campaignId,
+      deletedAt: null,
+      outOfDistrictApprovalStatus: "pending",
+    },
+  });
+}
+
 // ── Voter list (paginated, management view) ────────────────────────────────
 
 const VOTER_LIST_PAGE_SIZE = 100;

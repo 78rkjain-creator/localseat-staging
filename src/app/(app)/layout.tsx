@@ -7,6 +7,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { canReviewAddressChanges } from "@/lib/permissions";
 import { getPendingAddressChangeCount } from "@/lib/address-changes";
 import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
+import { getPendingOutOfDistrictCount } from "@/lib/people";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -29,13 +30,19 @@ export default async function AppLayout({
 
   const demoMode = process.env.DEMO_MODE === "true";
 
-  const pendingDataCorrectionsCount =
+  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager";
+
+  const [pendingDataCorrectionsCount, pendingOutOfDistrictCount] = await Promise.all([
     activeCampaignId && activeRole && canReviewAddressChanges(activeRole as Role)
-      ? await Promise.all([
+      ? Promise.all([
           getPendingAddressChangeCount(activeCampaignId),
           getPendingVoterChangeCount(activeCampaignId),
         ]).then(([a, b]) => a + b)
-      : 0;
+      : Promise.resolve(0),
+    activeCampaignId && isFullAccess
+      ? getPendingOutOfDistrictCount(activeCampaignId)
+      : Promise.resolve(0),
+  ]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -48,6 +55,7 @@ export default async function AppLayout({
           campaignName={activeMembership?.campaignName ?? null}
           campaignCount={memberships.length}
           pendingDataCorrectionsCount={pendingDataCorrectionsCount}
+          pendingOutOfDistrictCount={pendingOutOfDistrictCount}
         />
         <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">
           {children}

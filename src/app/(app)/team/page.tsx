@@ -174,13 +174,6 @@ export default function TeamPage() {
 
   const candidateMember = members.find((m) => m.role === "candidate");
 
-  // TEMP DIAGNOSTIC — remove after debugging
-  console.log("[TeamPage] session:", session);
-  console.log("[TeamPage] sessionStatus:", sessionStatus);
-  console.log("[TeamPage] activeRole:", activeRole);
-  console.log("[TeamPage] canManage:", canManage);
-  console.log("[TeamPage] canAddMember:", canAddMember);
-
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
       {/* Header */}
