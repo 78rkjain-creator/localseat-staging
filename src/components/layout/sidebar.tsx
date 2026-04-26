@@ -58,7 +58,13 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+
+  const isPeoplePath = pathname.startsWith("/people");
+  useEffect(() => {
+    if (isPeoplePath) setPeopleOpen(true);
+  }, [isPeoplePath]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -237,30 +243,8 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
         ),
       },
     ],
-    // Group 2 — People & Field
+    // Group 2 — Field Operations (People section rendered separately)
     [
-      ...(role && canViewAllPeople(role)
-        ? [
-            {
-              href: "/voter-list",
-              label: "Residents List",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              ),
-            },
-            {
-              href: "/voter-list/confirmed",
-              label: "Voter List",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
       ...(role && canManageVoterList(role)
         ? [
             {
@@ -386,16 +370,90 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
-        {navGroups.filter((g) => g.length > 0).flatMap((group, gi) => [
-          ...(gi > 0 ? [<div key={`divider-${gi}`} className="h-px bg-slate-100 my-1" />] : []),
-          ...group.map((item) => (
-            <NavLink
-              key={item.href}
-              {...item}
-              active={pathname === item.href || pathname.startsWith(item.href + "/")}
-            />
-          )),
-        ])}
+        {/* Dashboard */}
+        {navGroups[0].map((item) => (
+          <NavLink
+            key={item.href}
+            {...item}
+            active={pathname === item.href || pathname.startsWith(item.href + "/")}
+          />
+        ))}
+
+        {/* People section — expandable, auto-opens on /people/* */}
+        {role && canViewAllPeople(role) && (
+          <>
+            <div className="h-px bg-slate-100 my-1" />
+            <button
+              type="button"
+              onClick={() => setPeopleOpen((v) => !v)}
+              className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
+            >
+              <span className="flex items-center gap-3">
+                <span className="h-5 w-5 flex-shrink-0">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </span>
+                People
+              </span>
+              <svg
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (peopleOpen || isPeoplePath) ? "rotate-180" : ""].join(" ")}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {(peopleOpen || isPeoplePath) && (
+              <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
+                {([
+                  { href: "/people", label: "All People" },
+                  { href: "/people/residents", label: "Residents" },
+                  { href: "/people/voters", label: "Voter List" },
+                  ...(role && canManageVoterList(role)
+                    ? [{ href: "/people/out-of-district", label: "Out-of-District" }]
+                    : []),
+                  { href: "/people/team", label: "Team" },
+                ] as { href: string; label: string }[]).map((item) => {
+                  const isActive =
+                    item.href === "/people"
+                      ? pathname === "/people"
+                      : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={[
+                        "flex items-center px-3 py-2 text-sm rounded-r-xl transition-colors",
+                        isActive
+                          ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Field & Operations groups */}
+        {navGroups.slice(1).filter((g) => g.length > 0).map((group, gi) => (
+          <div key={gi}>
+            <div className="h-px bg-slate-100 my-1" />
+            {group.map((item) => (
+              <NavLink
+                key={item.href}
+                {...item}
+                active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              />
+            ))}
+          </div>
+        ))}
 
         {/* Admin collapsible section */}
         {showAdmin && (

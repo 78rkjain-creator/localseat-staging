@@ -5,16 +5,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, canExportData, canAddResident } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { getPeopleList, getPeopleCount, getCampaignTags } from "@/lib/people";
+import { getPeopleList, getCampaignTags } from "@/lib/people";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PeopleSearchBar } from "./search-bar";
-import { DistrictClassifyBanner } from "./classify-banner";
-import type { UnclassifiedPerson } from "./classify-modal";
-import type { Role, SupportLevel } from "@/types";
+import { PeopleSearchBar } from "../search-bar";
+import { ResidentsDateFilter, ResidentsListSourceFilter } from "./filters-client";
+import type { Role, SupportLevel, ListSource } from "@/types";
+import { ListSource as PrismaListSource } from "@prisma/client";
 
-export const metadata: Metadata = { title: "People" };
+export const metadata: Metadata = { title: "Residents List" };
+
+// Residents view excludes team members by default.
+const RESIDENTS_LIST_SOURCE_VALUES: ListSource[] = [
+  "voters_list",
+  "residents_list",
+  "manual",
+  "canvass",
+];
 
 type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
 
@@ -37,15 +45,28 @@ function buildUrl(params: {
   q?: string;
   tag?: string;
   supportFilter?: string;
+  contactedAfter?: string;
+  cfFilters?: string;
+  listSource?: string;
   page?: number;
 }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.tag) p.set("tag", params.tag);
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
+  if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
+  if (params.cfFilters) p.set("cfFilters", params.cfFilters);
+  if (params.listSource) p.set("listSource", params.listSource);
   if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
-  return `/people${s ? `?${s}` : ""}`;
+  return `/people/residents${s ? `?${s}` : ""}`;
+}
+
+function toggleCfFilter(fieldId: string, active: string[]): string {
+  const next = active.includes(fieldId)
+    ? active.filter((id) => id !== fieldId)
+    : [...active, fieldId];
+  return next.join(",");
 }
 
 function getPageRange(current: number, total: number): (number | "...")[] {
@@ -61,12 +82,25 @@ interface PageProps {
     q?: string;
     tag?: string;
     supportFilter?: string;
+    contactedAfter?: string;
+    cfFilters?: string;
+    listSource?: string;
     page?: string;
   }>;
 }
 
-export default async function PeopleMasterListPage({ searchParams }: PageProps) {
-  const { q, tag, supportFilter: rawSupportFilter, page: rawPage } = await searchParams;
+type CustomFieldDef = { id: string; label: string };
+
+export default async function ResidentsListPage({ searchParams }: PageProps) {
+  const {
+    q,
+    tag,
+    supportFilter: rawSupportFilter,
+    contactedAfter,
+    cfFilters: rawCfFilters,
+    listSource: rawListSource,
+    page: rawPage,
+  } = await searchParams;
 
   const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
@@ -74,6 +108,23 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
     rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS
       ? (rawSupportFilter as SupportFilter)
       : undefined;
+
+  const activeCfFilters: string[] = rawCfFilters
+    ? rawCfFilters.split(",").filter(Boolean)
+    : [];
+
+  // Parse explicit source selection; limit to residents-valid sources (no team).
+  const activeListSources: ListSource[] = rawListSource
+    ? (rawListSource
+        .split(",")
+        .filter((v) =>
+          RESIDENTS_LIST_SOURCE_VALUES.includes(v as ListSource)
+        ) as ListSource[])
+    : [];
+
+  // Always pass a source list so team is excluded even when no filter is selected.
+  const effectiveListSources: ListSource[] =
+    activeListSources.length > 0 ? activeListSources : RESIDENTS_LIST_SOURCE_VALUES;
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -85,63 +136,65 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
   const canAdd = activeRole ? canAddResident(activeRole as Role) : false;
 
-  const [{ people, total: filteredTotal }, totalCount, allTags, unclassifiedPeople] =
+  const [{ people, total: filteredTotal }, totalCount, allTags, campaignData] =
     await Promise.all([
       getPeopleList({
         campaignId: activeCampaignId,
         q,
         tagId: tag,
         supportFilter,
+        contactedAfter,
+        customFieldFilters: activeCfFilters.length > 0 ? activeCfFilters : undefined,
+        listSource: effectiveListSources,
+        isOutOfDistrict: false,
         page,
       }),
-      getPeopleCount(activeCampaignId),
-      getCampaignTags(activeCampaignId),
-      db.person.findMany({
+      // Total count: all non-team, in-district residents.
+      db.person.count({
         where: {
           campaignId: activeCampaignId,
           deletedAt: null,
-          needsDistrictClassification: true,
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          household: {
-            select: {
-              address: {
-                select: {
-                  streetNumber: true,
-                  streetName: true,
-                  unitNumber: true,
-                },
-              },
-            },
+          listSource: {
+            in: [
+              PrismaListSource.voters_list,
+              PrismaListSource.residents_list,
+              PrismaListSource.manual,
+              PrismaListSource.canvass,
+            ],
           },
+          isOutOfDistrict: false,
         },
-        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-        take: 100,
+      }),
+      getCampaignTags(activeCampaignId),
+      db.campaign.findUnique({
+        where: { id: activeCampaignId },
+        select: { customFields: true },
       }),
     ]);
 
-  const classifyPeople: UnclassifiedPerson[] = unclassifiedPeople.map((p) => {
-    const addr = p.household?.address;
-    const addressLine = addr
-      ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
-      : null;
-    return { id: p.id, firstName: p.firstName, lastName: p.lastName, addressLine };
-  });
+  const rawCfDefs = campaignData?.customFields;
+  const customFieldDefs: CustomFieldDef[] = Array.isArray(rawCfDefs)
+    ? (rawCfDefs as CustomFieldDef[])
+    : [];
 
   const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
-  const isFiltered = !!q || !!activeTagId || !!supportFilter;
+  const isFiltered =
+    !!q ||
+    !!activeTagId ||
+    !!supportFilter ||
+    !!contactedAfter ||
+    activeCfFilters.length > 0 ||
+    (activeListSources.length > 0 &&
+      activeListSources.length < RESIDENTS_LIST_SOURCE_VALUES.length);
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">All People</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Residents List</h1>
           <p className="text-slate-500 text-sm mt-0.5">
             {isFiltered ? (
               <>
@@ -195,28 +248,26 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
         </div>
       </div>
 
-      {/* District classification banner */}
-      {classifyPeople.length > 0 && (
-        <DistrictClassifyBanner
-          count={classifyPeople.length}
-          campaignId={activeCampaignId}
-          people={classifyPeople}
-        />
-      )}
-
       {/* Search */}
       <div className="mb-3">
         <PeopleSearchBar defaultValue={q ?? ""} />
       </div>
 
-      {/* Support filter pills */}
+      {/* Support filter pills + date filter */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
         {SUPPORT_FILTER_PILLS.map((pill) => {
           const isActive = supportFilter === pill.value;
           return (
             <Link
               key={pill.label}
-              href={buildUrl({ q, tag, supportFilter: pill.value })}
+              href={buildUrl({
+                q,
+                tag,
+                supportFilter: pill.value,
+                contactedAfter,
+                cfFilters: rawCfFilters,
+                listSource: rawListSource,
+              })}
               className={
                 isActive
                   ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
@@ -227,6 +278,57 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
             </Link>
           );
         })}
+        <ResidentsDateFilter
+          q={q}
+          tag={tag}
+          supportFilter={supportFilter}
+          contactedAfter={contactedAfter}
+          cfFilters={rawCfFilters}
+          listSource={rawListSource}
+        />
+      </div>
+
+      {/* Custom field filter pills */}
+      {customFieldDefs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs text-slate-400 font-medium">Custom fields:</span>
+          {customFieldDefs.map((field) => {
+            const isActive = activeCfFilters.includes(field.id);
+            const nextCfFilters = toggleCfFilter(field.id, activeCfFilters) || undefined;
+            return (
+              <Link
+                key={field.id}
+                href={buildUrl({
+                  q,
+                  tag,
+                  supportFilter,
+                  contactedAfter,
+                  cfFilters: nextCfFilters,
+                  listSource: rawListSource,
+                })}
+                className={
+                  isActive
+                    ? "bg-brand-500 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                    : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+                }
+              >
+                {field.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {/* List source filter */}
+      <div className="mb-4">
+        <ResidentsListSourceFilter
+          activeListSources={activeListSources}
+          q={q}
+          tag={tag}
+          supportFilter={supportFilter}
+          contactedAfter={contactedAfter}
+          cfFilters={rawCfFilters}
+        />
       </div>
 
       {/* Active tag filter */}
@@ -235,7 +337,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
           <span className="text-sm text-slate-500">Filtered by tag:</span>
           <TagChip name={activeTag.name} color={activeTag.color} />
           <Link
-            href="/people"
+            href="/people/residents"
             className="text-sm text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900"
           >
             Clear
@@ -255,11 +357,11 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
       {/* List */}
       {people.length === 0 ? (
         <EmptyState
-          title={isFiltered ? "No results" : "No people yet"}
+          title={isFiltered ? "No results" : "No residents yet"}
           description={
             isFiltered
               ? "Try a different name or clear the filter."
-              : "Voter records will appear here once data is imported."
+              : "Resident records will appear here once data is imported."
           }
         />
       ) : (
@@ -351,7 +453,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               <div className="flex md:hidden items-center justify-between px-5 py-4">
                 {page > 1 ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page - 1 })}
+                    href={buildUrl({
+                      q,
+                      tag,
+                      supportFilter,
+                      contactedAfter,
+                      cfFilters: rawCfFilters,
+                      listSource: rawListSource,
+                      page: page - 1,
+                    })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
                   >
                     <svg
@@ -379,12 +489,22 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                     Previous
                   </span>
                 )}
+
                 <span className="text-sm text-slate-500">
                   Page {page} of {totalPages}
                 </span>
+
                 {page < totalPages ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page + 1 })}
+                    href={buildUrl({
+                      q,
+                      tag,
+                      supportFilter,
+                      contactedAfter,
+                      cfFilters: rawCfFilters,
+                      listSource: rawListSource,
+                      page: page + 1,
+                    })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
                   >
                     Next
@@ -418,7 +538,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               <div className="hidden md:flex items-center justify-center gap-1 px-5 py-4">
                 {page > 1 ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page - 1 })}
+                    href={buildUrl({
+                      q,
+                      tag,
+                      supportFilter,
+                      contactedAfter,
+                      cfFilters: rawCfFilters,
+                      listSource: rawListSource,
+                      page: page - 1,
+                    })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     aria-label="Previous page"
                   >
@@ -460,7 +588,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                   ) : (
                     <Link
                       key={pageNum}
-                      href={buildUrl({ q, tag, supportFilter, page: pageNum })}
+                      href={buildUrl({
+                        q,
+                        tag,
+                        supportFilter,
+                        contactedAfter,
+                        cfFilters: rawCfFilters,
+                        listSource: rawListSource,
+                        page: pageNum,
+                      })}
                       aria-current={pageNum === page ? "page" : undefined}
                       className={
                         pageNum === page
@@ -475,7 +611,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
 
                 {page < totalPages ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page + 1 })}
+                    href={buildUrl({
+                      q,
+                      tag,
+                      supportFilter,
+                      contactedAfter,
+                      cfFilters: rawCfFilters,
+                      listSource: rawListSource,
+                      page: page + 1,
+                    })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     aria-label="Next page"
                   >

@@ -266,7 +266,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
                             <div className="min-w-0 flex-1">
                               <Link
-                                href={`/voter-list/${entry.person.id}`}
+                                href={`/people/${entry.person.id}`}
                                 className="text-sm font-medium text-slate-800 hover:text-slate-600 transition-colors"
                               >
                                 {entry.person.firstName} {entry.person.lastName}
@@ -329,7 +329,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                         </div>
                         <div className="min-w-0 flex-1">
                           <Link
-                            href={`/voter-list/${response.person.id}`}
+                            href={`/people/${response.person.id}`}
                             className="text-sm font-medium text-slate-800 hover:text-brand-600 transition-colors"
                           >
                             {response.person.firstName} {response.person.lastName}

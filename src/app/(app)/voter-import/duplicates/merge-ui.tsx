@@ -158,7 +158,7 @@ function PersonCard({ person, label }: { person: PersonRow; label: string }) {
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <Link
-            href={`/voter-list/${person.id}`}
+            href={`/people/${person.id}`}
             className="font-semibold text-slate-900 hover:text-brand-600 transition-colors"
           >
             {person.firstName} {person.lastName}

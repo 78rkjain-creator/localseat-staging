@@ -93,7 +93,7 @@ export default async function VolunteerSchedulePage() {
                 {volunteerRecords.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/50">
                     <td className="px-4 py-3">
-                      <a href={`/voter-list/${r.person.id}`} className="font-medium text-slate-900 hover:text-brand-600">
+                      <a href={`/people/${r.person.id}`} className="font-medium text-slate-900 hover:text-brand-600">
                         {r.person.firstName} {r.person.lastName}
                       </a>
                       {r.person.household?.address && (

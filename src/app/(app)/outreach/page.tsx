@@ -145,7 +145,7 @@ export default async function OutreachPage({ searchParams }: PageProps) {
                 <div className="flex items-start justify-between gap-3 mb-1">
                   <div className="min-w-0">
                     <Link
-                      href={`/voter-list/${log.person.id}`}
+                      href={`/people/${log.person.id}`}
                       className="text-base font-semibold text-slate-900 hover:text-brand-600 transition-colors"
                     >
                       {log.person.firstName} {log.person.lastName}

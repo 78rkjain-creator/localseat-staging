@@ -36,7 +36,7 @@ function getTabsForRole(role: Role | string | null | undefined): Tab[] {
       return [
         tab("Canvassing", "/canvassing", <MapPin size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
-        tab("Voters", "/voter-list", <Users size={ICON_SIZE} />),
+        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
         tab("Account", "/account", <User size={ICON_SIZE} />),
       ];
     case "field_organizer":
@@ -44,7 +44,7 @@ function getTabsForRole(role: Role | string | null | undefined): Tab[] {
         tab("Dashboard", "/dashboard", <LayoutDashboard size={ICON_SIZE} />),
         tab("Canvassing", "/canvassing", <MapPin size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
-        tab("Voters", "/voter-list", <Users size={ICON_SIZE} />),
+        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
         tab("Account", "/account", <User size={ICON_SIZE} />),
       ];
     case "volunteer_coordinator":
@@ -52,14 +52,14 @@ function getTabsForRole(role: Role | string | null | undefined): Tab[] {
         tab("Dashboard", "/dashboard", <LayoutDashboard size={ICON_SIZE} />),
         tab("Volunteers", "/volunteers", <UserCheck size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
-        tab("Voters", "/voter-list", <Users size={ICON_SIZE} />),
+        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
         tab("Account", "/account", <User size={ICON_SIZE} />),
       ];
     case "finance_lead":
       return [
         tab("Dashboard", "/dashboard", <LayoutDashboard size={ICON_SIZE} />),
         tab("Donors", "/donors", <Heart size={ICON_SIZE} />),
-        tab("Voters", "/voter-list", <Users size={ICON_SIZE} />),
+        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
         tab("Account", "/account", <User size={ICON_SIZE} />),
       ];
     case "super_user":
@@ -75,7 +75,7 @@ function getTabsForRole(role: Role | string | null | undefined): Tab[] {
     default:
       return [
         tab("Dashboard", "/dashboard", <LayoutDashboard size={ICON_SIZE} />),
-        tab("Voters", "/voter-list", <Users size={ICON_SIZE} />),
+        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
         tab("Canvassing", "/canvassing", <MapPin size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
       ];

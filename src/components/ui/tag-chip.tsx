@@ -36,7 +36,7 @@ export function TagChip({ name, color, tagId, size = "sm" }: TagChipProps) {
 
   if (tagId) {
     return (
-      <Link href={`/voter-list?tag=${tagId}`} className="hover:opacity-80 transition-opacity">
+      <Link href={`/people/residents?tag=${tagId}`} className="hover:opacity-80 transition-opacity">
         {chip}
       </Link>
     );

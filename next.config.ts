@@ -5,6 +5,45 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async redirects() {
+    return [
+      {
+        source: "/voter-list",
+        destination: "/people/residents",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/confirmed",
+        destination: "/people/voters",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/confirmed/:personId",
+        destination: "/people/:personId",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/new",
+        destination: "/people/new",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/duplicates",
+        destination: "/people/duplicates",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/export",
+        destination: "/people/export",
+        permanent: true,
+      },
+      {
+        source: "/voter-list/:personId",
+        destination: "/people/:personId",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

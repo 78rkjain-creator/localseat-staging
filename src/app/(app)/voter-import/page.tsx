@@ -180,7 +180,7 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
                       <tr key={person.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-5 py-3">
                           <Link
-                            href={`/voter-list/${person.id}`}
+                            href={`/people/${person.id}`}
                             className="font-medium text-slate-900 hover:text-brand-600 transition-colors"
                           >
                             {person.lastName}, {person.firstName}

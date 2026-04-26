@@ -258,7 +258,7 @@ export function ListMapClient({ entries, listId, listName, ungeocodedCount = 0 }
                 ${supportLine}
                 ${outcomeLine}
                 <a
-                  href="/voter-list/${props.personId}"
+                  href="/people/${props.personId}"
                   style="display:inline-block;margin-top:8px;font-size:12px;color:#f97316;text-decoration:none;font-weight:500;"
                 >
                   View record →

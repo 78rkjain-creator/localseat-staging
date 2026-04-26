@@ -260,7 +260,7 @@ export function DonorDetailClient({ donor, showAmounts, readOnly = false }: Dono
       {donor.linkedPerson && (
         <Section title="Linked voter record">
           <a
-            href={`/voter-list/${donor.linkedPerson.id}`}
+            href={`/people/${donor.linkedPerson.id}`}
             className="text-sm text-brand-600 hover:underline"
           >
             {donor.linkedPerson.firstName} {donor.linkedPerson.lastName}

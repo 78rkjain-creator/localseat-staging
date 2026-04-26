@@ -467,7 +467,7 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
       {/* ── Actions ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-end gap-3 pb-8">
         <a
-          href="/voter-list"
+          href="/people/residents"
           className="inline-flex items-center h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"
         >
           Cancel

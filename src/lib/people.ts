@@ -8,13 +8,14 @@ export interface PeopleListFilters {
   supportFilter?: "supporting" | "undecided" | "not_supporting" | "not_contacted";
   contactedAfter?: string; // ISO date string
   customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
-  listSource?: ListSource[]; // when provided and fewer than 4 values, filter to those sources
+  listSource?: ListSource[]; // when provided and fewer than 5 values, filter to those sources
+  isOutOfDistrict?: boolean;
   page?: number;
 }
 
 const PEOPLE_PAGE_SIZE = 50;
 
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, page = 1 }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, isOutOfDistrict, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -52,8 +53,12 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
     } as Prisma.PersonWhereInput);
   }
 
-  if (listSource && listSource.length > 0 && listSource.length < 4) {
+  if (listSource && listSource.length > 0 && listSource.length < 5) {
     andFilters.push({ listSource: { in: listSource } });
+  }
+
+  if (typeof isOutOfDistrict === "boolean") {
+    andFilters.push({ isOutOfDistrict });
   }
 
   const where: Prisma.PersonWhereInput = {
@@ -248,7 +253,7 @@ export async function getVoterList({
     where.tags = { some: { tagId } };
   }
 
-  if (listSource && listSource.length > 0 && listSource.length < 4) {
+  if (listSource && listSource.length > 0 && listSource.length < 5) {
     where.listSource = { in: listSource };
   }
 

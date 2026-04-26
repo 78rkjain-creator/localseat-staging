@@ -15,6 +15,9 @@ interface PersonEditFormProps {
   phoneMobile: string | null;
   birthDate: Date | null;
   supportLevel: SupportLevel | null;
+  pollNumber: string | null;
+  wardStatus?: string;
+  readOnly?: boolean;
 }
 
 export function PersonEditForm({
@@ -26,6 +29,9 @@ export function PersonEditForm({
   phoneMobile,
   birthDate,
   supportLevel,
+  pollNumber,
+  wardStatus: _wardStatus,
+  readOnly = false,
 }: PersonEditFormProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -48,6 +54,7 @@ export function PersonEditForm({
         phoneMobile: fd.get("phoneMobile") as string,
         birthDate: (fd.get("birthDate") as string) || null,
         supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
+        pollNumber: (fd.get("pollNumber") as string) || null,
       });
 
       if (result.error) {
@@ -73,13 +80,15 @@ export function PersonEditForm({
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
             Contact
           </h2>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="h-7 px-3 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Edit
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="h-7 px-3 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Edit
+            </button>
+          )}
         </div>
         <dl className="flex flex-col gap-3">
           <ReadRow label="Name" value={`${firstName} ${lastName}`} />
@@ -118,6 +127,7 @@ export function PersonEditForm({
             value={birthDate ? new Date(birthDate).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : null}
           />
           <ReadRow label="Support level" value={SUPPORT_LEVEL_LABELS[supportLevel as SupportLevel] ?? null} />
+          {pollNumber && <ReadRow label="Poll number" value={pollNumber} />}
         </dl>
       </div>
     );
@@ -198,6 +208,15 @@ export function PersonEditForm({
             <option value="soft_no">Soft No</option>
             <option value="strong_no">Strong No</option>
           </select>
+        </Field>
+
+        <Field label="Poll number">
+          <input
+            name="pollNumber"
+            defaultValue={pollNumber ?? ""}
+            placeholder="e.g. 001A"
+            className={inputCls}
+          />
         </Field>
 
         {error && (

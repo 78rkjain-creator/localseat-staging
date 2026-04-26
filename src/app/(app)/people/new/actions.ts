@@ -226,5 +226,5 @@ export async function addResident(
     },
   });
 
-  redirect(`/voter-list/${person.id}`);
+  redirect(`/people/${person.id}`);
 }

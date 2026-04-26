@@ -16,7 +16,7 @@ export default async function AddResidentPage() {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (!activeRole || !canAddResident(activeRole as Role)) redirect("/voter-list");
+  if (!activeRole || !canAddResident(activeRole as Role)) redirect("/people/residents");
 
   const tags = await getCampaignTags(activeCampaignId);
 
@@ -24,7 +24,7 @@ export default async function AddResidentPage() {
     <div className="px-4 sm:px-6 py-8 max-w-2xl mx-auto">
       <div className="mb-6">
         <Link
-          href="/voter-list"
+          href="/people/residents"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 mb-4"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -157,7 +157,7 @@ export function ReviewQueueClient({ groups }: { groups: ImportGroup[] }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
-                          href={`/voter-list/${m.person.id}`}
+                          href={`/people/${m.person.id}`}
                           className="text-sm font-medium text-brand-600 hover:underline"
                         >
                           {m.person.firstName} {m.person.lastName}

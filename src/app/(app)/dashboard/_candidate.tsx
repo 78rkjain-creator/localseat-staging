@@ -89,7 +89,7 @@ export async function CandidateDashboard({ campaignId }: Props) {
         <Card padding="md">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Voter ID mix</h2>
-            <Link href="/voter-list" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">details →</Link>
+            <Link href="/people/residents" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">details →</Link>
           </div>
           <div className="flex items-center gap-6">
             {/* SVG donut — hand-rolled, no chart library */}

@@ -185,7 +185,7 @@ export async function importVoterRows(
     return { error: `Import failed: ${message}` };
   }
 
-  revalidatePath("/voter-list");
+  revalidatePath("/people/residents");
 
   if (created > 0) {
     await createAuditLog({
@@ -316,7 +316,7 @@ export async function importVotingRecordRows(
     imported++;
   }
 
-  revalidatePath("/voter-list");
+  revalidatePath("/people/residents");
   return { imported, skipped };
 }
 
@@ -415,7 +415,7 @@ export async function mergePersons(input: {
     details: { winnerId: input.winnerId, loserId: input.loserId },
   });
 
-  revalidatePath("/voter-list");
-  revalidatePath("/voter-list/duplicates");
+  revalidatePath("/people/residents");
+  revalidatePath("/people/duplicates");
   return { ok: true };
 }

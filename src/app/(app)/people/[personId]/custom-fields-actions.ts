@@ -43,6 +43,6 @@ export async function saveCustomFieldValues(
     data: { customFieldValues: Object.keys(cleaned).length > 0 ? cleaned : Prisma.DbNull },
   });
 
-  revalidatePath(`/voter-list/${personId}`);
+  revalidatePath(`/people/${personId}`);
   return {};
 }
