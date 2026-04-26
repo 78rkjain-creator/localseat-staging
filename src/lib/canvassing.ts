@@ -211,13 +211,15 @@ export async function previewPeopleFilter({
     };
   }
 
-  // Exclude manual-source records unless the campaign manager has overridden them,
-  // and exclude ward-ineligible addresses for the same reason.
+  // Hard exclude: out-of-district people cannot appear in walk lists regardless of override.
+  where.isOutOfDistrict = false;
+
+  // Soft exclude: manual and team records are excluded unless explicitly overridden.
   where.OR = [
     { includeInWalkLists: true },
     {
       AND: [
-        { listSource: { not: ListSource.manual } },
+        { listSource: { notIn: [ListSource.manual, ListSource.team] } },
         { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
       ],
     },

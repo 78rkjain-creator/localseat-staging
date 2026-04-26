@@ -144,10 +144,10 @@ export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
   super_admin: "Super Admin",
 };
 
-export type ListSource = "voters_list" | "residents_list" | "manual" | "canvass";
+export type ListSource = "voters_list" | "residents_list" | "manual" | "canvass" | "team";
 
 export const LIST_SOURCE_VALUES: ListSource[] = [
-  "voters_list", "residents_list", "manual", "canvass",
+  "voters_list", "residents_list", "manual", "canvass", "team",
 ];
 
 export const LIST_SOURCE_LABELS: Record<ListSource, string> = {
@@ -155,4 +155,13 @@ export const LIST_SOURCE_LABELS: Record<ListSource, string> = {
   residents_list: "Residents List",
   manual:         "Manual",
   canvass:        "Canvass",
+  team:           "Team",
+};
+
+export type OutOfDistrictApprovalStatus = "pending" | "approved" | "rejected";
+
+export const OUT_OF_DISTRICT_APPROVAL_STATUS_LABELS: Record<OutOfDistrictApprovalStatus, string> = {
+  pending:  "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
 };

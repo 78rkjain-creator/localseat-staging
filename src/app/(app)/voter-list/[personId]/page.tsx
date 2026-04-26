@@ -448,6 +448,7 @@ function ListSourceBadge({ source }: { source: ListSource }) {
     residents_list: "bg-blue-50 text-blue-700 border-blue-200",
     manual:         "bg-slate-100 text-slate-600 border-slate-200",
     canvass:        "bg-orange-50 text-orange-700 border-orange-200",
+    team:           "bg-violet-50 text-violet-700 border-violet-200",
   };
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorMap[source]}`}>

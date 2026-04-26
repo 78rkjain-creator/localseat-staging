@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 25, 2026 — end of session shipping Tags + Add Resident + listSource + cleanup batch._
+_Last updated: April 25, 2026 — ward boundary unsaved guard, Represent API picker removal, save button state feedback._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -335,7 +335,7 @@ Candidate
 - `src/lib/geocoding.ts` — Mapbox geocoding, cached on Address, 600ms delay
 - `/canvassing/turf` — polygon draw, ray-cast point-in-polygon, managers only
 - `/canvassing/[listId]/map` — colour-coded markers, 30s auto-refresh
-- Ward boundary: Polygon or MultiPolygon, Represent API picker, GeoJSON/KML upload
+- Ward boundary: Polygon or MultiPolygon, GeoJSON/KML/KMZ upload (Represent API picker removed — unreliable)
 - All 555 Owen Sound addresses have pre-baked lat/lng in seed
 
 ### Security

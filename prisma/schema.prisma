@@ -101,6 +101,14 @@ enum ListSource {
   residents_list
   manual
   canvass
+  team
+}
+
+enum OutOfDistrictApprovalStatus {
+  pending
+  approved
+  rejected
+  not_required
 }
 
 enum PersonListMembershipStatus {
@@ -199,6 +207,7 @@ model User {
   submittedVoterChanges VoterChangeRequest[]   @relation("VoterChangeSubmitter")
   reviewedVoterChanges  VoterChangeRequest[]   @relation("VoterChangeReviewer")
   listImports           ListImport[]           @relation("ListImportUser")
+  personRecords         Person[]
   signsAdded            Sign[]                 @relation("SignsAdded")
   signsInstalled        Sign[]                 @relation("SignsInstalled")
 
@@ -291,6 +300,10 @@ model Person {
   isConfirmedVoter    Boolean    @default(false)
   listSource          ListSource @default(manual)
   includeInWalkLists  Boolean    @default(false)
+  isOutOfDistrict             Boolean                      @default(false)
+  outOfDistrictApprovalStatus OutOfDistrictApprovalStatus?
+  userId                      String?
+  needsDistrictClassification Boolean                      @default(false)
   customFieldValues   Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -298,6 +311,7 @@ model Person {
 
   campaign           Campaign           @relation(fields: [campaignId], references: [id])
   household          Household?         @relation(fields: [householdId], references: [id])
+  user               User?              @relation(fields: [userId], references: [id])
   tags               PersonTag[]
   notes              Note[]
   canvassResponses   CanvassResponse[]
@@ -311,6 +325,7 @@ model Person {
   voterChangeRequests   VoterChangeRequest[]
   listMemberships       PersonListMembership[]
 
+  @@unique([userId, campaignId])
   @@index([campaignId, deletedAt])
   @@index([lastName])
   @@index([email])

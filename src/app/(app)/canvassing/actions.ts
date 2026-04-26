@@ -76,12 +76,13 @@ export async function createTurfCanvassList(data: {
   if (data.addressIds.length === 0) return { error: "No addresses selected." };
 
   // Find all people linked to the selected addresses via Household.
-  // Exclude manual-source records and ward-ineligible addresses unless the
-  // campaign manager has explicitly set includeInWalkLists = true on the person.
+  // Out-of-district people are hard-excluded (no override).
+  // Manual and team records are soft-excluded (overridable via includeInWalkLists).
   const people = await db.person.findMany({
     where: {
       campaignId: activeCampaignId,
       deletedAt: null,
+      isOutOfDistrict: false,
       household: {
         addressId: { in: data.addressIds },
         deletedAt: null,
@@ -90,7 +91,7 @@ export async function createTurfCanvassList(data: {
         { includeInWalkLists: true },
         {
           AND: [
-            { listSource: { not: ListSource.manual } },
+            { listSource: { notIn: [ListSource.manual, ListSource.team] } },
             { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
           ],
         },
