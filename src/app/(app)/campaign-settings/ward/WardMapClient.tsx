@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { Polygon, MultiPolygon } from "geojson";
 import { parseKmlToGeoJsonPolygon } from "@/lib/ward";
 import { saveWardBoundary, clearWardBoundary } from "./actions";
@@ -70,6 +71,7 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
+  const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef  = useRef<any>(null);
@@ -84,8 +86,12 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
   const [saving,  setSaving]  = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [hasUnsavedBoundary, setHasUnsavedBoundary] = useState(false);
+  const [showNavModal, setShowNavModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasUnsavedRef = useRef(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
 
   // ── Represent API state ───────────────────────────────────────────────────
 
@@ -112,6 +118,62 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [wardDropdownOpen]);
+
+  // ── Unsaved boundary guards ───────────────────────────────────────────────
+
+  // Keep ref in sync with state so event listeners can read it without stale closures
+  useEffect(() => { hasUnsavedRef.current = hasUnsavedBoundary; }, [hasUnsavedBoundary]);
+
+  // Browser close / tab refresh guard
+  useEffect(() => {
+    if (!hasUnsavedBoundary) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedBoundary]);
+
+  // In-app navigation guard — intercept history.pushState (used by Next.js <Link>)
+  useEffect(() => {
+    const origPush = history.pushState;
+    const thisPageUrl = window.location.href;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (history as any).pushState = function(data: unknown, unused: string, url?: string | URL | null) {
+      if (hasUnsavedRef.current) {
+        const rawUrl = url ? url.toString() : "";
+        const path = rawUrl.startsWith(window.location.origin)
+          ? rawUrl.slice(window.location.origin.length)
+          : rawUrl;
+        pendingNavRef.current = () => {
+          hasUnsavedRef.current = false;
+          if (path) router.push(path);
+          else origPush.call(history, data, unused, url);
+        };
+        setShowNavModal(true);
+      } else {
+        origPush.call(history, data, unused, url);
+      }
+    };
+
+    const handlePopstate = () => {
+      if (!hasUnsavedRef.current) return;
+      const targetPath = window.location.pathname + window.location.search;
+      origPush.call(history, null, "", thisPageUrl);
+      pendingNavRef.current = () => {
+        hasUnsavedRef.current = false;
+        router.push(targetPath);
+      };
+      setShowNavModal(true);
+    };
+
+    window.addEventListener("popstate", handlePopstate);
+
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (history as any).pushState = origPush;
+      window.removeEventListener("popstate", handlePopstate);
+    };
+  }, [router]);
 
   // ── Load a Polygon or MultiPolygon onto the draw control and fit bounds ───
 
@@ -253,10 +315,16 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const onUpdate = (_e: any) => { evaluatePolygon(draw); };
-      map.on("draw.create", () => { setIsDrawing(false); evaluatePolygon(draw); });
+      const onUpdate = (_e: any) => { setHasUnsavedBoundary(true); evaluatePolygon(draw); };
+      map.on("draw.create", () => { setIsDrawing(false); setHasUnsavedBoundary(true); evaluatePolygon(draw); });
       map.on("draw.update", onUpdate);
-      map.on("draw.delete", () => { setIsDrawing(false); evaluatePolygon(draw); });
+      map.on("draw.delete", () => {
+        setIsDrawing(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const remaining = (draw.getAll()?.features ?? []).filter((f: any) => f.geometry?.type === "Polygon");
+        if (remaining.length === 0) setHasUnsavedBoundary(false);
+        evaluatePolygon(draw);
+      });
     });
 
     return () => {
@@ -288,6 +356,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     setCurrentPolygon(null);
     setIsDrawing(false);
     setSaveMsg(null);
+    setHasUnsavedBoundary(false);
   }
 
   async function handleSave() {
@@ -300,6 +369,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       setSaveMsg({ type: "error", text: result.error });
     } else {
       setSaveMsg({ type: "success", text: "Ward boundary saved." });
+      setHasUnsavedBoundary(false);
     }
   }
 
@@ -314,7 +384,50 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       setSaveMsg({ type: "error", text: result.error });
     } else {
       setSaveMsg({ type: "success", text: "Ward boundary cleared." });
+      setHasUnsavedBoundary(false);
     }
+  }
+
+  // ── Navigation modal handlers ─────────────────────────────────────────────
+
+  async function handleSaveAndLeave() {
+    if (!currentPolygon) {
+      hasUnsavedRef.current = false;
+      setHasUnsavedBoundary(false);
+      setShowNavModal(false);
+      const nav = pendingNavRef.current;
+      pendingNavRef.current = null;
+      nav?.();
+      return;
+    }
+    setSaving(true);
+    const result = await saveWardBoundary(currentPolygon);
+    setSaving(false);
+    if (result.error) {
+      setSaveMsg({ type: "error", text: result.error });
+      setShowNavModal(false);
+    } else {
+      hasUnsavedRef.current = false;
+      setHasUnsavedBoundary(false);
+      setShowNavModal(false);
+      const nav = pendingNavRef.current;
+      pendingNavRef.current = null;
+      nav?.();
+    }
+  }
+
+  function handleLeaveWithoutSaving() {
+    hasUnsavedRef.current = false;
+    setHasUnsavedBoundary(false);
+    setShowNavModal(false);
+    const nav = pendingNavRef.current;
+    pendingNavRef.current = null;
+    nav?.();
+  }
+
+  function handleCancelNav() {
+    setShowNavModal(false);
+    pendingNavRef.current = null;
   }
 
   // ── Represent API handlers ────────────────────────────────────────────────
@@ -435,6 +548,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
       loadGeometryOntoMap(geometry);
       setCurrentPolygon(geometry);
+      setHasUnsavedBoundary(true);
       setSaveMsg(null);
       setWardDropdownOpen(false);
     } catch {
@@ -469,6 +583,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
           loadGeometryOntoMap(poly);
           setCurrentPolygon(poly);
+          setHasUnsavedBoundary(true);
           setSaveMsg(null);
         } catch {
           setFileError("Could not read KMZ file.");
@@ -518,6 +633,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
       loadGeometryOntoMap(geometry);
       setCurrentPolygon(geometry);
+      setHasUnsavedBoundary(true);
       setSaveMsg(null);
     };
     reader.readAsText(file);
@@ -740,7 +856,10 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={[
+                "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
+                hasUnsavedBoundary ? "ring-2 ring-brand-300 ring-offset-1" : "",
+              ].join(" ")}
             >
               {saving ? "Saving…" : "Save boundary"}
             </button>
@@ -807,6 +926,18 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
         </div>
       )}
 
+      {/* Unsaved boundary banner */}
+      {hasUnsavedBoundary && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.538-1.333-3.308 0L3.732 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-sm font-medium text-amber-800">
+            You have an unsaved boundary. Click <span className="font-semibold">Save boundary</span> to keep it.
+          </p>
+        </div>
+      )}
+
       {/* ── 4. Map ── */}
       <div
         className="relative rounded-2xl overflow-hidden border border-slate-200"
@@ -819,6 +950,39 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       <p className="text-xs text-slate-400">
         Accepted file types: .geojson (Polygon or MultiPolygon), .kml, .kmz
       </p>
+
+      {/* Navigation guard modal */}
+      {showNavModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-base font-semibold text-slate-900 mb-2">Unsaved boundary</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              You loaded a ward boundary but haven&apos;t saved it. Do you want to save before leaving?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleSaveAndLeave}
+                disabled={saving}
+                className="h-10 w-full rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Saving…" : "Save and leave"}
+              </button>
+              <button
+                onClick={handleLeaveWithoutSaving}
+                className="h-10 w-full rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Leave without saving
+              </button>
+              <button
+                onClick={handleCancelNav}
+                className="text-sm text-slate-400 hover:text-slate-600 transition-colors py-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

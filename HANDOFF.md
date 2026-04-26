@@ -1,5 +1,7 @@
 # LocalSeat.io — Handoff Notes
 
+_Last updated: April 25, 2026 — end of session shipping Tags + Add Resident + listSource + cleanup batch._
+
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
 - Read existing files only when information is not already known from context
@@ -144,6 +146,8 @@ NEXT_PUBLIC_STRIPE_ENABLED="false"
 
 After any reseed: sign out and back in to refresh JWT.
 
+Seed creates 8 default tags per campaign: Volunteer, Donor, Endorser, Sign location, Do not contact, Media, VIP, Influencer.
+
 ---
 
 ## Role Hierarchy
@@ -217,6 +221,9 @@ Candidate
 20260425044820_add_sign_installer_role
 20260425044915_add_signs_model
 20260425045245_add_volunteer_follow_up_task_type
+20260425120000_tag_tenancy_and_support_level_enum
+20260425130000_person_birth_date
+20260425140000_person_list_source
 ```
 
 ---
@@ -237,12 +244,17 @@ Candidate
 - PersonListMembershipStatus: matched, created, pending_review, accepted
 - SignStatus: to_be_installed, installed
 - TaskType: includes volunteer_follow_up
+- ListSource: voters_list, residents_list, manual, canvass
+- SupportLevel enum: strong_yes, soft_yes, undecided, soft_no, strong_no (on both Person and CanvassResponse)
 
 **Key Person fields:**
 - isConfirmedVoter (bool) — set true on OVL match
 - pollNumber — wired through full import pipeline
 - wardStatus: not_checked | inside | outside | outside_accepted | pending_review
 - customFieldValues (Json) — up to 5 campaign-defined fields
+- birthDate (DateTime, nullable) — replaced birthYear (Int); CSV import accepts "Birth Date" (YYYY-MM-DD), legacy "Birth Year" still accepted with deprecation warning
+- listSource (ListSource, required) — set on creation; manual + out-of-ward records auto-excluded from walk lists
+- includeInWalkLists (Boolean, default false) — override: set true to include a manual or out-of-ward person on walk lists
 
 **Key Campaign fields:**
 - customFields (Json) — defines up to 5 field labels
@@ -272,6 +284,37 @@ Candidate
 - Editable on person detail, importable via CSV (column headers match field labels)
 - Filter buttons on Residents List page filter by field presence (AND logic)
 - Orphan cleanup runs on definition save
+- Exported to Residents List CSV (one column per defined field, in definition order)
+
+### Tags
+- Campaign-scoped: Tag has `campaignId`, unique on `(campaignId, name)` — tags are not shared across campaigns
+- 18-tag cap per campaign; 8 default tags seeded (Volunteer, Donor, Endorser, Sign location, Do not contact, Media, VIP, Influencer)
+- Creation / rename / delete: candidate and campaign_manager only, at `/campaign-settings/tags`
+- Attach / detach: field_organizer and above
+- Delete blocked if tag is in use (personCount > 0); hard delete (no soft delete — unique constraint would block re-creation)
+- TagPicker component (`src/components/ui/tag-picker.tsx`): click-to-open dropdown with search, no inline creation
+
+### Add Resident
+- `/voter-list/new` — available to candidate, campaign_manager, field_organizer
+- Sets `listSource = manual`; these records are auto-excluded from walk lists unless `includeInWalkLists = true`
+- Address: search existing (combobox via `/api/addresses/search`) or enter manually
+
+### listSource and Walk List Eligibility
+- Every Person has a required `listSource`: voters_list, residents_list, manual, or canvass
+- Walk list / canvass list generation excludes `manual` records and `wardStatus` of `outside` or `pending_review` unless `includeInWalkLists = true`
+- Filter logic lives in `src/lib/canvassing.ts` (`previewPeopleFilter`)
+
+### Walk List Progress
+- All six progress-tracking locations now count **distinct personIds** (not raw response count): `getAssignedLists`, `getCanvassLists`, `getCandidateDashboardData`, `getFieldOrganizerDashboardData`, `getNeedsYouQueue`, canvasser dashboard
+- Display layer caps pct at 100% and shown count at totalEntries as defense in depth
+
+### Poll Number Display
+- `src/lib/format-poll-number.ts`: returns raw value when set; "Pending OVL" when `wardStatus` is `not_checked` or `pending_review`; "Unknown" when settled-but-null
+- Display-only helper — CSV export always uses the raw nullable value
+
+### Service Worker Cache Busting
+- `scripts/stamp-sw.mjs` runs before every build (`npm run build`): replaces `CACHE_NAME` in `public/sw.js` with a timestamp string
+- Combined with existing `skipWaiting()` and `clients.claim()` in the SW, this forces a clean cache reload on every deploy
 
 ### Signs
 - `/signs` — accessible to all roles including sign_installer
@@ -322,10 +365,16 @@ Candidate
   people.ts, canvassing.ts, outreach.ts, activity.ts, dashboard.ts
   geocoding.ts, ward.ts, address-normalize.ts, competitors.ts
   email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
+  format-poll-number.ts
 /src/components/layout/sidebar.tsx, mobile-nav.tsx
+/src/components/ui/tag-picker.tsx
 /src/hooks/useOfflineSync.ts
 /public/sw.js
-/scripts/geocode-demo.ts, export-geocoded-coords.ts
+/scripts/geocode-demo.ts, export-geocoded-coords.ts, stamp-sw.mjs
+/src/app/(app)/campaign-settings/tags/
+/src/app/(app)/voter-list/new/
+/src/app/api/addresses/search/route.ts
+/NEXT_SESSION_PROMPTS.md
 /var/www/marketing/
 ```
 
@@ -353,7 +402,6 @@ Candidate
 ---
 
 ## Known Issues / Technical Debt
-- `jszip` installed directly on demo server only — must add to package.json before next prod deploy or KMZ upload silently fails
 - `as unknown as` Prisma casts in several files — resolves on next `npx prisma generate` when dev server not holding DLL
 - Rate limiter resets on server restart — needs Redis for production scale
 - Offline queue is per-device only
@@ -361,6 +409,7 @@ Candidate
 - staging and localseat.io repos can drift — always copy seed.ts and key shared files
 - Staging Neon DB must have migrations applied manually (`prisma migrate deploy`) — Vercel does not auto-run migrations
 - EPERM on Windows during `prisma generate` = known DLL lock from running dev server, not a real error
+- Seed data: Downtown East Route has 38 entries but seed creates ~139 canvass responses (~3.6 per door). Not a bug — distinct-personId counting handles it correctly. Just an artifact of the seed data volume.
 
 ---
 
@@ -374,8 +423,10 @@ Candidate
 ### High Priority
 | Item | Effort |
 |---|---|
+| People restructure — 5 tabs (Master List, Residents List, Voter List, Out of District, Team), URL move to /people/*, team-as-people, district modal, FO out-of-district approval flow (see NEXT_SESSION_PROMPTS.md) | Large |
+| Offline queue persistence — queued submissions survive page reload (see NEXT_SESSION_PROMPTS.md Prompt β) | Medium |
 | Activity timeline on person detail | Small |
-| PWA manifest, install prompt, offline fallback | Small |
+| PWA manifest and install prompt — SW cache busting shipped; manifest and install prompt still needed | Small |
 | Content Security Policy (CSP) — prompt written, test on staging first | Small |
 
 ### Medium Priority
@@ -418,6 +469,7 @@ Candidate
 ### Defined — Ready to Build
 | Item | Effort |
 |---|---|
+| People restructure — 5-tab people section (/people/*), team-as-people model, district modal, FO out-of-district approval flow. Full spec in NEXT_SESSION_PROMPTS.md | Large |
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, phone preservation, field-level merge, manual review, unmatched handling, audit trail, data quality scoring | Large |
 
 ### V2+ Out of Scope
