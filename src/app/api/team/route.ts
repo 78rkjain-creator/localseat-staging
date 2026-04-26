@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Role } from "@prisma/client";
+import { Role, ListSource } from "@prisma/client";
 import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { canAddRole } from "@/lib/plan-limits";
@@ -227,12 +227,43 @@ export async function POST(req: NextRequest) {
     details: { targetUserId: user.id, email: normalizedEmail, role },
   });
 
+  // Create or update the Person record linked to this user for the campaign.
+  // Cannot use upsert — the userId+campaignId unique index is partial (WHERE userId IS NOT NULL)
+  // and Prisma's ON CONFLICT cannot reference partial indexes.
+  const existingPerson = await db.person.findFirst({
+    where: { userId: user.id, campaignId: activeCampaignId },
+    select: { id: true },
+  });
+
+  let person: { id: string };
+  if (existingPerson) {
+    person = await db.person.update({
+      where: { id: existingPerson.id },
+      data: { listSource: ListSource.team, needsDistrictClassification: true, deletedAt: null },
+      select: { id: true },
+    });
+  } else {
+    person = await db.person.create({
+      data: {
+        campaignId: activeCampaignId,
+        userId: user.id,
+        firstName: (firstName as string).trim(),
+        lastName: (lastName as string).trim(),
+        listSource: ListSource.team,
+        needsDistrictClassification: true,
+        includeInWalkLists: false,
+      },
+      select: { id: true },
+    });
+  }
+
   return NextResponse.json(
     {
       membershipId: membership.id,
       role: membership.role,
       joinedAt: membership.createdAt,
       user: membership.user,
+      personId: person.id,
     },
     { status: 201 }
   );

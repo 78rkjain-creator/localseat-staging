@@ -117,6 +117,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               },
             },
           },
+          user: {
+            select: {
+              memberships: {
+                where: { campaignId: activeCampaignId, deletedAt: null },
+                select: { role: true },
+                take: 1,
+              },
+            },
+          },
         },
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
         take: 100,
@@ -128,7 +137,8 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
     const addressLine = addr
       ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
       : null;
-    return { id: p.id, firstName: p.firstName, lastName: p.lastName, addressLine };
+    const role = p.user?.memberships[0]?.role ?? null;
+    return { id: p.id, firstName: p.firstName, lastName: p.lastName, addressLine, role };
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));

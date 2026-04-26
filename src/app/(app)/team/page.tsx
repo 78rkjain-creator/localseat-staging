@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import type { Role } from "@/types";
 import { ROLE_LABELS } from "@/types";
 import { changeUserRole, transferCandidateRole } from "./role-actions";
+import { TeamMemberClassifyModal } from "./classify-modal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ const primaryBtn =
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TeamPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const activeRole = session?.user?.activeRole as Role | undefined;
   const currentUserId = session?.user?.id;
 
@@ -148,7 +149,7 @@ export default function TeamPage() {
     loadMembers();
   }, []);
 
-  if (loading) {
+  if (loading || sessionStatus === "loading") {
     return (
       <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
         <div className="h-8 w-32 bg-slate-100 rounded-xl animate-pulse mb-6" />
@@ -172,6 +173,13 @@ export default function TeamPage() {
   }
 
   const candidateMember = members.find((m) => m.role === "candidate");
+
+  // TEMP DIAGNOSTIC — remove after debugging
+  console.log("[TeamPage] session:", session);
+  console.log("[TeamPage] sessionStatus:", sessionStatus);
+  console.log("[TeamPage] activeRole:", activeRole);
+  console.log("[TeamPage] canManage:", canManage);
+  console.log("[TeamPage] canAddMember:", canAddMember);
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
@@ -289,12 +297,19 @@ function AddMemberForm({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [classifyTarget, setClassifyTarget] = useState<{
+    personId: string;
+    firstName: string;
+    lastName: string;
+  } | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     const fd = new FormData(e.currentTarget);
+    const firstNameVal = (fd.get("firstName") as string).trim();
+    const lastNameVal = (fd.get("lastName") as string).trim();
     const phoneHome = (fd.get("phoneHome") as string).trim();
     const phoneMobile = (fd.get("phoneMobile") as string).trim();
     try {
@@ -302,8 +317,8 @@ function AddMemberForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: fd.get("firstName"),
-          lastName: fd.get("lastName"),
+          firstName: firstNameVal,
+          lastName: lastNameVal,
           email: fd.get("email"),
           phoneHome: phoneHome || null,
           phoneMobile: phoneMobile || null,
@@ -316,7 +331,13 @@ function AddMemberForm({
         setError(body.error ?? "Failed to add member");
         return;
       }
-      onSuccess();
+      const body = await res.json();
+      setSaving(false);
+      if (body.personId) {
+        setClassifyTarget({ personId: body.personId, firstName: firstNameVal, lastName: lastNameVal });
+      } else {
+        onSuccess();
+      }
     } catch {
       setError("Network error — please try again");
     } finally {
@@ -325,7 +346,18 @@ function AddMemberForm({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 mb-4">
+    <>
+      {classifyTarget && (
+        <TeamMemberClassifyModal
+          personId={classifyTarget.personId}
+          name={`${classifyTarget.firstName} ${classifyTarget.lastName}`}
+          onDone={() => {
+            setClassifyTarget(null);
+            onSuccess();
+          }}
+        />
+      )}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 mb-4">
       <h2 className="text-sm font-semibold text-slate-700 mb-3">Add team member</h2>
 
       {error && (
@@ -401,6 +433,7 @@ function AddMemberForm({
         </div>
       </form>
     </div>
+    </>
   );
 }
 
