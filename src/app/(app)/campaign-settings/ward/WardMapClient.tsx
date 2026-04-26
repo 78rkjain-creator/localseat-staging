@@ -63,6 +63,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
   const [saveMsg, setSaveMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [hasUnsavedBoundary, setHasUnsavedBoundary] = useState(false);
+  const [isBoundarySaved, setIsBoundarySaved] = useState(false);
   const [showNavModal, setShowNavModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,8 +266,8 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const onUpdate = (_e: any) => { setHasUnsavedBoundary(true); evaluatePolygon(draw); };
-      map.on("draw.create", () => { setIsDrawing(false); setHasUnsavedBoundary(true); evaluatePolygon(draw); });
+      const onUpdate = (_e: any) => { setHasUnsavedBoundary(true); setIsBoundarySaved(false); evaluatePolygon(draw); };
+      map.on("draw.create", () => { setIsDrawing(false); setHasUnsavedBoundary(true); setIsBoundarySaved(false); evaluatePolygon(draw); });
       map.on("draw.update", onUpdate);
       map.on("draw.delete", () => {
         setIsDrawing(false);
@@ -307,6 +308,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     setIsDrawing(false);
     setSaveMsg(null);
     setHasUnsavedBoundary(false);
+    setIsBoundarySaved(false);
   }
 
   async function handleSave() {
@@ -320,6 +322,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
     } else {
       setSaveMsg({ type: "success", text: "Ward boundary saved." });
       setHasUnsavedBoundary(false);
+      setIsBoundarySaved(true);
     }
   }
 
@@ -406,6 +409,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
           loadGeometryOntoMap(poly);
           setCurrentPolygon(poly);
           setHasUnsavedBoundary(true);
+          setIsBoundarySaved(false);
           setSaveMsg(null);
         } catch {
           setFileError("Could not read KMZ file.");
@@ -456,6 +460,7 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
       loadGeometryOntoMap(geometry);
       setCurrentPolygon(geometry);
       setHasUnsavedBoundary(true);
+      setIsBoundarySaved(false);
       setSaveMsg(null);
     };
     reader.readAsText(file);
@@ -516,13 +521,17 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
 
             <button
               onClick={handleSave}
-              disabled={saving}
-              className={[
-                "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
-                hasUnsavedBoundary ? "ring-2 ring-brand-300 ring-offset-1" : "",
-              ].join(" ")}
+              disabled={saving || isBoundarySaved}
+              className={
+                isBoundarySaved
+                  ? "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-sm font-semibold bg-slate-100 text-slate-400 cursor-not-allowed transition-colors"
+                  : [
+                      "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
+                      hasUnsavedBoundary ? "ring-2 ring-brand-300 ring-offset-1" : "",
+                    ].join(" ")
+              }
             >
-              {saving ? "Saving…" : "Save boundary"}
+              {saving ? "Saving…" : isBoundarySaved ? "Boundary saved" : "Save boundary"}
             </button>
           </>
         )}
