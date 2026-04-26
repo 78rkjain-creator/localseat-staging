@@ -33,7 +33,7 @@ export interface SaveResponseInput {
 
 export async function saveCanvassResponse(
   input: SaveResponseInput
-): Promise<{ error?: string; responseId?: string }> {
+): Promise<{ error?: string; responseId?: string; permanent?: boolean }> {
   const session = await getServerSession(authOptions);
   if (!session) return { error: "Not authenticated." };
 
@@ -49,13 +49,13 @@ export async function saveCanvassResponse(
     },
     select: { id: true },
   });
-  if (!assignment) return { error: "Assignment not found." };
+  if (!assignment) return { error: "Assignment not found.", permanent: true };
 
   const person = await db.person.findFirst({
     where: { id: input.personId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true, firstName: true, lastName: true },
   });
-  if (!person) return { error: "Person not found." };
+  if (!person) return { error: "Person not found.", permanent: true };
 
   const outcome = sanitizeEnum(input.outcome, CANVASS_OUTCOME_VALUES);
   if (!outcome) return { error: "Invalid outcome value." };

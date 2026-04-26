@@ -8,6 +8,7 @@ import type { SupportLevel, CanvassOutcome } from "@/types";
 import { VoterChangeModal } from "@/components/voter-change-modal";
 import { AddResidentModal } from "@/components/add-resident-modal";
 import { enqueue } from "@/lib/offline-queue";
+import type { QueuedResponse } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -176,8 +177,17 @@ export function CanvassScreen({
   savedSetRef.current = savedSet;
 
   // ── Offline sync ──────────────────────────────────────────────────────────
-  const { pendingCount, isSyncing, refresh: refreshSyncCount } =
-    useOfflineSync(saveCanvassResponse);
+  const {
+    pendingCount,
+    parkedCount,
+    parkedItems,
+    isSyncing,
+    refresh: refreshSyncCount,
+    retryParked,
+    discardParked,
+  } = useOfflineSync(saveCanvassResponse);
+
+  const [showParkedPanel, setShowParkedPanel] = useState(false);
 
   const [swFailure, setSwFailure] = useState(false);
 
@@ -733,7 +743,23 @@ export function CanvassScreen({
       </main>
 
       {/* ── Offline sync pill — sits above footer ── */}
-      <OfflinePill pendingCount={pendingCount} isSyncing={isSyncing} />
+      <OfflinePill
+        pendingCount={pendingCount}
+        parkedCount={parkedCount}
+        isSyncing={isSyncing}
+        onOpenParked={() => setShowParkedPanel(true)}
+      />
+
+      {/* ── Parked items panel ── */}
+      {showParkedPanel && (
+        <ParkedPanel
+          parkedItems={parkedItems}
+          entries={entries}
+          onRetry={async (id) => { await retryParked(id); }}
+          onDiscard={async (id) => { await discardParked(id); }}
+          onClose={() => setShowParkedPanel(false)}
+        />
+      )}
 
       {/* ── Zone 3: Actions — pinned bottom, clears mobile nav ── */}
       <footer className="flex-none bg-white border-t border-slate-100 px-4 pt-2 pb-16">
@@ -881,9 +907,18 @@ export function CanvassScreen({
 
 // ── Offline sync pill ──────────────────────────────────────────────────────
 
-function OfflinePill({ pendingCount, isSyncing }: { pendingCount: number; isSyncing: boolean }) {
+function OfflinePill({
+  pendingCount,
+  parkedCount,
+  isSyncing,
+  onOpenParked,
+}: {
+  pendingCount: number;
+  parkedCount: number;
+  isSyncing: boolean;
+  onOpenParked: () => void;
+}) {
   const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
-  if (isOnline && pendingCount === 0 && !isSyncing) return null;
 
   if (!isOnline) {
     return (
@@ -892,6 +927,19 @@ function OfflinePill({ pendingCount, isSyncing }: { pendingCount: number; isSync
       </div>
     );
   }
+
+  if (parkedCount > 0) {
+    return (
+      <button
+        type="button"
+        onClick={onOpenParked}
+        className="fixed bottom-36 left-4 z-10 bg-red-50 border border-red-200 text-red-700 text-xs font-medium px-3 py-1.5 rounded-full active:bg-red-100 transition-colors"
+      >
+        {parkedCount} failed · review
+      </button>
+    );
+  }
+
   if (isSyncing) {
     return (
       <div className="fixed bottom-36 left-4 z-10 bg-white border border-slate-200 text-slate-600 text-xs px-3 py-1.5 rounded-full">
@@ -899,9 +947,115 @@ function OfflinePill({ pendingCount, isSyncing }: { pendingCount: number; isSync
       </div>
     );
   }
+
+  if (pendingCount > 0) {
+    return (
+      <div className="fixed bottom-36 left-4 z-10 bg-white border border-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-full">
+        {pendingCount} to sync
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// ── Parked items panel ─────────────────────────────────────────────────────
+
+function ParkedPanel({
+  parkedItems,
+  entries,
+  onRetry,
+  onDiscard,
+  onClose,
+}: {
+  parkedItems: QueuedResponse[];
+  entries: LocalEntry[];
+  onRetry: (id: string) => Promise<void>;
+  onDiscard: (id: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+
+  function personName(personId: string): string {
+    const entry = entries.find((e) => e.person.id === personId);
+    if (!entry) return "Unknown person";
+    return `${entry.person.firstName} ${entry.person.lastName}`;
+  }
+
+  async function handleRetry(id: string) {
+    setBusy(id);
+    await onRetry(id);
+    setBusy(null);
+  }
+
+  async function handleDiscard(id: string) {
+    setBusy(id);
+    await onDiscard(id);
+    setBusy(null);
+  }
+
   return (
-    <div className="fixed bottom-36 left-4 z-10 bg-white border border-slate-200 text-slate-500 text-xs px-3 py-1.5 rounded-full">
-      {pendingCount} to sync
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/30"
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <div className="relative bg-white rounded-t-3xl shadow-2xl max-h-[70vh] flex flex-col">
+        {/* Handle + header */}
+        <div className="flex-none px-5 pt-4 pb-3 border-b border-slate-100">
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3" />
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Failed to sync</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {parkedItems.length} {parkedItems.length === 1 ? "response" : "responses"} could not be saved
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Item list */}
+        <ul className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {parkedItems.map((item) => (
+            <li key={item.id} className="px-5 py-3.5">
+              <p className="text-sm font-semibold text-slate-900 mb-0.5">{personName(item.personId)}</p>
+              {item.lastError && (
+                <p className="text-xs text-red-600 mb-2">{item.lastError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleRetry(item.id)}
+                  disabled={busy === item.id}
+                  className="h-8 px-3 rounded-xl bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors disabled:opacity-50"
+                >
+                  {busy === item.id ? "…" : "Retry"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDiscard(item.id)}
+                  disabled={busy === item.id}
+                  className="h-8 px-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Discard
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -941,5 +1095,4 @@ function CompactToggle({
   );
 }
 
-// Keep unused export to prevent TS errors from lingering references
 export type { LocalEntry };

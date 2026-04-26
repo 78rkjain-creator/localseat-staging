@@ -7,26 +7,28 @@
  * the useOfflineSync hook reads this queue and flushes items in order by calling
  * the saveCanvassResponse server action.
  *
+ * RETRY AND PARK:
+ * Each item tracks lifetime retry state in IndexedDB (persists across page reloads).
+ * After MAX_RETRIES failures the item transitions to status="parked" and stops
+ * blocking other items. Parked items remain visible in the UI so the canvasser
+ * can retry manually or discard them.
+ *
  * CURRENT LIMITATIONS:
  * - Queue is per-browser, per-device. Items on device A are invisible to device B.
  * - Items are stored unencrypted in the browser's local storage. This matches the
  *   security posture of the rest of the app — the canvasser is already authenticated.
  * - Concurrent browser tabs could attempt to sync the same queue simultaneously.
  *   In V1, the canvassing workflow is single-tab only so this is acceptable.
- * - If saveCanvassResponse rejects an item (e.g. assignment deleted server-side),
- *   that item blocks all later items until manually cleared. There is no per-item
- *   retry limit in V1.
  * - Queued items include a local queuedAt timestamp. The server action applies its
- *   own server-side timestamp on the respondedAt field, so canvass times in the
- *   database reflect sync time, not the moment the door was knocked. This is a
- *   known V1 limitation.
+ *   own server-side timestamp on the respondedAt field when queuedAt falls outside
+ *   the 48-hour acceptance window.
  */
 
 import type { SupportLevel, CanvassOutcome } from "@/types";
 
 const DB_NAME = "localseat_offline";
 const STORE_NAME = "canvass_queue";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface QueuedResponse {
   /** Local UUID assigned at enqueue time. */
@@ -43,6 +45,14 @@ export interface QueuedResponse {
   competitorId: string | null;
   /** Client-side timestamp in ms (Date.now()). */
   queuedAt: number;
+  /** Lifetime retry attempts (persisted in IDB). */
+  retryCount: number;
+  /** Timestamp of the last sync attempt, or null if never tried. */
+  lastAttemptedAt: number | null;
+  /** Last error message, or null if never failed. */
+  lastError: string | null;
+  /** pending = will be synced on next flush; parked = exceeded retry cap, needs manual action. */
+  status: "pending" | "parked";
 }
 
 // ── DB lifecycle ──────────────────────────────────────────────────────────────
@@ -56,6 +66,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
+      // v1→v2: store is schemaless; new retry fields default on read.
     };
 
     req.onsuccess = () => resolve(req.result);
@@ -63,10 +74,6 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-/**
- * Opens a transaction, runs fn against the object store, and returns the
- * resolved IDBRequest result. Closes the DB after the transaction completes.
- */
 function withStore<T>(
   mode: IDBTransactionMode,
   fn: (store: IDBObjectStore) => IDBRequest<T>
@@ -86,41 +93,68 @@ function withStore<T>(
   );
 }
 
+// Normalizes a raw IDB record to a full QueuedResponse (handles v1 records
+// that lack the retry fields introduced in DB_VERSION 2).
+function normalize(raw: Partial<QueuedResponse>): QueuedResponse {
+  return {
+    ...(raw as QueuedResponse),
+    retryCount: raw.retryCount ?? 0,
+    lastAttemptedAt: raw.lastAttemptedAt ?? null,
+    lastError: raw.lastError ?? null,
+    status: raw.status ?? "pending",
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Adds a response to the end of the queue. Assigns a local UUID and timestamp. */
+/** Adds a response to the end of the queue. */
 export function enqueue(
-  item: Omit<QueuedResponse, "id" | "queuedAt">
+  item: Omit<QueuedResponse, "id" | "queuedAt" | "retryCount" | "lastAttemptedAt" | "lastError" | "status">
 ): Promise<void> {
   const record: QueuedResponse = {
     ...item,
     id: crypto.randomUUID(),
     queuedAt: Date.now(),
+    retryCount: 0,
+    lastAttemptedAt: null,
+    lastError: null,
+    status: "pending",
   };
   return withStore("readwrite", (store) => store.add(record)).then(
     () => undefined
   );
 }
 
-/** Returns all queued items sorted oldest-first (ascending queuedAt). */
+/** Returns ALL queued items sorted oldest-first. Normalizes v1 records. */
 export function getAll(): Promise<QueuedResponse[]> {
   return openDb().then(
     (db) =>
       new Promise<QueuedResponse[]>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, "readonly");
         const store = tx.objectStore(STORE_NAME);
-        const req = store.getAll() as IDBRequest<QueuedResponse[]>;
+        const req = store.getAll() as IDBRequest<Partial<QueuedResponse>[]>;
 
         req.onsuccess = () => {
-          const sorted = req.result.slice().sort(
-            (a, b) => a.queuedAt - b.queuedAt
-          );
+          const sorted = req.result
+            .map(normalize)
+            .slice()
+            .sort((a, b) => a.queuedAt - b.queuedAt);
           resolve(sorted);
         };
         req.onerror = () => reject(req.error);
         tx.oncomplete = () => db.close();
       })
   );
+}
+
+/** Returns only items with status="pending" (will be attempted on next flush). */
+export function getPending(): Promise<QueuedResponse[]> {
+  return getAll().then((items) => items.filter((i) => i.status === "pending"));
+}
+
+/** Returns only items with status="parked" (exceeded retry cap, need manual action). */
+export function getParked(): Promise<QueuedResponse[]> {
+  return getAll().then((items) => items.filter((i) => i.status === "parked"));
 }
 
 /** Removes a single item from the queue by its local id. */
@@ -130,7 +164,37 @@ export function remove(id: string): Promise<void> {
   );
 }
 
-/** Returns the current number of items in the queue. */
+/** Returns the current number of items in the queue (all statuses). */
 export function count(): Promise<number> {
   return withStore<number>("readonly", (store) => store.count());
+}
+
+/**
+ * Updates retry-tracking fields on an existing item without removing it.
+ * Used by useOfflineSync to persist retry state across page reloads.
+ */
+export function updateRetryState(
+  id: string,
+  fields: Partial<Pick<QueuedResponse, "retryCount" | "lastAttemptedAt" | "lastError" | "status">>
+): Promise<void> {
+  return openDb().then(
+    (db) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const getReq = store.get(id) as IDBRequest<Partial<QueuedResponse> | undefined>;
+
+        getReq.onsuccess = () => {
+          const existing = getReq.result;
+          if (!existing) { resolve(); return; }
+          const updated = { ...normalize(existing), ...fields };
+          const putReq = store.put(updated);
+          putReq.onsuccess = () => resolve();
+          putReq.onerror = () => reject(putReq.error);
+        };
+        getReq.onerror = () => reject(getReq.error);
+        tx.onerror = () => reject(tx.error);
+        tx.oncomplete = () => db.close();
+      })
+  );
 }

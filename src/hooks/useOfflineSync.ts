@@ -4,68 +4,75 @@
  * useOfflineSync — flushes the offline canvass queue when connectivity returns.
  *
  * SYNC STRATEGY:
- * Items are synced in queuedAt order (oldest first). Each item is attempted up
- * to MAX_RETRIES times before being removed from the queue and logged as dropped.
- * Items that fail do NOT block later items — the flush continues to the next
- * item so a single permanently-rejected entry cannot freeze the whole queue.
+ * Items are synced in queuedAt order (oldest first), skipping parked items.
+ * Retry state is persisted in IndexedDB so counts survive page reloads.
  *
- * Retry counts are tracked in memory (resets on page reload). A permanent server
- * rejection (e.g. assignment deleted) will hit MAX_RETRIES across 3 online events,
- * after which the item is removed and reported to the user via droppedCount.
+ * Failure classification:
+ *   - Network error (fetch throws): transient — retry up to MAX_RETRIES, then park.
+ *   - result.permanent === true: park immediately (e.g. assignment deleted).
+ *   - Other result.error: count toward cap — park after MAX_RETRIES lifetime failures.
+ *
+ * Parked items do not block the queue. The canvasser can retry or discard them
+ * from the parked items panel in the canvass screen.
  *
  * Sync is triggered:
  *   1. On component mount (handles tab reopen while already online)
  *   2. Whenever navigator.onLine transitions to true
- *
- * CURRENT LIMITATIONS:
- * - lastSyncedAt is not persisted across page loads; it resets on mount.
- * - The sync function is passed as a parameter so this hook is not coupled to a
- *   specific page path. Callers must pass saveCanvassResponse from their actions
- *   module.
  */
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { getAll, remove } from "@/lib/offline-queue";
+import {
+  getPending,
+  getParked,
+  remove,
+  updateRetryState,
+} from "@/lib/offline-queue";
+import type { QueuedResponse } from "@/lib/offline-queue";
 import type { SaveResponseInput } from "@/app/(app)/canvassing/[listId]/canvass/actions";
 
 type SyncFn = (
   input: SaveResponseInput
-) => Promise<{ error?: string; responseId?: string }>;
+) => Promise<{ error?: string; responseId?: string; permanent?: boolean }>;
 
 const MAX_RETRIES = 3;
 
 export interface OfflineSyncState {
-  /** Number of items currently waiting in the local queue. */
+  /** Items waiting to sync (status="pending"). */
   pendingCount: number;
+  /** Items that exceeded the retry cap and need manual action. */
+  parkedCount: number;
+  /** The full list of parked items for the review panel. */
+  parkedItems: QueuedResponse[];
   /** True while a flush is actively in progress. */
   isSyncing: boolean;
   /** Timestamp of the last completed flush attempt (null until first attempt). */
   lastSyncedAt: Date | null;
-  /** Number of items permanently dropped this session (failed MAX_RETRIES times). */
-  droppedCount: number;
-  /** Call after enqueue() to immediately reflect the new pending count. */
+  /** Re-reads counts from IDB. Call after enqueue() to reflect the new item. */
   refresh: () => Promise<void>;
+  /** Resets a parked item to pending and triggers a flush. */
+  retryParked: (id: string) => Promise<void>;
+  /** Permanently removes a parked item from the queue. */
+  discardParked: (id: string) => Promise<void>;
 }
 
 export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
   const [pendingCount, setPendingCount] = useState(0);
+  const [parkedCount, setParkedCount] = useState(0);
+  const [parkedItems, setParkedItems] = useState<QueuedResponse[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const [droppedCount, setDroppedCount] = useState(0);
 
-  // Ref prevents concurrent flushes if two online events fire close together.
+  // Prevents concurrent flushes if two online events fire close together.
   const isSyncingRef = useRef(false);
-
-  // Per-session retry counts keyed by item.id. Resets on page reload which is
-  // acceptable — stale items get fresh attempts after reload.
-  const retryCountsRef = useRef<Map<string, number>>(new Map());
 
   const refresh = useCallback(async () => {
     try {
-      const items = await getAll();
-      setPendingCount(items.length);
+      const [pending, parked] = await Promise.all([getPending(), getParked()]);
+      setPendingCount(pending.length);
+      setParkedCount(parked.length);
+      setParkedItems(parked);
     } catch {
-      // IndexedDB unavailable — leave count as-is
+      // IndexedDB unavailable — leave counts as-is
     }
   }, []);
 
@@ -73,9 +80,9 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
     if (isSyncingRef.current) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
 
-    let items;
+    let items: QueuedResponse[];
     try {
-      items = await getAll();
+      items = await getPending();
     } catch {
       return;
     }
@@ -86,8 +93,6 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
     setIsSyncing(true);
 
     for (const item of items) {
-      const retries = retryCountsRef.current.get(item.id) ?? 0;
-
       try {
         const result = await syncFn({
           assignmentId: item.assignmentId,
@@ -104,56 +109,83 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
         });
 
         if (result.error) {
-          const newRetries = retries + 1;
-          retryCountsRef.current.set(item.id, newRetries);
+          const now = Date.now();
+          const newRetries = item.retryCount + 1;
 
-          if (newRetries >= MAX_RETRIES) {
-            // Permanently rejected — remove from queue, report to user.
-            console.error(
-              `[useOfflineSync] Item ${item.id} rejected ${MAX_RETRIES} times, dropping.`,
-              { item, error: result.error }
-            );
-            await remove(item.id).catch(() => {});
-            retryCountsRef.current.delete(item.id);
-            setPendingCount((n) => Math.max(0, n - 1));
-            setDroppedCount((n) => n + 1);
+          if (result.permanent || newRetries >= MAX_RETRIES) {
+            // Permanent failure or retry cap reached — park the item.
+            await updateRetryState(item.id, {
+              retryCount: newRetries,
+              lastAttemptedAt: now,
+              lastError: result.error,
+              status: "parked",
+            }).catch(() => {});
+          } else {
+            await updateRetryState(item.id, {
+              retryCount: newRetries,
+              lastAttemptedAt: now,
+              lastError: result.error,
+            }).catch(() => {});
           }
-          // Continue to next item — do not break.
+          // Continue — do not let this item block later items.
           continue;
         }
 
-        // Success — remove from queue and clear retry count.
-        await remove(item.id);
-        retryCountsRef.current.delete(item.id);
-        setPendingCount((n) => Math.max(0, n - 1));
+        // Success — remove from queue.
+        await remove(item.id).catch(() => {});
       } catch {
-        // Network error — increment retries but continue to next item.
-        const newRetries = retries + 1;
-        retryCountsRef.current.set(item.id, newRetries);
+        // Network/fetch error — transient.
+        const now = Date.now();
+        const newRetries = item.retryCount + 1;
+        const errorMsg = "Network error — will retry when online.";
 
         if (newRetries >= MAX_RETRIES) {
-          console.error(
-            `[useOfflineSync] Item ${item.id} failed with network error ${MAX_RETRIES} times, dropping.`,
-            { item }
-          );
-          await remove(item.id).catch(() => {});
-          retryCountsRef.current.delete(item.id);
-          setPendingCount((n) => Math.max(0, n - 1));
-          setDroppedCount((n) => n + 1);
+          await updateRetryState(item.id, {
+            retryCount: newRetries,
+            lastAttemptedAt: now,
+            lastError: errorMsg,
+            status: "parked",
+          }).catch(() => {});
+        } else {
+          await updateRetryState(item.id, {
+            retryCount: newRetries,
+            lastAttemptedAt: now,
+            lastError: errorMsg,
+          }).catch(() => {});
         }
+        // Continue — network errors on one item don't block others.
       }
     }
 
     setLastSyncedAt(new Date());
     isSyncingRef.current = false;
     setIsSyncing(false);
-  }, [syncFn]);
+    await refresh();
+  }, [syncFn, refresh]);
+
+  const retryParked = useCallback(
+    async (id: string) => {
+      await updateRetryState(id, {
+        retryCount: 0,
+        status: "pending",
+        lastError: null,
+      }).catch(() => {});
+      await refresh();
+      flush(); // fire-and-forget — user sees pending count update immediately
+    },
+    [flush, refresh]
+  );
+
+  const discardParked = useCallback(
+    async (id: string) => {
+      await remove(id).catch(() => {});
+      await refresh();
+    },
+    [refresh]
+  );
 
   useEffect(() => {
-    // Read initial count from IndexedDB on mount.
     refresh();
-
-    // Attempt flush on mount in case the tab was reopened while online.
     flush();
 
     const handleOnline = () => flush();
@@ -161,5 +193,14 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
     return () => window.removeEventListener("online", handleOnline);
   }, [flush, refresh]);
 
-  return { pendingCount, isSyncing, lastSyncedAt, droppedCount, refresh };
+  return {
+    pendingCount,
+    parkedCount,
+    parkedItems,
+    isSyncing,
+    lastSyncedAt,
+    refresh,
+    retryParked,
+    discardParked,
+  };
 }
