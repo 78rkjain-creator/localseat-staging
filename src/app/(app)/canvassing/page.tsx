@@ -184,7 +184,7 @@ async function CanvasserView({
           {assignments.map((a) => {
             const pct =
               a.totalEntries > 0
-                ? Math.round((a.totalResponses / a.totalEntries) * 100)
+                ? Math.min(100, Math.round((a.totalResponses / a.totalEntries) * 100))
                 : 0;
             const remaining = Math.max(0, a.totalEntries - a.totalResponses);
 

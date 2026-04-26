@@ -15,7 +15,7 @@ export interface RowFields {
   phoneHome: string;
   phoneMobile: string;
   email: string;
-  birthYear: string;
+  birthDate: string;
   pollNumber: string;
 }
 
@@ -41,7 +41,7 @@ export const FIELD_LABELS: Record<keyof RowFields, string> = {
   phoneHome:    "Phone (home)",
   phoneMobile:  "Phone (mobile)",
   email:        "Email",
-  birthYear:    "Birth year",
+  birthDate:    "Birth date",
   pollNumber:   "Poll #",
 };
 
@@ -108,18 +108,21 @@ export function parseCsvToReviewRows(
 ): {
   rows: ReviewRow[];
   fileError: string | null;
+  birthYearWarningCount: number;
 } {
   const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   if (lines.length < 2) {
     return {
       rows: [],
       fileError: "File must have a header row and at least one data row.",
+      birthYearWarningCount: 0,
     };
   }
 
   const headers = parseCsvLine(lines[0]).map(normaliseKey);
   const rows: ReviewRow[] = [];
   let id = 0;
+  let birthYearWarningCount = 0;
 
   // Build a lookup from normalised label → field id for custom fields
   const customFieldMap: { normLabel: string; id: string }[] =
@@ -145,7 +148,17 @@ export function parseCsvToReviewRows(
       phoneHome:    getField(raw, "phone", "phonehome", "phone_home", "phonenumber", "phone_number", "tel"),
       phoneMobile:  getField(raw, "mobile", "cell", "cellphone", "mobilephon", "phone_mobile", "phonemobile"),
       email:        getField(raw, "email", "emailaddress", "email_address"),
-      birthYear:    getField(raw, "birthyear", "birth_year", "dob", "yearofbirth"),
+      birthDate:    (() => {
+        const direct = getField(raw, "birthdate", "birth_date", "dateofbirth");
+        if (direct) return direct;
+        // Backward compat: accept a bare birth year (YYYY) and convert to YYYY-01-01
+        const yearStr = getField(raw, "birthyear", "birth_year", "yearofbirth");
+        if (yearStr && /^\d{4}$/.test(yearStr.trim())) {
+          birthYearWarningCount++;
+          return `${yearStr.trim()}-01-01`;
+        }
+        return "";
+      })(),
       pollNumber:   getField(raw, "pollnumber", "poll_number", "poll", "pollno", "poll_no"),
     };
 
@@ -167,8 +180,8 @@ export function parseCsvToReviewRows(
   }
 
   if (rows.length === 0) {
-    return { rows: [], fileError: "No data rows found after the header." };
+    return { rows: [], fileError: "No data rows found after the header.", birthYearWarningCount: 0 };
   }
 
-  return { rows, fileError: null };
+  return { rows, fileError: null, birthYearWarningCount };
 }

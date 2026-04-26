@@ -20,7 +20,7 @@ const BASE_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
 ];
-const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthYear", "pollNumber"];
+const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthDate", "pollNumber"];
 
 type Step = "upload" | "review" | "done";
 
@@ -44,6 +44,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     skipped: number;
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
+  const [birthYearWarningCount, setBirthYearWarningCount] = useState(0);
 
   // ── Reset ──────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     setFileError(null);
     setSubmitError(null);
     setResult(null);
+    setBirthYearWarningCount(0);
     onClose();
   }
 
@@ -76,7 +78,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
     }
 
     const text = await file.text();
-    const { rows, fileError: err } = parseCsvToReviewRows(text);
+    const { rows, fileError: err, birthYearWarningCount: bywc } = parseCsvToReviewRows(text);
     if (err) { setFileError(err); return; }
 
     if (rows.length > 2000) {
@@ -84,6 +86,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
       return;
     }
 
+    setBirthYearWarningCount(bywc);
     setReviewRows(rows);
     setStep("review");
   }
@@ -142,7 +145,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
         phoneHome:    r.fields.phoneHome.trim(),
         phoneMobile:  r.fields.phoneMobile.trim(),
         email:        r.fields.email.trim(),
-        birthYear:    r.fields.birthYear.trim(),
+        birthDate:    r.fields.birthDate.trim(),
         pollNumber:   r.fields.pollNumber.trim(),
       }));
 
@@ -202,7 +205,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               </a>
             </div>
             <p className="text-xs text-slate-500 font-mono leading-relaxed break-all">
-              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, PhoneHome, PhoneMobile, Email, BirthYear
+              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, PhoneHome, PhoneMobile, Email, BirthDate
             </p>
             <p className="text-xs text-slate-400 mt-2">
               Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
@@ -269,6 +272,14 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
             </div>
           )}
 
+          {birthYearWarningCount > 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <p className="text-sm text-amber-800">
+                <strong>{birthYearWarningCount}</strong> row{birthYearWarningCount !== 1 ? "s" : ""} used a Birth Year column (deprecated). Dates were set to January 1 of that year. Update the CSV to use a Birth Date column (YYYY-MM-DD) to avoid this.
+              </p>
+            </div>
+          )}
+
           {/* Table */}
           <div className="overflow-x-auto -mx-6 sm:-mx-8 border-t border-slate-100">
             <table className="w-full text-sm min-w-[900px]">
@@ -311,6 +322,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
               onClick={() => {
                 setStep("upload");
                 setReviewRows([]);
+                setBirthYearWarningCount(0);
                 if (fileRef.current) fileRef.current.value = "";
               }}
               disabled={isSubmitting}
@@ -363,7 +375,7 @@ export function VoterImportModal({ open, onClose }: VoterImportModalProps) {
 const ALL_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
-  "phoneHome", "phoneMobile", "email", "birthYear", "pollNumber",
+  "phoneHome", "phoneMobile", "email", "birthDate", "pollNumber",
 ];
 
 function ReviewRowComponent({

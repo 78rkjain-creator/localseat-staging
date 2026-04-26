@@ -172,8 +172,8 @@ function PersonCard({ person, label }: { person: PersonRow; label: string }) {
           >
             {person.firstName} {person.lastName}
           </Link>
-          {person.birthYear && (
-            <p className="text-xs text-slate-400 mt-0.5">b. {person.birthYear}</p>
+          {person.birthDate && (
+            <p className="text-xs text-slate-400 mt-0.5">b. {new Date(person.birthDate).getFullYear()}</p>
           )}
         </div>
         <span className="text-xs text-slate-400 flex-shrink-0">

@@ -15,7 +15,7 @@ const FIELD_LABELS: Record<keyof VoterChangeFields, string> = {
   phoneHome: "Home phone",
   phoneMobile: "Mobile phone",
   email: "Email",
-  birthYear: "Birth year",
+  birthDate: "Birth date",
 };
 
 interface Request {

@@ -2,6 +2,8 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import type { ListSource } from "@/types";
+import { LIST_SOURCE_LABELS, LIST_SOURCE_VALUES } from "@/types";
 
 interface Props {
   q?: string;
@@ -9,9 +11,76 @@ interface Props {
   supportFilter?: string;
   contactedAfter?: string;
   cfFilters?: string;
+  listSource?: string;
 }
 
-export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter, cfFilters }: Props) {
+interface ListSourceFilterProps {
+  activeListSources: ListSource[];
+  q?: string;
+  tag?: string;
+  supportFilter?: string;
+  contactedAfter?: string;
+  cfFilters?: string;
+}
+
+export function ListSourceFilter({
+  activeListSources,
+  q,
+  tag,
+  supportFilter,
+  contactedAfter,
+  cfFilters,
+}: ListSourceFilterProps) {
+  const router = useRouter();
+  const allSelected = activeListSources.length === 0 || activeListSources.length === LIST_SOURCE_VALUES.length;
+
+  function buildUrl(sources: ListSource[]) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (tag) params.set("tag", tag);
+    if (supportFilter) params.set("supportFilter", supportFilter);
+    if (contactedAfter) params.set("contactedAfter", contactedAfter);
+    if (cfFilters) params.set("cfFilters", cfFilters);
+    if (sources.length > 0 && sources.length < LIST_SOURCE_VALUES.length) {
+      params.set("listSource", sources.join(","));
+    }
+    const s = params.toString();
+    return `/voter-list${s ? `?${s}` : ""}`;
+  }
+
+  function toggle(value: ListSource) {
+    const current = allSelected ? LIST_SOURCE_VALUES : activeListSources;
+    const next = current.includes(value)
+      ? current.filter((s) => s !== value)
+      : [...current, value];
+    router.push(buildUrl(next.length === LIST_SOURCE_VALUES.length ? [] : next));
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-slate-400 font-medium">Source:</span>
+      {LIST_SOURCE_VALUES.map((value) => {
+        const isActive = allSelected || activeListSources.includes(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => toggle(value)}
+            className={
+              isActive
+                ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                : "bg-white border border-slate-200 text-slate-400 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+            }
+          >
+            {LIST_SOURCE_LABELS[value]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter, cfFilters, listSource }: Props) {
   const router = useRouter();
   const [showPicker, setShowPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,6 +92,7 @@ export function VoterListDateFilter({ q, tag, supportFilter, contactedAfter, cfF
     if (supportFilter) params.set("supportFilter", supportFilter);
     if (date) params.set("contactedAfter", date);
     if (cfFilters) params.set("cfFilters", cfFilters);
+    if (listSource) params.set("listSource", listSource);
     const s = params.toString();
     return `/voter-list${s ? `?${s}` : ""}`;
   }

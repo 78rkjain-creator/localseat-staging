@@ -52,21 +52,22 @@ export function sanitizePhone(value: string | null | undefined): string | null {
   return stripped;
 }
 
-// ── Birth year ────────────────────────────────────────────────────────────────
+// ── Birth date ────────────────────────────────────────────────────────────────
 
 /**
- * Parses to integer and validates the range 1900–current year.
- * Returns null for NaN or out-of-range values.
+ * Parses a birth date from a string (YYYY-MM-DD) or Date object.
+ * Validates that the year is in the range 1900–current year.
+ * Returns null for empty, invalid, or out-of-range values.
  */
-export function sanitizeBirthYear(
-  value: number | string | null | undefined
-): number | null {
+export function sanitizeBirthDate(
+  value: string | Date | null | undefined
+): Date | null {
   if (value == null || value === "") return null;
-  const parsed = parseInt(String(value), 10);
-  if (isNaN(parsed)) return null;
-  const currentYear = new Date().getFullYear();
-  if (parsed < 1900 || parsed > currentYear) return null;
-  return parsed;
+  const date = value instanceof Date ? value : new Date(value as string);
+  if (isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  if (year < 1900 || year > new Date().getFullYear()) return null;
+  return date;
 }
 
 // ── Amount ────────────────────────────────────────────────────────────────────

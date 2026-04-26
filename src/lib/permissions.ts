@@ -145,6 +145,18 @@ export function canManageVoterList(role: Role): boolean {
   return FULL_ACCESS.includes(role);
 }
 
+// field_organizer and above may manually add residents.
+export function canAddResident(role: Role): boolean {
+  return FIELD_AND_ABOVE.includes(role);
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+// candidate and campaign_manager may create, rename, recolor, and delete tags.
+export function canManageTags(role: Role): boolean {
+  return FULL_ACCESS.includes(role);
+}
+
 // ── Campaign ──────────────────────────────────────────────────────────────────
 
 export function canManageCampaign(role: Role): boolean {

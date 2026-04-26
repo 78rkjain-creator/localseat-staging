@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const BASE_HEADERS =
-  "FirstName,LastName,StreetNumber,StreetName,UnitNumber,City,Province,PostalCode,PhoneHome,PhoneMobile,Email,BirthYear,PollNumber";
+  "FirstName,LastName,StreetNumber,StreetName,UnitNumber,City,Province,PostalCode,PhoneHome,PhoneMobile,Email,BirthDate,PollNumber";
 
 export async function GET() {
   const session = await getServerSession(authOptions);

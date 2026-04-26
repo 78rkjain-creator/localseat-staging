@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { updatePerson } from "./actions";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { SupportLevel } from "@/types";
+import { formatPollNumber } from "@/lib/format-poll-number";
 
 interface PersonEditFormProps {
   personId: string;
@@ -13,9 +14,10 @@ interface PersonEditFormProps {
   email: string | null;
   phoneHome: string | null;
   phoneMobile: string | null;
-  birthYear: number | null;
+  birthDate: Date | null;
   supportLevel: SupportLevel | null;
   pollNumber: string | null;
+  wardStatus: string;
 }
 
 export function PersonEditForm({
@@ -25,9 +27,10 @@ export function PersonEditForm({
   email,
   phoneHome,
   phoneMobile,
-  birthYear,
+  birthDate,
   supportLevel,
   pollNumber,
+  wardStatus,
 }: PersonEditFormProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -39,8 +42,6 @@ export function PersonEditForm({
     setError(null);
 
     const fd = new FormData(e.currentTarget);
-    const rawYear = (fd.get("birthYear") as string).trim();
-    const parsedYear = rawYear ? parseInt(rawYear, 10) : null;
 
     startTransition(async () => {
       const result = await updatePerson({
@@ -50,7 +51,7 @@ export function PersonEditForm({
         email: fd.get("email") as string,
         phoneHome: fd.get("phoneHome") as string,
         phoneMobile: fd.get("phoneMobile") as string,
-        birthYear: parsedYear,
+        birthDate: (fd.get("birthDate") as string) || null,
         supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
         pollNumber: (fd.get("pollNumber") as string) || null,
       });
@@ -116,9 +117,16 @@ export function PersonEditForm({
               ) : null
             }
           />
-          <ReadRow label="Birth year" value={birthYear ? String(birthYear) : null} />
+          <ReadRow
+            label="Birth date"
+            value={birthDate ? new Date(birthDate).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : null}
+          />
           <ReadRow label="Support level" value={SUPPORT_LEVEL_LABELS[supportLevel as SupportLevel] ?? null} />
-          <ReadRow label="Poll number" value={pollNumber} />
+          <ReadRow
+            label="Poll number"
+            value={pollNumber ?? undefined}
+            placeholder={formatPollNumber(null, wardStatus)}
+          />
         </dl>
       </div>
     );
@@ -152,13 +160,13 @@ export function PersonEditForm({
           </Field>
         </div>
 
-        <Field label="Birth year">
+        <Field label="Birth date">
           <input
-            name="birthYear"
-            type="number"
-            defaultValue={birthYear ?? ""}
-            min={1900}
-            max={new Date().getFullYear()}
+            name="birthDate"
+            type="date"
+            defaultValue={birthDate ? new Date(birthDate).toISOString().slice(0, 10) : ""}
+            min="1900-01-01"
+            max={`${new Date().getFullYear()}-12-31`}
             className={inputCls}
           />
         </Field>
@@ -206,12 +214,24 @@ export function PersonEditForm({
   );
 }
 
-function ReadRow({ label, value }: { label: string; value: React.ReactNode }) {
+function ReadRow({
+  label,
+  value,
+  placeholder,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  placeholder?: string;
+}) {
   return (
     <div>
       <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide">{label}</dt>
       <dd className="text-sm text-slate-800 mt-0.5">
-        {value ?? <span className="text-slate-300">Not recorded</span>}
+        {value ?? (
+          placeholder
+            ? <span className="text-slate-400 italic">{placeholder}</span>
+            : <span className="text-slate-300">Not recorded</span>
+        )}
       </dd>
     </div>
   );

@@ -13,7 +13,7 @@ interface PersonEditFormProps {
   email: string | null;
   phoneHome: string | null;
   phoneMobile: string | null;
-  birthYear: number | null;
+  birthDate: Date | null;
   supportLevel: SupportLevel | null;
 }
 
@@ -24,7 +24,7 @@ export function PersonEditForm({
   email,
   phoneHome,
   phoneMobile,
-  birthYear,
+  birthDate,
   supportLevel,
 }: PersonEditFormProps) {
   const router = useRouter();
@@ -37,8 +37,6 @@ export function PersonEditForm({
     setError(null);
 
     const fd = new FormData(e.currentTarget);
-    const rawYear = (fd.get("birthYear") as string).trim();
-    const parsedYear = rawYear ? parseInt(rawYear, 10) : null;
 
     startTransition(async () => {
       const result = await updatePerson({
@@ -48,7 +46,7 @@ export function PersonEditForm({
         email: fd.get("email") as string,
         phoneHome: fd.get("phoneHome") as string,
         phoneMobile: fd.get("phoneMobile") as string,
-        birthYear: parsedYear,
+        birthDate: (fd.get("birthDate") as string) || null,
         supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
       });
 
@@ -115,7 +113,10 @@ export function PersonEditForm({
               ) : null
             }
           />
-          <ReadRow label="Birth year" value={birthYear ? String(birthYear) : null} />
+          <ReadRow
+            label="Birth date"
+            value={birthDate ? new Date(birthDate).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : null}
+          />
           <ReadRow label="Support level" value={SUPPORT_LEVEL_LABELS[supportLevel as SupportLevel] ?? null} />
         </dl>
       </div>
@@ -177,13 +178,13 @@ export function PersonEditForm({
           </Field>
         </div>
 
-        <Field label="Birth year">
+        <Field label="Birth date">
           <input
-            name="birthYear"
-            type="number"
-            defaultValue={birthYear ?? ""}
-            min={1900}
-            max={new Date().getFullYear()}
+            name="birthDate"
+            type="date"
+            defaultValue={birthDate ? new Date(birthDate).toISOString().slice(0, 10) : ""}
+            min="1900-01-01"
+            max={`${new Date().getFullYear()}-12-31`}
             className={inputCls}
           />
         </Field>

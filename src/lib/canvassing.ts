@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { ListSource, WardStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { SupportLevel } from "@/types";
 
@@ -209,6 +210,18 @@ export async function previewPeopleFilter({
     };
   }
 
+  // Exclude manual-source records unless the campaign manager has overridden them,
+  // and exclude ward-ineligible addresses for the same reason.
+  where.OR = [
+    { includeInWalkLists: true },
+    {
+      AND: [
+        { listSource: { not: ListSource.manual } },
+        { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
+      ],
+    },
+  ];
+
   const [count, sample] = await Promise.all([
     db.person.count({ where }),
     db.person.findMany({
@@ -252,21 +265,27 @@ export async function getAssignedLists(canvasserId: string, campaignId: string) 
           _count: { select: { entries: true } },
         },
       },
-      _count: { select: { responses: true } },
+      // Fetch only personId so we can count distinct people canvassed.
+      // Using _count.responses would count every response (4 visits to the same
+      // door = 4), producing percentages over 100%.
+      responses: { select: { personId: true } },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return assignments.map((a) => ({
-    assignmentId: a.id,
-    list: {
-      id: a.canvassList.id,
-      name: a.canvassList.name,
-      description: a.canvassList.description,
-    },
-    totalEntries: a.canvassList._count.entries,
-    totalResponses: a._count.responses,
-  }));
+  return assignments.map((a) => {
+    const respondedCount = new Set(a.responses.map((r) => r.personId)).size;
+    return {
+      assignmentId: a.id,
+      list: {
+        id: a.canvassList.id,
+        name: a.canvassList.name,
+        description: a.canvassList.description,
+      },
+      totalEntries: a.canvassList._count.entries,
+      totalResponses: respondedCount,
+    };
+  });
 }
 
 // ── Canvassing queue ───────────────────────────────────────────────────────
@@ -309,7 +328,7 @@ export async function getCanvassingQueue(
             phoneHome: true,
             phoneMobile: true,
             email: true,
-            birthYear: true,
+            birthDate: true,
             household: {
               select: {
                 address: {
@@ -370,7 +389,7 @@ export async function getCanvassingQueue(
         phoneHome: e.person.phoneHome,
         phoneMobile: e.person.phoneMobile,
         email: e.person.email,
-        birthYear: e.person.birthYear,
+        birthDate: e.person.birthDate,
         address: e.person.household?.address ?? null,
         coResidents: (e.person.household?.people ?? []).filter(
           (p) => p.id !== e.person.id

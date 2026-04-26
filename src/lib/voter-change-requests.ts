@@ -25,7 +25,7 @@ export interface VoterChangeFields {
   phoneHome?: string | null;
   phoneMobile?: string | null;
   email?: string | null;
-  birthYear?: number | null;
+  birthDate?: string | null;
 }
 
 // ── Submit ─────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export async function getPendingVoterChangeRequests(campaignId: string) {
           phoneHome: true,
           phoneMobile: true,
           email: true,
-          birthYear: true,
+          birthDate: true,
         },
       },
       submittedBy: { select: { firstName: true, lastName: true } },
@@ -137,7 +137,7 @@ export async function approveVoterChangeRequest(
       ...(changes.phoneHome !== undefined && { phoneHome: changes.phoneHome }),
       ...(changes.phoneMobile !== undefined && { phoneMobile: changes.phoneMobile }),
       ...(changes.email !== undefined && { email: changes.email }),
-      ...(changes.birthYear !== undefined && { birthYear: changes.birthYear }),
+      ...(changes.birthDate !== undefined && { birthDate: changes.birthDate ? new Date(changes.birthDate) : null }),
     },
   });
 

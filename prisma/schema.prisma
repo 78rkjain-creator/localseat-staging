@@ -96,6 +96,13 @@ enum ListImportType {
   telephone_list
 }
 
+enum ListSource {
+  voters_list
+  residents_list
+  manual
+  canvass
+}
+
 enum PersonListMembershipStatus {
   matched
   created
@@ -273,7 +280,7 @@ model Person {
   email       String?
   phoneHome   String?
   phoneMobile String?
-  birthYear    Int?
+  birthDate    DateTime?
   supportLevel SupportLevel?
   gender       String?
   pollNumber   String?
@@ -282,6 +289,8 @@ model Person {
   sourceNotes String?
   wardStatus          WardStatus @default(not_checked)
   isConfirmedVoter    Boolean    @default(false)
+  listSource          ListSource @default(manual)
+  includeInWalkLists  Boolean    @default(false)
   customFieldValues   Json?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

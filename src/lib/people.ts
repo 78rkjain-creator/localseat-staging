@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { Prisma, SupportLevel, CanvassOutcome } from "@prisma/client";
+import type { Prisma, SupportLevel, CanvassOutcome, ListSource } from "@prisma/client";
 
 export interface PeopleListFilters {
   campaignId: string;
@@ -8,12 +8,13 @@ export interface PeopleListFilters {
   supportFilter?: "supporting" | "undecided" | "not_supporting" | "not_contacted";
   contactedAfter?: string; // ISO date string
   customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
+  listSource?: ListSource[]; // when provided and fewer than 4 values, filter to those sources
   page?: number;
 }
 
 const PEOPLE_PAGE_SIZE = 50;
 
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, page = 1 }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -49,6 +50,10 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
     andFilters.push({
       customFieldValues: { path: [fieldId], string_contains: "" },
     } as Prisma.PersonWhereInput);
+  }
+
+  if (listSource && listSource.length > 0 && listSource.length < 4) {
+    andFilters.push({ listSource: { in: listSource } });
   }
 
   const where: Prisma.PersonWhereInput = {
@@ -201,6 +206,7 @@ export interface VoterListFilters {
   q?: string;
   street?: string;
   tagId?: string;
+  listSource?: ListSource[];
   page?: number;
 }
 
@@ -209,6 +215,7 @@ export async function getVoterList({
   q,
   street,
   tagId,
+  listSource,
   page = 1,
 }: VoterListFilters) {
   const skip = (page - 1) * VOTER_LIST_PAGE_SIZE;
@@ -241,6 +248,10 @@ export async function getVoterList({
     where.tags = { some: { tagId } };
   }
 
+  if (listSource && listSource.length > 0 && listSource.length < 4) {
+    where.listSource = { in: listSource };
+  }
+
   const [people, total] = await Promise.all([
     db.person.findMany({
       where,
@@ -251,7 +262,9 @@ export async function getVoterList({
         email: true,
         phoneHome: true,
         phoneMobile: true,
-        birthYear: true,
+        birthDate: true,
+        listSource: true,
+        includeInWalkLists: true,
         sourceNotes: true,
         createdAt: true,
         household: {
@@ -305,7 +318,7 @@ export async function findDuplicatePairs(campaignId: string) {
       email: true,
       phoneHome: true,
       phoneMobile: true,
-      birthYear: true,
+      birthDate: true,
       sourceNotes: true,
       createdAt: true,
       tags: {

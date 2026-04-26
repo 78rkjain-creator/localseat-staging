@@ -10,7 +10,7 @@ interface CurrentRecord {
   phoneHome: string | null;
   phoneMobile: string | null;
   email: string | null;
-  birthYear: number | null;
+  birthDate: string | null;
 }
 
 interface VoterChangeModalProps {
@@ -41,9 +41,7 @@ export function VoterChangeModal({
       phoneHome: (fd.get("phoneHome") as string).trim() || null,
       phoneMobile: (fd.get("phoneMobile") as string).trim() || null,
       email: (fd.get("email") as string).trim() || null,
-      birthYear: (fd.get("birthYear") as string).trim()
-        ? Number(fd.get("birthYear"))
-        : null,
+      birthDate: (fd.get("birthDate") as string).trim() || null,
     };
 
     // Only include fields that differ from the current record
@@ -53,7 +51,7 @@ export function VoterChangeModal({
     if ((proposed.phoneHome ?? null) !== (currentRecord.phoneHome ?? null)) changes.phoneHome = proposed.phoneHome;
     if ((proposed.phoneMobile ?? null) !== (currentRecord.phoneMobile ?? null)) changes.phoneMobile = proposed.phoneMobile;
     if ((proposed.email ?? null) !== (currentRecord.email ?? null)) changes.email = proposed.email;
-    if ((proposed.birthYear ?? null) !== (currentRecord.birthYear ?? null)) changes.birthYear = proposed.birthYear;
+    if ((proposed.birthDate ?? null) !== (currentRecord.birthDate ?? null)) changes.birthDate = proposed.birthDate;
 
     if (Object.keys(changes).length === 0) {
       setError("No changes detected. Update at least one field before submitting.");
@@ -66,7 +64,7 @@ export function VoterChangeModal({
       phoneHome: currentRecord.phoneHome,
       phoneMobile: currentRecord.phoneMobile,
       email: currentRecord.email,
-      birthYear: currentRecord.birthYear,
+      birthDate: currentRecord.birthDate,
     };
 
     startTransition(async () => {
@@ -184,14 +182,13 @@ export function VoterChangeModal({
               />
             </FormField>
 
-            <FormField label="Birth year">
+            <FormField label="Birth date">
               <input
-                name="birthYear"
-                type="number"
-                min={1900}
-                max={new Date().getFullYear()}
-                defaultValue={currentRecord.birthYear ?? ""}
-                placeholder="1980"
+                name="birthDate"
+                type="date"
+                min="1900-01-01"
+                max={`${new Date().getFullYear()}-12-31`}
+                defaultValue={currentRecord.birthDate ?? ""}
                 className={inputCls}
               />
             </FormField>

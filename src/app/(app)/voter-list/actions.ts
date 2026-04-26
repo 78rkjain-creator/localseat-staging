@@ -5,8 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
-import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
+import { sanitizePhone, sanitizeEmail, sanitizeBirthDate } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
+import { ListSource } from "@prisma/client";
 import type { Role } from "@/types";
 
 // ── Auth guard ────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ export interface VoterCsvRow {
   phoneHome: string;    // empty string when absent
   phoneMobile: string;  // empty string when absent
   email: string;        // empty string when absent
-  birthYear: string;    // empty string when absent
+  birthDate: string;    // empty string when absent; accepts YYYY-MM-DD
   pollNumber: string;   // empty string when absent
 }
 
@@ -87,7 +88,7 @@ export async function importVoterRows(
           const phoneHome   = sanitizePhone(row.phoneHome);
           const phoneMobile = sanitizePhone(row.phoneMobile);
           const email       = sanitizeEmail(row.email);
-          const birthYear   = sanitizeBirthYear(row.birthYear);
+          const birthDate   = sanitizeBirthDate(row.birthDate);
           const pollNumber  = row.pollNumber?.trim() || null;
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
@@ -166,10 +167,11 @@ export async function importVoterRows(
               phoneHome:    phoneHome ?? undefined,
               phoneMobile:  phoneMobile ?? undefined,
               email:        email ?? undefined,
-              birthYear:    birthYear ?? undefined,
+              birthDate:    birthDate ?? undefined,
               pollNumber:   pollNumber ?? undefined,
               importSource: normalizedImportSource ?? undefined,
               sourceNotes:  "voter-list-import",
+              listSource:   ListSource.residents_list,
             },
           });
 

@@ -16,7 +16,7 @@ type LocalEntry = CanvassingQueue["entries"][number] & {
   person: {
     phoneMobile: string | null;
     email: string | null;
-    birthYear: number | null;
+    birthDate: Date | null;
     coResidents: { id: string; firstName: string; lastName: string }[];
   };
 };
@@ -862,7 +862,7 @@ export function CanvassScreen({
             phoneHome: current.person.phoneHome,
             phoneMobile: current.person.phoneMobile ?? null,
             email: current.person.email ?? null,
-            birthYear: current.person.birthYear ?? null,
+            birthDate: current.person.birthDate ? new Date(current.person.birthDate).toISOString().slice(0, 10) : null,
           }}
           onClose={() => setShowVoterChangeModal(false)}
         />

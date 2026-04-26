@@ -19,7 +19,7 @@ const BASE_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
 ];
-const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthYear"];
+const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthDate"];
 
 type Step = "upload" | "review" | "done";
 
@@ -48,6 +48,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     flaggedRows: FlaggedRow[];
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
+  const [birthYearWarningCount, setBirthYearWarningCount] = useState(0);
 
   function handleClose() {
     if (fileRef.current) fileRef.current.value = "";
@@ -59,6 +60,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setFileError(null);
     setSubmitError(null);
     setResult(null);
+    setBirthYearWarningCount(0);
     onClose();
   }
 
@@ -86,7 +88,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     }
 
     const text = await file.text();
-    const { rows, fileError: err } = parseCsvToReviewRows(text, customFields);
+    const { rows, fileError: err, birthYearWarningCount: bywc } = parseCsvToReviewRows(text, customFields);
     if (err) { setFileError(err); return; }
 
     if (rows.length > 2000) {
@@ -109,7 +111,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         phoneHome:    r.fields.phoneHome,
         phoneMobile:  r.fields.phoneMobile,
         email:        r.fields.email,
-        birthYear:    r.fields.birthYear,
+        birthDate:    r.fields.birthDate,
         pollNumber:   r.fields.pollNumber,
       }));
 
@@ -125,9 +127,11 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
       });
 
       setReviewRows(markedRows);
+      setBirthYearWarningCount(bywc);
     } catch {
       // If the duplicate check fails, proceed without warnings
       setReviewRows(rows);
+      setBirthYearWarningCount(bywc);
     } finally {
       setIsCheckingDuplicates(false);
     }
@@ -185,7 +189,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         phoneHome:    r.fields.phoneHome.trim(),
         phoneMobile:  r.fields.phoneMobile.trim(),
         email:        r.fields.email.trim(),
-        birthYear:    r.fields.birthYear.trim(),
+        birthDate:    r.fields.birthDate.trim(),
         pollNumber:   r.fields.pollNumber.trim(),
         customFieldValues: r.customFieldValues,
       }));
@@ -365,6 +369,14 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
             </div>
           )}
 
+          {birthYearWarningCount > 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <p className="text-sm text-amber-800">
+                <strong>{birthYearWarningCount}</strong> row{birthYearWarningCount !== 1 ? "s" : ""} used a Birth Year column (deprecated). Dates were set to January 1 of that year. Update the CSV to use a Birth Date column (YYYY-MM-DD) to avoid this.
+              </p>
+            </div>
+          )}
+
           {duplicateCount > 0 && (
             <div className="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3">
               <p className="text-sm text-orange-800">
@@ -491,7 +503,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
 const ALL_COLUMNS: (keyof RowFields)[] = [
   "firstName", "lastName", "streetNumber", "streetName",
   "unitNumber", "city", "province", "postalCode",
-  "phoneHome", "phoneMobile", "email", "birthYear",
+  "phoneHome", "phoneMobile", "email", "birthDate",
 ];
 
 function ReviewRowComponent({

@@ -12,7 +12,7 @@
  * Run: npm run db:seed
  */
 
-import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel, SignStatus, SignLocationType } from "@prisma/client";
+import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel, SignStatus, SignLocationType, ListSource } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -879,15 +879,17 @@ async function main() {
   // ── Tags ──────────────────────────────────────────────────────────────────
   await db.tag.createMany({
     data: [
-      { name: "field-entry",        color: "#475569", campaignId: campaign.id },
-      { name: "record-outdated",    color: "#dc2626", campaignId: campaign.id },
-      { name: "strong-supporter",   color: "#16a34a", campaignId: campaign.id },
-      { name: "needs-sign",         color: "#2563eb", campaignId: campaign.id },
-      { name: "volunteer-interest", color: "#7c3aed", campaignId: campaign.id },
-      { name: "donor-prospect",     color: "#ea6c0a", campaignId: campaign.id },
+      { name: "Volunteer",      color: "#22c55e", campaignId: campaign.id },
+      { name: "Donor",          color: "#f97316", campaignId: campaign.id },
+      { name: "Endorser",       color: null,      campaignId: campaign.id },
+      { name: "Sign location",  color: "#eab308", campaignId: campaign.id },
+      { name: "Do not contact", color: "#ef4444", campaignId: campaign.id },
+      { name: "Media",          color: null,      campaignId: campaign.id },
+      { name: "VIP",            color: "#f97316", campaignId: campaign.id },
+      { name: "Influencer",     color: null,      campaignId: campaign.id },
     ],
   });
-  console.log("  ✓ Tags: 6");
+  console.log("  ✓ Tags: 8");
 
   // ── Streets, addresses, households, placeholder voters ───────────────────
   //
@@ -982,16 +984,18 @@ async function main() {
   let cfGroupIdx = 0;
 
   const personRows: {
-    campaignId:         string;
-    householdId:        string;
-    firstName:          string;
-    lastName:           string;
-    pollNumber:         string;
-    importSource:       string;
-    supportLevel?:      SupportLevel;
-    phoneHome?:         string;
-    phoneMobile?:       string;
-    customFieldValues?: Record<string, string>;
+    campaignId:          string;
+    householdId:         string;
+    firstName:           string;
+    lastName:            string;
+    pollNumber:          string;
+    importSource:        string;
+    listSource:          ListSource;
+    includeInWalkLists?: boolean;
+    supportLevel?:       SupportLevel;
+    phoneHome?:          string;
+    phoneMobile?:        string;
+    customFieldValues?:  Record<string, string>;
   }[] = [];
 
   households.forEach((hh, hhIdx) => {
@@ -1023,6 +1027,7 @@ async function main() {
         lastName,
         pollNumber:   poll,
         importSource: "2022 Municipal Voter List",
+        listSource:   ListSource.voters_list,
         ...(sl  ? { supportLevel:      sl  } : {}),
         ...(ph  ? { phoneHome:         ph  } : {}),
         ...(pm  ? { phoneMobile:       pm  } : {}),
@@ -1035,6 +1040,40 @@ async function main() {
   const cfProvincial = personRows.filter((r) => r.customFieldValues?.cf_2025_prov).length;
   const cfMunicipal  = personRows.filter((r) => r.customFieldValues?.cf_2022_mun).length;
   console.log(`  ✓ Placeholder voters: ${personRows.length} (cf_2025_prov: ${cfProvincial}, cf_2022_mun "Voted": ${cfMunicipal})`);
+
+  // ── Manual seed persons (for testing listSource + includeInWalkLists) ─────
+  // Three manually-added supporters. One has includeInWalkLists=true so
+  // the walk-list override flow can be tested without modifying real data.
+  await db.person.createMany({
+    data: [
+      {
+        campaignId:  campaign.id,
+        householdId: households[0].id,
+        firstName:   "Jordan",
+        lastName:    "Manual",
+        listSource:  ListSource.manual,
+        sourceNotes: "manually-added",
+      },
+      {
+        campaignId:  campaign.id,
+        householdId: households[1].id,
+        firstName:   "Casey",
+        lastName:    "ManualTwo",
+        listSource:  ListSource.manual,
+        sourceNotes: "manually-added",
+      },
+      {
+        campaignId:         campaign.id,
+        householdId:        households[2].id,
+        firstName:          "Riley",
+        lastName:           "ManualIncluded",
+        listSource:         ListSource.manual,
+        includeInWalkLists: true,
+        sourceNotes:        "manually-added",
+      },
+    ],
+  });
+  console.log("  ✓ Manual persons: 3 (1 with includeInWalkLists=true)");
 
   // ── Walk lists, assignments, entries, canvass responses ───────────────────
   const NOTE_POOL = [

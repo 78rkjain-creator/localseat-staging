@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
-import { sanitizeEmail, sanitizePhone, sanitizeBirthYear, sanitizeEnum } from "@/lib/sanitize";
+import { sanitizeEmail, sanitizePhone, sanitizeBirthDate, sanitizeEnum } from "@/lib/sanitize";
 import type { SupportLevel } from "@/types";
 import { Role } from "@prisma/client";
 
@@ -22,7 +22,7 @@ interface UpdatePersonInput {
   email?: string;
   phoneHome?: string;
   phoneMobile?: string;
-  birthYear?: number | null;
+  birthDate?: string | null;
   supportLevel?: SupportLevel | null;
 }
 
@@ -62,7 +62,7 @@ export async function updatePerson(
       email: sanitizeEmail(input.email),
       phoneHome: sanitizePhone(input.phoneHome),
       phoneMobile: sanitizePhone(input.phoneMobile),
-      birthYear: sanitizeBirthYear(input.birthYear),
+      birthDate: sanitizeBirthDate(input.birthDate),
       supportLevel: sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES),
     },
   });

@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { geocodeAddressesForCanvassList } from "@/lib/geocoding";
+import { ListSource, WardStatus } from "@prisma/client";
 import type { Role } from "@/types";
 
 // ── Create walk list ───────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ export async function createTurfCanvassList(data: {
   if (name.length > 120) return { error: "Name is too long." };
   if (data.addressIds.length === 0) return { error: "No addresses selected." };
 
-  // Find all people linked to the selected addresses via Household
+  // Find all people linked to the selected addresses via Household.
+  // Exclude manual-source records and ward-ineligible addresses unless the
+  // campaign manager has explicitly set includeInWalkLists = true on the person.
   const people = await db.person.findMany({
     where: {
       campaignId: activeCampaignId,
@@ -83,6 +86,15 @@ export async function createTurfCanvassList(data: {
         addressId: { in: data.addressIds },
         deletedAt: null,
       },
+      OR: [
+        { includeInWalkLists: true },
+        {
+          AND: [
+            { listSource: { not: ListSource.manual } },
+            { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
+          ],
+        },
+      ],
     },
     select: { id: true },
   });

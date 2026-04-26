@@ -143,3 +143,16 @@ export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
   super_user: "Super User",
   super_admin: "Super Admin",
 };
+
+export type ListSource = "voters_list" | "residents_list" | "manual" | "canvass";
+
+export const LIST_SOURCE_VALUES: ListSource[] = [
+  "voters_list", "residents_list", "manual", "canvass",
+];
+
+export const LIST_SOURCE_LABELS: Record<ListSource, string> = {
+  voters_list:    "Voters List",
+  residents_list: "Residents List",
+  manual:         "Manual",
+  canvass:        "Canvass",
+};

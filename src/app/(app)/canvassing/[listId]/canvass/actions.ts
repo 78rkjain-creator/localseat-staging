@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
-import { WardStatus } from "@prisma/client";
+import { WardStatus, ListSource } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import { CANVASS_OUTCOME_VALUES, SUPPORT_LEVEL_VALUES } from "@/types";
 import type { CanvassOutcome, SupportLevel } from "@/types";
@@ -360,7 +360,7 @@ export async function addPersonAtDoor(input: {
 
   const result = await db.$transaction(async (tx) => {
     const person = await tx.person.create({
-      data: { firstName, lastName, campaignId: activeCampaignId, wardStatus },
+      data: { firstName, lastName, campaignId: activeCampaignId, wardStatus, listSource: ListSource.canvass },
     });
 
     await tx.personTag.create({

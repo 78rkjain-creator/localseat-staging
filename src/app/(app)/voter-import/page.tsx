@@ -185,8 +185,8 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
                           >
                             {person.lastName}, {person.firstName}
                           </Link>
-                          {person.birthYear && (
-                            <p className="text-xs text-slate-400 mt-0.5">b. {person.birthYear}</p>
+                          {person.birthDate && (
+                            <p className="text-xs text-slate-400 mt-0.5">b. {new Date(person.birthDate).getFullYear()}</p>
                           )}
                         </td>
                         <td className="px-5 py-3 hidden sm:table-cell">

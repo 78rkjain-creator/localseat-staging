@@ -5,13 +5,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
-import { sanitizePhone, sanitizeEmail, sanitizeBirthYear } from "@/lib/sanitize";
+import { sanitizePhone, sanitizeEmail, sanitizeBirthDate } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { normalizeFullAddress } from "@/lib/address-normalize";
-import { WardStatus } from "@prisma/client";
+import { WardStatus, ListSource } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
@@ -44,7 +44,7 @@ export interface VoterCsvRow {
   phoneHome: string;    // empty string when absent
   phoneMobile: string;  // empty string when absent
   email: string;        // empty string when absent
-  birthYear: string;    // empty string when absent
+  birthDate: string;    // empty string when absent; accepts YYYY-MM-DD
   pollNumber: string;   // empty string when absent
   customFieldValues?: Record<string, string>;
 }
@@ -235,7 +235,7 @@ export async function importVoterRows(
         const phoneHome   = sanitizePhone(row.phoneHome);
         const phoneMobile = sanitizePhone(row.phoneMobile);
         const email       = sanitizeEmail(row.email);
-        const birthYear   = sanitizeBirthYear(row.birthYear);
+        const birthDate   = sanitizeBirthDate(row.birthDate);
         const pollNumber  = row.pollNumber?.trim() || null;
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
@@ -407,9 +407,10 @@ export async function importVoterRows(
                 phoneHome:        phoneHome   ?? undefined,
                 phoneMobile:      phoneMobile ?? undefined,
                 email:            email       ?? undefined,
-                birthYear:        birthYear   ?? undefined,
+                birthDate:        birthDate   ?? undefined,
                 importSource:     "Official Voters List",
                 isConfirmedVoter: true,
+                listSource:       ListSource.voters_list,
                 pollNumber:       pollNumber ?? undefined,
                 ...(sanitisedCfv ? { customFieldValues: sanitisedCfv } : {}),
               },
@@ -553,9 +554,10 @@ export async function importVoterRows(
             phoneHome:    phoneHome ?? undefined,
             phoneMobile:  phoneMobile ?? undefined,
             email:        email ?? undefined,
-            birthYear:    birthYear ?? undefined,
+            birthDate:    birthDate ?? undefined,
             importSource: importSource.trim() || "voter-list-import",
             wardStatus,
+            listSource:   ListSource.residents_list,
             pollNumber:   pollNumber ?? undefined,
             ...(sanitisedCustomFieldValues ? { customFieldValues: sanitisedCustomFieldValues } : {}),
           },

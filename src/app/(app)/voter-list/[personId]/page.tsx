@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople, isReadOnly } from "@/lib/permissions";
-import { getPersonDetail } from "@/lib/people";
+import { canViewAllPeople, isReadOnly, hasMinimumRole } from "@/lib/permissions";
+import { getPersonDetail, getCampaignTags } from "@/lib/people";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
@@ -12,10 +12,12 @@ import { TagChip } from "@/components/ui/tag-chip";
 import { AddNoteForm } from "./add-note-form";
 import { PersonEditForm } from "./person-edit-form";
 import { AddressEditButton } from "./address-edit-button";
-import type { SupportLevel, CanvassOutcome, OutreachChannel } from "@/types";
-import { OUTREACH_CHANNEL_LABELS } from "@/types";
+import type { SupportLevel, CanvassOutcome, OutreachChannel, ListSource } from "@/types";
+import { OUTREACH_CHANNEL_LABELS, LIST_SOURCE_LABELS } from "@/types";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { CustomField } from "./CustomFieldsEditor";
+import { ListSourceToggle } from "./list-source-toggle";
+import { PersonTagEditor } from "./person-tag-editor";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -36,8 +38,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole as import("@/types").Role)) redirect("/dashboard");
   const readOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
+  const canToggleWalkList = activeRole
+    ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
+    : false;
+  const canEditTags = activeRole
+    ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
+    : false;
 
-  const [person, campaign, listMemberships] = await Promise.all([
+  const [person, campaign, listMemberships, campaignTags] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
     db.campaign.findUnique({
       where: { id: activeCampaignId },
@@ -54,6 +62,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
       },
       orderBy: { createdAt: "desc" },
     }),
+    getCampaignTags(activeCampaignId),
   ]);
   if (!person) notFound();
 
@@ -128,6 +137,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 Confirmed voter
               </span>
             )}
+            <ListSourceBadge source={person.listSource as ListSource} />
           </div>
           {address && (
             <p className="text-slate-500 mt-0.5">
@@ -163,14 +173,21 @@ export default async function PersonDetailPage({ params }: PageProps) {
               email={person.email}
               phoneHome={person.phoneHome}
               phoneMobile={person.phoneMobile}
-              birthYear={person.birthYear}
+              birthDate={person.birthDate}
               supportLevel={person.supportLevel}
               pollNumber={person.pollNumber ?? null}
+              wardStatus={person.wardStatus}
             />
             {person.importSource && (
               <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
                 Source: {person.importSource}
               </p>
+            )}
+            {person.listSource === "manual" && canToggleWalkList && (
+              <ListSourceToggle
+                personId={person.id}
+                initialValue={person.includeInWalkLists}
+              />
             )}
           </Card>
 
@@ -296,8 +313,21 @@ export default async function PersonDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* Right column: notes + list membership + timeline */}
+        {/* Right column: tags + notes + list membership + timeline */}
         <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Tags */}
+          <Card padding="md">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              Tags
+            </h2>
+            <PersonTagEditor
+              personId={person.id}
+              initialTags={person.tags.map(({ tag }) => tag)}
+              campaignTags={campaignTags}
+              canEdit={canEditTags}
+            />
+          </Card>
+
           {/* Notes */}
           <Card padding="md">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
@@ -411,6 +441,20 @@ export default async function PersonDetailPage({ params }: PageProps) {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function ListSourceBadge({ source }: { source: ListSource }) {
+  const colorMap: Record<ListSource, string> = {
+    voters_list:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+    residents_list: "bg-blue-50 text-blue-700 border-blue-200",
+    manual:         "bg-slate-100 text-slate-600 border-slate-200",
+    canvass:        "bg-orange-50 text-orange-700 border-orange-200",
+  };
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorMap[source]}`}>
+      {LIST_SOURCE_LABELS[source]}
+    </span>
+  );
+}
 
 function FlagChip({
   label,

@@ -4,10 +4,16 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canManageVoterList } from "@/lib/permissions";
-import { sanitizeEmail, sanitizePhone, sanitizeBirthYear, sanitizeEnum } from "@/lib/sanitize";
+import { canManageVoterList, hasMinimumRole } from "@/lib/permissions";
+import { sanitizeEmail, sanitizePhone, sanitizeBirthDate, sanitizeEnum } from "@/lib/sanitize";
+import { createAuditLog } from "@/lib/audit";
 import type { SupportLevel } from "@/types";
 import { Role } from "@prisma/client";
+
+// Candidate, campaign_manager, field_organizer may manage tags
+function canEditTags(role: Role): boolean {
+  return hasMinimumRole(role, Role.field_organizer);
+}
 
 const SUPPORT_LEVEL_VALUES: SupportLevel[] = [
   "strong_yes", "soft_yes", "undecided", "soft_no", "strong_no", "not_home",
@@ -22,7 +28,7 @@ interface UpdatePersonInput {
   email?: string;
   phoneHome?: string;
   phoneMobile?: string;
-  birthYear?: number | null;
+  birthDate?: string | null;
   supportLevel?: SupportLevel | null;
   pollNumber?: string | null;
 }
@@ -62,7 +68,7 @@ export async function updatePerson(
       email: sanitizeEmail(input.email),
       phoneHome: sanitizePhone(input.phoneHome),
       phoneMobile: sanitizePhone(input.phoneMobile),
-      birthYear: sanitizeBirthYear(input.birthYear),
+      birthDate: sanitizeBirthDate(input.birthDate),
       supportLevel: sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES),
       pollNumber: input.pollNumber?.trim() || null,
     },
@@ -70,6 +76,45 @@ export async function updatePerson(
 
   revalidatePath(`/voter-list/${input.personId}`);
   return { success: true };
+}
+
+// ── Toggle includeInWalkLists ─────────────────────────────────────────────────
+
+export async function toggleIncludeInWalkLists(
+  personId: string
+): Promise<{ error?: string; includeInWalkLists?: boolean }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !hasMinimumRole(activeRole as Role, Role.field_organizer)) {
+    return { error: "Permission denied." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, includeInWalkLists: true, listSource: true },
+  });
+  if (!person) return { error: "Person not found." };
+  if (person.listSource !== "manual") return { error: "Only manual records can be toggled." };
+
+  const next = !person.includeInWalkLists;
+  await db.person.update({
+    where: { id: personId },
+    data: { includeInWalkLists: next },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "PERSON_WALK_LIST_OVERRIDE_TOGGLED",
+    entityType: "person",
+    entityId: personId,
+    details: { includeInWalkLists: next },
+  });
+
+  revalidatePath(`/voter-list/${personId}`);
+  return { includeInWalkLists: next };
 }
 
 export async function addNote(
@@ -106,3 +151,79 @@ export async function addNote(
   revalidatePath(`/voter-list/${personId}`);
   return {};
 }
+
+// ── Tag management ────────────────────────────────────────────────────────────
+
+async function requireTagEditor() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." } as const;
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canEditTags(activeRole as Role)) {
+    return { error: "Permission denied." } as const;
+  }
+  return { session, campaignId: activeCampaignId } as const;
+}
+
+export async function addTagToPerson(
+  personId: string,
+  tagId: string
+): Promise<{ error?: string }> {
+  const auth = await requireTagEditor();
+  if ("error" in auth) return auth;
+  const { session, campaignId } = auth;
+
+  const [person, tag] = await Promise.all([
+    db.person.findFirst({ where: { id: personId, campaignId, deletedAt: null }, select: { id: true } }),
+    db.tag.findFirst({ where: { id: tagId, campaignId, deletedAt: null }, select: { id: true, name: true } }),
+  ]);
+  if (!person) return { error: "Person not found." };
+  if (!tag) return { error: "Tag not found." };
+
+  await db.personTag.upsert({
+    where: { personId_tagId: { personId, tagId } },
+    update: { deletedAt: null },
+    create: { personId, tagId },
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "PERSON_TAG_ADDED",
+    entityType: "person",
+    entityId: personId,
+    details: { tagId, tagName: tag.name },
+  });
+
+  revalidatePath(`/voter-list/${personId}`);
+  return {};
+}
+
+export async function removeTagFromPerson(
+  personId: string,
+  tagId: string
+): Promise<{ error?: string }> {
+  const auth = await requireTagEditor();
+  if ("error" in auth) return auth;
+  const { session, campaignId } = auth;
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  await db.personTag.deleteMany({ where: { personId, tagId } });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "PERSON_TAG_REMOVED",
+    entityType: "person",
+    entityId: personId,
+    details: { tagId },
+  });
+
+  revalidatePath(`/voter-list/${personId}`);
+  return {};
+}
+

@@ -29,7 +29,12 @@ export async function GET() {
 
   const campaignId = session.user.activeCampaignId;
 
-  const people = await db.person.findMany({
+  const [campaign, people] = await Promise.all([
+    db.campaign.findUnique({
+      where: { id: campaignId },
+      select: { customFields: true },
+    }),
+    db.person.findMany({
     where: { campaignId, deletedAt: null },
     include: {
       household: {
@@ -43,13 +48,20 @@ export async function GET() {
         select: { supportLevel: true, outcome: true, competitor: { select: { name: true } } },
       },
     },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    }),
+  ]);
+
+  interface CfDef { id: string; label: string }
+  const customFieldDefs: CfDef[] = Array.isArray(campaign?.customFields)
+    ? (campaign.customFields as unknown as CfDef[])
+    : [];
 
   const headers = row([
     "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
     "Street", "Unit", "City", "Province", "Postal Code", "Poll Number",
     "Tags", "Support Level", "Competitor", "Notes Count", "Created Date", "Import Source",
+    ...customFieldDefs.map((f) => f.label),
   ]);
 
   const rows = people.map((p) => {
@@ -68,6 +80,8 @@ export async function GET() {
         ? latestResponse.competitor.name
         : "";
 
+    const cfValues = (p.customFieldValues as Record<string, string> | null) ?? {};
+
     return row([
       p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
       street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
@@ -75,6 +89,7 @@ export async function GET() {
       tags, supportLevel, competitor, p.notes.length,
       p.createdAt.toISOString().slice(0, 10),
       p.importSource,
+      ...customFieldDefs.map((f) => cfValues[f.id] ?? ""),
     ]);
   });
 
