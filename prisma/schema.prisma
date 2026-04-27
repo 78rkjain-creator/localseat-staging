@@ -498,9 +498,6 @@ model CanvassResponse {
   person     Person             @relation(fields: [personId], references: [id])
   competitor CampaignCompetitor? @relation(fields: [competitorId], references: [id])
 
-  // One response per person per assignment — prevents duplicate submissions from
-  // network retries or offline queue re-syncs. Use upsert when saving.
-  @@unique([assignmentId, personId])
   @@index([assignmentId])
   @@index([personId])
   @@index([competitorId])

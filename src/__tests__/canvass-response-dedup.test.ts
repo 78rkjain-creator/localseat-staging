@@ -1,12 +1,15 @@
 /**
- * Test 1 — Canvass Response Deduplication (Item 29)
+ * Canvass Response — multi-visit behavior (Item 29 updated)
  *
- * Tests the upsert behavior in saveCanvassResponse:
- * - Saving the same assignmentId + personId twice should not create two records
- * - Second save updates the existing record
- * - Third save with a different supportLevel updates to the new level
+ * The unique constraint on (assignmentId, personId) has been removed.
+ * saveCanvassResponse now always calls db.canvassResponse.create — every
+ * interaction produces a new record. Side effects (outreach log, tasks, etc.)
+ * run on every save.
  *
- * Uses mocked Prisma client and mocked next-auth session.
+ * Deduplication of accidental double-taps is handled client-side:
+ *   - Online: useTransition isPending flag blocks concurrent submissions.
+ *   - Offline: offline-queue.ts rejects enqueue() within a 30-second window
+ *     for the same assignmentId+personId pair.
  */
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
@@ -19,29 +22,25 @@ jest.mock('@/lib/auth', () => ({
   authOptions: {},
 }));
 
-// Mock revalidatePath to avoid Next.js internals
 jest.mock('next/cache', () => ({
   revalidatePath: jest.fn(),
 }));
 
-// Mock audit logging — not the subject under test
 jest.mock('@/lib/audit', () => ({
   createAuditLog: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock the db module
 jest.mock('@/lib/db', () => ({
   db: {
     canvassAssignment: { findFirst: jest.fn() },
     person: { findFirst: jest.fn() },
     canvassResponse: {
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
+      create: jest.fn(),
     },
     outreachLog: { create: jest.fn() },
     volunteerRecord: { upsert: jest.fn() },
     donor: { findFirst: jest.fn(), create: jest.fn() },
-    task: { create: jest.fn() },
+    task: { findFirst: jest.fn(), create: jest.fn() },
   },
 }));
 
@@ -72,7 +71,7 @@ const baseInput = {
   needsFollowUp: false,
 };
 
-function setupMocksForFirstSave() {
+function setupMocks() {
   (getServerSession as jest.Mock).mockResolvedValue(mockSession);
   (db.canvassAssignment.findFirst as jest.Mock).mockResolvedValue({ id: 'assignment-1' });
   (db.person.findFirst as jest.Mock).mockResolvedValue({
@@ -80,105 +79,59 @@ function setupMocksForFirstSave() {
     firstName: 'John',
     lastName: 'Doe',
   });
-  // No existing response — first save
-  (db.canvassResponse.findUnique as jest.Mock).mockResolvedValue(null);
-  (db.canvassResponse.upsert as jest.Mock).mockResolvedValue({ id: 'response-abc' });
+  (db.canvassResponse.create as jest.Mock).mockResolvedValue({ id: 'response-abc' });
   (db.outreachLog.create as jest.Mock).mockResolvedValue(undefined);
-}
-
-function setupMocksForSubsequentSave(existingResponseId: string) {
-  (getServerSession as jest.Mock).mockResolvedValue(mockSession);
-  (db.canvassAssignment.findFirst as jest.Mock).mockResolvedValue({ id: 'assignment-1' });
-  (db.person.findFirst as jest.Mock).mockResolvedValue({
-    id: 'person-1',
-    firstName: 'John',
-    lastName: 'Doe',
-  });
-  // Existing response present — retry/duplicate
-  (db.canvassResponse.findUnique as jest.Mock).mockResolvedValue({ id: existingResponseId });
-  (db.canvassResponse.upsert as jest.Mock).mockResolvedValue({ id: existingResponseId });
+  (db.task.findFirst as jest.Mock).mockResolvedValue(null);
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe('saveCanvassResponse — deduplication (upsert behavior)', () => {
+describe('saveCanvassResponse — multi-visit (create behavior)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('first save: upsert is called with create + update data', async () => {
-    setupMocksForFirstSave();
+  test('every save calls create (not upsert) and returns a responseId', async () => {
+    setupMocks();
 
     const result = await saveCanvassResponse(baseInput);
 
     expect(result.error).toBeUndefined();
     expect(result.responseId).toBe('response-abc');
+    expect(db.canvassResponse.create).toHaveBeenCalledTimes(1);
 
-    // Upsert MUST have been called exactly once
-    expect(db.canvassResponse.upsert).toHaveBeenCalledTimes(1);
-
-    const upsertCall = (db.canvassResponse.upsert as jest.Mock).mock.calls[0][0];
-
-    // The unique constraint key must be used
-    expect(upsertCall.where).toEqual({
-      assignmentId_personId: { assignmentId: 'assignment-1', personId: 'person-1' },
-    });
-
-    // Create payload must include both FK fields
-    expect(upsertCall.create).toMatchObject({
+    const createCall = (db.canvassResponse.create as jest.Mock).mock.calls[0][0];
+    expect(createCall.data).toMatchObject({
       assignmentId: 'assignment-1',
       personId: 'person-1',
       outcome: 'contacted',
       supportLevel: 'strong_yes',
     });
-
-    // Update payload must NOT include FK fields (would fail Prisma)
-    expect(upsertCall.update).not.toHaveProperty('assignmentId');
-    expect(upsertCall.update).not.toHaveProperty('personId');
-    expect(upsertCall.update).toMatchObject({ outcome: 'contacted', supportLevel: 'strong_yes' });
   });
 
-  test('second save (retry): upsert still called, but side effects (outreach log, tasks) are skipped', async () => {
-    setupMocksForSubsequentSave('response-abc');
-
-    const result = await saveCanvassResponse(baseInput);
-
-    expect(result.error).toBeUndefined();
-    expect(result.responseId).toBe('response-abc');
-
-    // Upsert still fires (idempotent update)
-    expect(db.canvassResponse.upsert).toHaveBeenCalledTimes(1);
-
-    // Side effects must NOT fire on a duplicate submission
-    expect(db.outreachLog.create).not.toHaveBeenCalled();
-    expect(db.task.create).not.toHaveBeenCalled();
-    expect(db.volunteerRecord.upsert).not.toHaveBeenCalled();
-    expect(db.donor.create).not.toHaveBeenCalled();
-  });
-
-  test('third save with different support level updates the record to the new level', async () => {
-    // Second call — existing response already exists
-    setupMocksForSubsequentSave('response-abc');
-
-    const updatedInput = { ...baseInput, supportLevel: 'soft_no' as const };
-    const result = await saveCanvassResponse(updatedInput);
-
-    expect(result.error).toBeUndefined();
-    expect(db.canvassResponse.upsert).toHaveBeenCalledTimes(1);
-
-    const upsertCall = (db.canvassResponse.upsert as jest.Mock).mock.calls[0][0];
-
-    // The update data must carry the new support level
-    expect(upsertCall.update).toMatchObject({ supportLevel: 'soft_no' });
-  });
-
-  test('first save triggers outreach log creation', async () => {
-    setupMocksForFirstSave();
+  test('second save for the same person creates a second record', async () => {
+    setupMocks();
 
     await saveCanvassResponse(baseInput);
+    (db.canvassResponse.create as jest.Mock).mockResolvedValue({ id: 'response-xyz' });
+    const result2 = await saveCanvassResponse({ ...baseInput, supportLevel: 'soft_yes' });
 
-    // First-save path should auto-create an outreach log entry
-    expect(db.outreachLog.create).toHaveBeenCalledTimes(1);
+    expect(result2.error).toBeUndefined();
+    expect(result2.responseId).toBe('response-xyz');
+    expect(db.canvassResponse.create).toHaveBeenCalledTimes(2);
+
+    const secondCreate = (db.canvassResponse.create as jest.Mock).mock.calls[1][0];
+    expect(secondCreate.data).toMatchObject({ supportLevel: 'soft_yes' });
+  });
+
+  test('outreach log is created on every save', async () => {
+    setupMocks();
+
+    await saveCanvassResponse(baseInput);
+    (db.canvassResponse.create as jest.Mock).mockResolvedValue({ id: 'response-xyz' });
+    await saveCanvassResponse(baseInput);
+
+    expect(db.outreachLog.create).toHaveBeenCalledTimes(2);
     const logCall = (db.outreachLog.create as jest.Mock).mock.calls[0][0];
     expect(logCall.data).toMatchObject({
       campaignId: 'campaign-1',
@@ -192,7 +145,7 @@ describe('saveCanvassResponse — deduplication (upsert behavior)', () => {
 
     const result = await saveCanvassResponse(baseInput);
     expect(result.error).toBe('Not authenticated.');
-    expect(db.canvassResponse.upsert).not.toHaveBeenCalled();
+    expect(db.canvassResponse.create).not.toHaveBeenCalled();
   });
 
   test('returns error when assignment does not belong to canvasser', async () => {
@@ -201,6 +154,59 @@ describe('saveCanvassResponse — deduplication (upsert behavior)', () => {
 
     const result = await saveCanvassResponse(baseInput);
     expect(result.error).toBe('Assignment not found.');
-    expect(db.canvassResponse.upsert).not.toHaveBeenCalled();
+    expect(db.canvassResponse.create).not.toHaveBeenCalled();
+  });
+});
+
+// ── Offline queue dedup — unit tests for the dedup logic ─────────────────────
+//
+// The dedup logic lives inside enqueue() in offline-queue.ts. Since IndexedDB
+// is unavailable in Node, these tests exercise the pure dedup predicate directly.
+
+const DEDUP_WINDOW_MS = 30_000;
+
+type PendingStub = { assignmentId: string; personId: string; queuedAt: number };
+
+function wouldDeduplicate(pending: PendingStub[], assignmentId: string, personId: string): boolean {
+  const now = Date.now();
+  return pending.some(
+    (q) =>
+      q.assignmentId === assignmentId &&
+      q.personId === personId &&
+      now - q.queuedAt < DEDUP_WINDOW_MS
+  );
+}
+
+describe('offline-queue — 30-second dedup predicate', () => {
+  test('no prior items: not a duplicate', () => {
+    expect(wouldDeduplicate([], 'a-1', 'p-1')).toBe(false);
+  });
+
+  test('same assignment+person queued just now: duplicate', () => {
+    const pending: PendingStub[] = [
+      { assignmentId: 'a-1', personId: 'p-1', queuedAt: Date.now() - 5_000 },
+    ];
+    expect(wouldDeduplicate(pending, 'a-1', 'p-1')).toBe(true);
+  });
+
+  test('same assignment+person queued 31 seconds ago: not a duplicate', () => {
+    const pending: PendingStub[] = [
+      { assignmentId: 'a-1', personId: 'p-1', queuedAt: Date.now() - 31_000 },
+    ];
+    expect(wouldDeduplicate(pending, 'a-1', 'p-1')).toBe(false);
+  });
+
+  test('same person, different assignment: not a duplicate', () => {
+    const pending: PendingStub[] = [
+      { assignmentId: 'a-1', personId: 'p-1', queuedAt: Date.now() - 5_000 },
+    ];
+    expect(wouldDeduplicate(pending, 'a-2', 'p-1')).toBe(false);
+  });
+
+  test('same assignment, different person: not a duplicate', () => {
+    const pending: PendingStub[] = [
+      { assignmentId: 'a-1', personId: 'p-1', queuedAt: Date.now() - 5_000 },
+    ];
+    expect(wouldDeduplicate(pending, 'a-1', 'p-2')).toBe(false);
   });
 });

@@ -81,37 +81,22 @@ export async function saveCanvassResponse(
     }
   }
 
-  // Check whether this is a new response or a retry — side effects (outreach log,
-  // volunteer/donor records, tasks) only run on the first successful save.
-  const existingResponse = await db.canvassResponse.findUnique({
-    where: { assignmentId_personId: { assignmentId: input.assignmentId, personId: input.personId } },
+  const response = await db.canvassResponse.create({
+    data: {
+      assignmentId: input.assignmentId,
+      personId: input.personId,
+      outcome,
+      supportLevel: isContacted ? supportLevel : null,
+      signRequest: isContacted ? input.signRequest : false,
+      volunteerInterest: isContacted ? input.volunteerInterest : false,
+      donorInterest: isContacted ? input.donorInterest : false,
+      notes: noteText,
+      needsFollowUp: input.needsFollowUp,
+      competitorId: outcome === "other_candidate" ? (input.competitorId ?? null) : null,
+      respondedAt,
+    },
     select: { id: true },
   });
-  const isNewResponse = !existingResponse;
-
-  const responseData = {
-    outcome,
-    supportLevel: isContacted ? supportLevel : null,
-    signRequest: isContacted ? input.signRequest : false,
-    volunteerInterest: isContacted ? input.volunteerInterest : false,
-    donorInterest: isContacted ? input.donorInterest : false,
-    notes: noteText,
-    needsFollowUp: input.needsFollowUp,
-    competitorId: outcome === "other_candidate" ? (input.competitorId ?? null) : null,
-    respondedAt,
-  };
-
-  const response = await db.canvassResponse.upsert({
-    where: { assignmentId_personId: { assignmentId: input.assignmentId, personId: input.personId } },
-    create: { assignmentId: input.assignmentId, personId: input.personId, ...responseData },
-    update: responseData,
-    select: { id: true },
-  });
-
-  if (!isNewResponse) {
-    // Duplicate submission (retry/re-sync) — update accepted, skip side effects.
-    return { responseId: response.id };
-  }
 
   // Auto-log to outreach log — door_knock entry for every canvass save
   try {

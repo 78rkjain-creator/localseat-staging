@@ -358,7 +358,6 @@ export async function getCanvassingQueue(
             canvassResponses: {
               where: { assignmentId: assignment.id },
               orderBy: { respondedAt: "desc" },
-              take: 1,
               select: {
                 id: true,
                 outcome: true,
@@ -368,6 +367,7 @@ export async function getCanvassingQueue(
                 donorInterest: true,
                 notes: true,
                 needsFollowUp: true,
+                respondedAt: true,
               },
             },
           },
@@ -400,6 +400,7 @@ export async function getCanvassingQueue(
           (p) => p.id !== e.person.id
         ),
       },
+      visitCount: e.person.canvassResponses.length,
       lastResponse: e.person.canvassResponses.length > 0
         ? e.person.canvassResponses[0]
         : null,

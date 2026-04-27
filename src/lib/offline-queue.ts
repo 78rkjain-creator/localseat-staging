@@ -107,22 +107,39 @@ function normalize(raw: Partial<QueuedResponse>): QueuedResponse {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Adds a response to the end of the queue. */
-export function enqueue(
+const DEDUP_WINDOW_MS = 30_000;
+
+/**
+ * Adds a response to the queue.
+ *
+ * Returns `{ isDuplicate: true }` when an identical assignmentId+personId was
+ * enqueued within the last 30 seconds — catches accidental double-taps while
+ * offline without blocking intentional re-visits.
+ */
+export async function enqueue(
   item: Omit<QueuedResponse, "id" | "queuedAt" | "retryCount" | "lastAttemptedAt" | "lastError" | "status">
-): Promise<void> {
+): Promise<{ isDuplicate: boolean }> {
+  const pending = await getPending();
+  const now = Date.now();
+  const isDuplicate = pending.some(
+    (q) =>
+      q.assignmentId === item.assignmentId &&
+      q.personId === item.personId &&
+      now - q.queuedAt < DEDUP_WINDOW_MS
+  );
+  if (isDuplicate) return { isDuplicate: true };
+
   const record: QueuedResponse = {
     ...item,
     id: crypto.randomUUID(),
-    queuedAt: Date.now(),
+    queuedAt: now,
     retryCount: 0,
     lastAttemptedAt: null,
     lastError: null,
     status: "pending",
   };
-  return withStore("readwrite", (store) => store.add(record)).then(
-    () => undefined
-  );
+  await withStore("readwrite", (store) => store.add(record));
+  return { isDuplicate: false };
 }
 
 /** Returns ALL queued items sorted oldest-first. Normalizes v1 records. */

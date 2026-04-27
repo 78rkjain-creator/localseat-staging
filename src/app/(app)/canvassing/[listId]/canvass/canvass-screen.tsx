@@ -10,6 +10,19 @@ import { VoterChangeModal } from "@/components/voter-change-modal";
 import { AddResidentModal } from "@/components/add-resident-modal";
 import { enqueue } from "@/lib/offline-queue";
 import type { QueuedResponse } from "@/lib/offline-queue";
+
+function formatVisitDate(iso: string | Date): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / 86_400_000);
+  if (diffDays === 0) {
+    return `today at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -44,6 +57,16 @@ function emptyDraft(): ResponseDraft {
     notes: "",
     needsFollowUp: false,
     competitorId: null,
+  };
+}
+
+function draftFromLastResponse(
+  response: { supportLevel: string | null } | null
+): ResponseDraft {
+  if (!response) return emptyDraft();
+  return {
+    ...emptyDraft(),
+    supportLevel: (response.supportLevel as SupportLevel | null) ?? null,
   };
 }
 
@@ -247,10 +270,11 @@ export function CanvassScreen({
   function handlePrevious() {
     if (currentIndex <= 0) return;
     const prevIndex = currentIndex - 1;
+    const prevEntry = entries[prevIndex];
     setCurrentIndex(prevIndex);
-    setDraft(emptyDraft());
+    setDraft(draftFromLastResponse(prevEntry.lastResponse));
     setError(null);
-    setSelectedPersonId(entries[prevIndex].person.id);
+    setSelectedPersonId(prevEntry.person.id);
   }
 
   async function handleNotHome() {
@@ -261,7 +285,7 @@ export function CanvassScreen({
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
-        await enqueue({
+        const { isDuplicate } = await enqueue({
           assignmentId,
           personId: capturedEntryPersonId,
           outcome: "not_home",
@@ -273,7 +297,7 @@ export function CanvassScreen({
           competitorId: null,
           needsFollowUp: false,
         });
-        await refreshSyncCount();
+        if (!isDuplicate) await refreshSyncCount();
         markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
       } catch (err) {
         console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
@@ -309,7 +333,7 @@ export function CanvassScreen({
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
-        await enqueue({
+        const { isDuplicate } = await enqueue({
           assignmentId,
           personId: capturedApiPersonId,
           outcome,
@@ -321,7 +345,7 @@ export function CanvassScreen({
           competitorId: null,
           needsFollowUp: false,
         });
-        await refreshSyncCount();
+        if (!isDuplicate) await refreshSyncCount();
         markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
       } catch (err) {
         console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
@@ -365,7 +389,7 @@ export function CanvassScreen({
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
-        await enqueue({
+        const { isDuplicate } = await enqueue({
           assignmentId,
           personId: capturedApiPersonId,
           outcome,
@@ -377,7 +401,7 @@ export function CanvassScreen({
           needsFollowUp: draft.needsFollowUp,
           competitorId,
         });
-        await refreshSyncCount();
+        if (!isDuplicate) await refreshSyncCount();
         markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
       } catch (err) {
         console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
@@ -598,7 +622,8 @@ export function CanvassScreen({
             )}
             {current.lastResponse && (
               <span className="inline-block mt-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                Previously recorded
+                {current.visitCount === 1 ? "Visited once" : `${current.visitCount} visits`}
+                {" · "}last {formatVisitDate(current.lastResponse.respondedAt)}
               </span>
             )}
           </div>
