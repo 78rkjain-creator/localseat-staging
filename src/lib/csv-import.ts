@@ -17,6 +17,7 @@ export interface RowFields {
   email: string;
   birthDate: string;
   pollNumber: string;
+  voterId: string;
 }
 
 export const MANDATORY_FIELDS: (keyof RowFields)[] = [
@@ -43,6 +44,7 @@ export const FIELD_LABELS: Record<keyof RowFields, string> = {
   email:        "Email",
   birthDate:    "Birth date",
   pollNumber:   "Poll #",
+  voterId:      "Voter ID",
 };
 
 export type RowStatus = "ready" | "flagged" | "approved" | "rejected" | "duplicate";
@@ -160,6 +162,7 @@ export function parseCsvToReviewRows(
         return "";
       })(),
       pollNumber:   getField(raw, "pollnumber", "poll_number", "poll", "pollno", "poll_no"),
+      voterId:      getField(raw, "voterid", "voter_id", "voteridentifier", "electorid", "elector_id"),
     };
 
     // Extract custom field values by matching CSV header labels to field definitions

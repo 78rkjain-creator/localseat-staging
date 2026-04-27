@@ -46,6 +46,8 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     created: number;
     skipped: number;
     flaggedRows: FlaggedRow[];
+    voterIdUpdated: number;
+    voterIdUnchanged: number;
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
   const [birthYearWarningCount, setBirthYearWarningCount] = useState(0);
@@ -113,6 +115,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         email:        r.fields.email,
         birthDate:    r.fields.birthDate,
         pollNumber:   r.fields.pollNumber,
+        voterId:      r.fields.voterId,
       }));
 
       const duplicates = await checkDuplicatesForImport(csvRows);
@@ -191,6 +194,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         email:        r.fields.email.trim(),
         birthDate:    r.fields.birthDate.trim(),
         pollNumber:   r.fields.pollNumber.trim(),
+        voterId:      r.fields.voterId.trim(),
         customFieldValues: r.customFieldValues,
       }));
 
@@ -205,10 +209,12 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         setSubmitError(res.error);
       } else {
         setResult({
-          matched:     res.matched     ?? 0,
-          created:     res.created     ?? 0,
-          skipped:     res.skipped     ?? 0,
-          flaggedRows: res.flaggedRows ?? [],
+          matched:          res.matched          ?? 0,
+          created:          res.created          ?? 0,
+          skipped:          res.skipped          ?? 0,
+          flaggedRows:      res.flaggedRows       ?? [],
+          voterIdUpdated:   res.voterIdUpdated   ?? 0,
+          voterIdUnchanged: res.voterIdUnchanged ?? 0,
         });
         setStep("done");
       }
@@ -462,12 +468,22 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
           </div>
           <div>
             <p className="text-base font-semibold text-slate-900 mb-1">Import complete</p>
-            <p className="text-sm text-slate-500">
-              {result.matched} matched existing record{result.matched !== 1 ? "s" : ""}
-              {" · "}
-              {result.created} new record{result.created !== 1 ? "s" : ""} created
-              {result.skipped > 0 && ` · ${result.skipped} skipped`}
-            </p>
+            {(result.voterIdUpdated > 0 || result.voterIdUnchanged > 0) ? (
+              <p className="text-sm text-slate-500">
+                {result.voterIdUpdated} matched and updated
+                {" · "}
+                {result.created} created new
+                {result.voterIdUnchanged > 0 && ` · ${result.voterIdUnchanged} unchanged`}
+                {result.skipped > 0 && ` · ${result.skipped} skipped`}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">
+                {result.matched} matched existing record{result.matched !== 1 ? "s" : ""}
+                {" · "}
+                {result.created} new record{result.created !== 1 ? "s" : ""} created
+                {result.skipped > 0 && ` · ${result.skipped} skipped`}
+              </p>
+            )}
           </div>
 
           {result.flaggedRows.length > 0 && (

@@ -61,6 +61,13 @@ enum PlanTier {
   demo
 }
 
+enum CanvassListStatus {
+  draft
+  pending_approval
+  active
+  archived
+}
+
 enum WardStatus {
   not_checked
   inside
@@ -312,6 +319,7 @@ model Person {
   userId                       String?
   needsDistrictClassification  Boolean                      @default(false)
   customFieldValues   Json?
+  voterId             String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -334,6 +342,7 @@ model Person {
   listMemberships       PersonListMembership[]
 
   @@unique([userId, campaignId])
+  @@unique([campaignId, voterId])
   @@index([campaignId, deletedAt])
   @@index([lastName])
   @@index([email])
@@ -420,15 +429,19 @@ model Task {
 // ─── Canvass List ─────────────────────────────────────────────────────────────
 
 model CanvassList {
-  id             String    @id @default(cuid())
-  campaignId     String
-  name           String
-  description    String?
-  turfPolygon    Json?     // GeoJSON polygon from map-based turf cutting; null for manual/CSV lists
-  turfCreatedAt  DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
+  id              String            @id @default(cuid())
+  campaignId      String
+  name            String
+  description     String?
+  turfPolygon     Json?             // GeoJSON polygon from map-based turf cutting; null for manual/CSV lists
+  turfCreatedAt   DateTime?
+  status          CanvassListStatus @default(active)
+  rejectionReason String?
+  dynamicFilters  Json?             // DynamicFilters JSON when isDynamic; null for static lists
+  lastRefreshedAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
 
   campaign    Campaign            @relation(fields: [campaignId], references: [id])
   assignments CanvassAssignment[]

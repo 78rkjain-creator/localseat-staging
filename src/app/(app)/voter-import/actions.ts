@@ -46,6 +46,7 @@ export interface VoterCsvRow {
   email: string;        // empty string when absent
   birthDate: string;    // empty string when absent; accepts YYYY-MM-DD
   pollNumber: string;   // empty string when absent
+  voterId: string;      // empty string when absent
   customFieldValues?: Record<string, string>;
 }
 
@@ -68,6 +69,10 @@ export interface VoterImportResult {
   skipped?: number;
   reviewCount?: number;
   flaggedRows?: FlaggedRow[];
+  /** Number of records matched by Voter ID and updated with new field values. */
+  voterIdUpdated?: number;
+  /** Number of records matched by Voter ID with no field changes (already up to date). */
+  voterIdUnchanged?: number;
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────
@@ -215,6 +220,8 @@ export async function importVoterRows(
   let created = 0;
   let skipped = 0;
   let reviewCount = 0;
+  let voterIdUpdated = 0;
+  let voterIdUnchanged = 0;
   const flaggedRows: FlaggedRow[] = [];
   const newAddressIds: string[] = [];
   let listImportId!: string;
@@ -243,6 +250,11 @@ export async function importVoterRows(
             id: true,
             firstName: true,
             lastName: true,
+            phoneHome: true,
+            phoneMobile: true,
+            email: true,
+            birthDate: true,
+            voterId: true,
             household: {
               select: {
                 id: true,
@@ -319,6 +331,21 @@ export async function importVoterRows(
       // Regular-list person map: personKey → personId
       const personByNameAddr = new Map<string, string>();
 
+      // Voter ID map: voterId → person fields (for voter-ID-based matching/updating)
+      type VoterIdStub = {
+        id: string;
+        firstName: string;
+        lastName: string;
+        phoneHome: string | null;
+        phoneMobile: string | null;
+        email: string | null;
+        birthDate: Date | null;
+      };
+      const voterIdMap = new Map<string, VoterIdStub>();
+
+      // Voter ID update ops staged for batch write
+      const voterIdUpdateOps: Array<{ id: string; data: Prisma.PersonUpdateInput }> = [];
+
       // OVL lookup maps
       const ovlByNormName   = new Map<string, OvlStub[]>(); // "normFirst|normLast" → stubs
       const ovlByStreetCity = new Map<string, OvlStub[]>(); // "streetNumber|city" → stubs
@@ -334,6 +361,19 @@ export async function importVoterRows(
             makePersonKey(p.firstName, p.lastName, addr.streetNumber, addr.streetName, addr.unitNumber, addr.postalCode),
             p.id
           );
+        }
+
+        // Voter ID lookup
+        if (p.voterId) {
+          voterIdMap.set(p.voterId, {
+            id: p.id,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            phoneHome: p.phoneHome,
+            phoneMobile: p.phoneMobile,
+            email: p.email,
+            birthDate: p.birthDate,
+          });
         }
 
         // OVL stubs
@@ -533,6 +573,72 @@ export async function importVoterRows(
 
         // ── Regular list matching ─────────────────────────────────────────
 
+        const incomingVoterId = row.voterId?.trim() || null;
+
+        // 0. Voter ID match — takes priority over name+address matching
+        if (incomingVoterId) {
+          const existingByVid = voterIdMap.get(incomingVoterId);
+
+          if (existingByVid) {
+            // Update non-blank incoming fields that differ from stored values
+            const updateData: Prisma.PersonUpdateInput = {};
+            if (phoneHome && phoneHome !== existingByVid.phoneHome) updateData.phoneHome = phoneHome;
+            if (phoneMobile && phoneMobile !== existingByVid.phoneMobile) updateData.phoneMobile = phoneMobile;
+            if (email && email !== existingByVid.email) updateData.email = email;
+            if (birthDate) {
+              const storedTime = existingByVid.birthDate?.getTime() ?? null;
+              if (birthDate.getTime() !== storedTime) updateData.birthDate = birthDate;
+            }
+            if (firstName && firstName !== existingByVid.firstName) updateData.firstName = firstName;
+            if (lastName && lastName !== existingByVid.lastName) updateData.lastName = lastName;
+
+            if (Object.keys(updateData).length > 0) {
+              voterIdUpdateOps.push({ id: existingByVid.id, data: updateData });
+              voterIdUpdated++;
+            } else {
+              voterIdUnchanged++;
+            }
+            newMembershipRows.push({ personId: existingByVid.id, listImportId, campaignId, status: "matched" });
+            continue;
+          }
+
+          // No existing person with this voter ID — create a new one with voterId set
+          const vidAddrEntry = getOrStageAddress(streetNumber, streetName, unitNumber, city, province, postalCode);
+          let vidWardStatus: WardStatus = WardStatus.not_checked;
+          if (wardBoundary && vidAddrEntry.lat !== null && vidAddrEntry.lng !== null) {
+            vidWardStatus = isPointInWard(vidAddrEntry.lat, vidAddrEntry.lng, wardBoundary)
+              ? WardStatus.inside : WardStatus.outside;
+          }
+          if (vidWardStatus === WardStatus.outside) {
+            flaggedRows.push({ firstName, lastName, streetNumber, streetName, unitNumber, city, province, postalCode, wardStatus: "outside" });
+            continue;
+          }
+          const vidHouseholdId = getOrStageHousehold(vidAddrEntry.id);
+          const vidPersonId    = crypto.randomUUID();
+          const vidCfv         = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
+          newPersonRows.push({
+            id:           vidPersonId,
+            campaignId,
+            householdId:  vidHouseholdId,
+            firstName,    lastName,
+            phoneHome:    phoneHome   ?? undefined,
+            phoneMobile:  phoneMobile ?? undefined,
+            email:        email       ?? undefined,
+            birthDate:    birthDate   ?? undefined,
+            importSource: importSource.trim() || "voter-list-import",
+            wardStatus:   vidWardStatus,
+            listSource:   ListSource.residents_list,
+            pollNumber:   pollNumber ?? undefined,
+            voterId:      incomingVoterId,
+            ...(vidCfv ? { customFieldValues: vidCfv as Prisma.InputJsonValue } : {}),
+          });
+          newMembershipRows.push({ personId: vidPersonId, listImportId, campaignId, status: "created" });
+          personByNameAddr.set(makePersonKey(firstName, lastName, streetNumber, streetName, unitNumber, postalCode), vidPersonId);
+          voterIdMap.set(incomingVoterId, { id: vidPersonId, firstName, lastName, phoneHome, phoneMobile, email, birthDate });
+          created++;
+          continue;
+        }
+
         // 1. Match existing person by name + address (in-memory lookup)
         const pKey            = makePersonKey(firstName, lastName, streetNumber, streetName, unitNumber, postalCode);
         const existingPersonId = personByNameAddr.get(pKey);
@@ -603,6 +709,13 @@ export async function importVoterRows(
       if (newMembershipRows.length > 0) {
         await tx.personListMembership.createMany({ data: newMembershipRows });
       }
+      if (voterIdUpdateOps.length > 0) {
+        await Promise.all(
+          voterIdUpdateOps.map(({ id, data }) =>
+            tx.person.update({ where: { id }, data })
+          )
+        );
+      }
       if (personUpdateOps.length > 0) {
         await Promise.all(
           personUpdateOps.map(({ id, isConfirmedVoter, pollNumber }) =>
@@ -640,5 +753,5 @@ export async function importVoterRows(
     });
   }
 
-  return { matched, created, skipped, reviewCount, flaggedRows };
+  return { matched, created, skipped, reviewCount, flaggedRows, voterIdUpdated, voterIdUnchanged };
 }

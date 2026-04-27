@@ -3,6 +3,15 @@ import { ListSource, WardStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { SupportLevel } from "@/types";
 
+// ── Dynamic filter shape (stored as JSON on CanvassList.dynamicFilters) ────
+
+export interface DynamicFilters {
+  supportLevels?: string[];
+  tagIds?: string[];
+  canvassStatus?: "not_yet_canvassed" | "canvassed" | "not_home" | "";
+  wardStatuses?: string[];
+}
+
 // ── Walk list index ────────────────────────────────────────────────────────
 
 export async function getCanvassLists(campaignId: string) {
@@ -22,7 +31,6 @@ export async function getCanvassLists(campaignId: string) {
   });
 
   return lists.map((list) => {
-    // Count distinct people canvassed across all assignments on this list.
     const allPersonIds = list.assignments.flatMap((a) =>
       a.responses.map((r) => r.personId)
     );
@@ -262,7 +270,7 @@ export async function getAssignedLists(canvasserId: string, campaignId: string) 
     where: {
       canvasserId,
       deletedAt: null,
-      canvassList: { campaignId, deletedAt: null },
+      canvassList: { campaignId, deletedAt: null, status: "active" },
     },
     include: {
       canvassList: {
@@ -305,7 +313,7 @@ export async function getCanvassingQueue(
       canvassListId: listId,
       canvasserId,
       deletedAt: null,
-      canvassList: { campaignId },
+        canvassList: { campaignId, status: "active" },
     },
     select: { id: true },
   });
@@ -313,7 +321,7 @@ export async function getCanvassingQueue(
 
   const [listRecord, entries, competitors] = await Promise.all([
     db.canvassList.findFirst({
-      where: { id: listId, campaignId, deletedAt: null },
+      where: { id: listId, campaignId, deletedAt: null, status: "active" },
       select: { name: true },
     }),
     db.canvassListEntry.findMany({
@@ -325,6 +333,7 @@ export async function getCanvassingQueue(
         { person: { lastName: "asc" } },
         { person: { firstName: "asc" } },
       ],
+      // Note: unit number is sorted numerically in JS below — Prisma sorts strings alphabetically
       include: {
         person: {
           select: {
@@ -382,11 +391,37 @@ export async function getCanvassingQueue(
     }),
   ]);
 
+  // Sort entries so units within the same building are adjacent and ordered numerically.
+  // Prisma's string sort would put "10" before "2"; this corrects that.
+  const sortedEntries = [...entries].sort((a, b) => {
+    const soA = a.sortOrder ?? Infinity;
+    const soB = b.sortOrder ?? Infinity;
+    if (soA !== soB) return soA - soB;
+
+    const adA = a.person.household?.address;
+    const adB = b.person.household?.address;
+
+    const snComp = (adA?.streetName ?? "").localeCompare(adB?.streetName ?? "");
+    if (snComp !== 0) return snComp;
+
+    const numA = parseInt(adA?.streetNumber ?? "0", 10) || 0;
+    const numB = parseInt(adB?.streetNumber ?? "0", 10) || 0;
+    if (numA !== numB) return numA - numB;
+
+    const uA = adA?.unitNumber ? (parseInt(adA.unitNumber, 10) || 0) : -1;
+    const uB = adB?.unitNumber ? (parseInt(adB.unitNumber, 10) || 0) : -1;
+    if (uA !== uB) return uA - uB;
+
+    const lc = a.person.lastName.localeCompare(b.person.lastName);
+    if (lc !== 0) return lc;
+    return a.person.firstName.localeCompare(b.person.firstName);
+  });
+
   return {
     assignmentId: assignment.id,
     listName: listRecord?.name ?? "",
     competitors,
-    entries: entries.map((e) => ({
+    entries: sortedEntries.map((e) => ({
       entryId: e.id,
       person: {
         id: e.person.id,

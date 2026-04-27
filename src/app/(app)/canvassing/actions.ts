@@ -8,8 +8,20 @@ import { db } from "@/lib/db";
 import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { geocodeAddressesForCanvassList } from "@/lib/geocoding";
-import { ListSource, WardStatus } from "@prisma/client";
+import { ListSource, WardStatus, CanvassListStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import type { Role } from "@/types";
+import type { DynamicFilters } from "@/lib/canvassing";
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function statusForRole(role: string): CanvassListStatus {
+  return role === "field_organizer"
+    ? CanvassListStatus.pending_approval
+    : CanvassListStatus.active;
+}
+
+const APPROVER_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
 
 // ── Create walk list ───────────────────────────────────────────────────────
 
@@ -31,11 +43,28 @@ export async function createCanvassList(
   if (!name || name.length === 0) return { error: "Name is required." };
   if (name.length > 120) return { error: "Name is too long." };
 
+  const isDynamic = formData.get("isDynamic") === "true";
+  let dynamicFilters: DynamicFilters | null = null;
+  if (isDynamic) {
+    const raw = formData.get("dynamicFilters") as string | null;
+    if (raw) {
+      try {
+        dynamicFilters = JSON.parse(raw) as DynamicFilters;
+      } catch {
+        return { error: "Invalid filter data." };
+      }
+    }
+  }
+
+  const status = statusForRole(activeRole);
+
   const list = await db.canvassList.create({
     data: {
       campaignId: activeCampaignId,
       name,
       description,
+      status,
+      dynamicFilters: dynamicFilters as Prisma.InputJsonValue | undefined,
     },
   });
 
@@ -45,11 +74,17 @@ export async function createCanvassList(
     action: "WALK_LIST_CREATED",
     entityType: "canvass_list",
     entityId: list.id,
-    details: { name, description: description ?? null },
+    details: { name, description: description ?? null, isDynamic, status },
   });
 
+  // If dynamic, run initial population now (before redirect)
+  if (dynamicFilters) {
+    await _doRefresh(list.id, activeCampaignId, session.user.id, dynamicFilters);
+  } else {
+    geocodeAddressesForCanvassList(list.id);
+  }
+
   revalidatePath("/canvassing");
-  geocodeAddressesForCanvassList(list.id);
   redirect(`/canvassing/${list.id}`);
 }
 
@@ -75,9 +110,6 @@ export async function createTurfCanvassList(data: {
   if (name.length > 120) return { error: "Name is too long." };
   if (data.addressIds.length === 0) return { error: "No addresses selected." };
 
-  // Find all people linked to the selected addresses via Household.
-  // Out-of-district people are hard-excluded (no override).
-  // Manual and team records are soft-excluded (overridable via includeInWalkLists).
   const people = await db.person.findMany({
     where: {
       campaignId: activeCampaignId,
@@ -100,6 +132,8 @@ export async function createTurfCanvassList(data: {
     select: { id: true },
   });
 
+  const status = statusForRole(activeRole);
+
   const list = await db.canvassList.create({
     data: {
       campaignId: activeCampaignId,
@@ -107,6 +141,7 @@ export async function createTurfCanvassList(data: {
       description: data.description?.trim() || null,
       turfPolygon: data.polygon,
       turfCreatedAt: new Date(),
+      status,
     },
   });
 
@@ -132,12 +167,259 @@ export async function createTurfCanvassList(data: {
       source: "turf_map",
       addressCount: data.addressIds.length,
       personCount: people.length,
+      status,
     },
   });
 
   revalidatePath("/canvassing");
   geocodeAddressesForCanvassList(list.id);
   return { listId: list.id };
+}
+
+// ── Dynamic list refresh ──────────────────────────────────────────────────
+
+// Internal refresh — called from both the server action and the page server component.
+export async function _doRefresh(
+  listId: string,
+  campaignId: string,
+  userId: string,
+  filtersOverride?: DynamicFilters | null
+): Promise<{ added: number; removed: number }> {
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId, deletedAt: null },
+    select: { dynamicFilters: true },
+  });
+  if (!list) return { added: 0, removed: 0 };
+
+  const filters = (filtersOverride !== undefined
+    ? filtersOverride
+    : list.dynamicFilters) as DynamicFilters | null;
+  if (!filters) return { added: 0, removed: 0 };
+
+  // Build WHERE clause with standard walk-list hard/soft exclusions
+  const andConditions: Prisma.PersonWhereInput[] = [];
+
+  if (filters.supportLevels?.length) {
+    andConditions.push({
+      canvassResponses: { some: { supportLevel: { in: filters.supportLevels as ("strong_yes" | "soft_yes" | "undecided" | "soft_no" | "strong_no")[] } } },
+    });
+  }
+
+  if (filters.canvassStatus === "not_yet_canvassed") {
+    andConditions.push({ canvassResponses: { none: {} } });
+  } else if (filters.canvassStatus === "canvassed") {
+    andConditions.push({ canvassResponses: { some: {} } });
+  } else if (filters.canvassStatus === "not_home") {
+    andConditions.push({ canvassResponses: { some: { outcome: "not_home" } } });
+  }
+
+  if (filters.tagIds?.length) {
+    andConditions.push({ tags: { some: { tagId: { in: filters.tagIds } } } });
+  }
+
+  if (filters.wardStatuses?.length) {
+    andConditions.push({ wardStatus: { in: filters.wardStatuses as WardStatus[] } });
+  }
+
+  const where: Prisma.PersonWhereInput = {
+    campaignId,
+    deletedAt: null,
+    isOutOfDistrict: false,
+    OR: [
+      { includeInWalkLists: true },
+      {
+        AND: [
+          { listSource: { notIn: [ListSource.manual, ListSource.team] } },
+          { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
+        ],
+      },
+    ],
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
+  };
+
+  const matchingPeople = await db.person.findMany({ where, select: { id: true } });
+  const matchingIds = new Set(matchingPeople.map((p) => p.id));
+
+  // Current state of entries (including soft-deleted so we can re-activate)
+  const allEntries = await db.canvassListEntry.findMany({
+    where: { canvassListId: listId },
+    select: { id: true, personId: true, deletedAt: true },
+  });
+
+  // People who already have a canvass response on this list — never remove them
+  const respondedIds = new Set(
+    (await db.canvassResponse.findMany({
+      where: { assignment: { canvassListId: listId } },
+      select: { personId: true },
+      distinct: ["personId"],
+    })).map((r) => r.personId)
+  );
+
+  const activeByPerson = new Map(
+    allEntries.filter((e) => !e.deletedAt).map((e) => [e.personId, e.id])
+  );
+  const deletedByPerson = new Map(
+    allEntries.filter((e) => e.deletedAt).map((e) => [e.personId, e.id])
+  );
+
+  // People to add: match but not active in list
+  const toAdd = [...matchingIds].filter((id) => !activeByPerson.has(id));
+  // People to remove: active but no longer match and no responses
+  const toRemove = [...activeByPerson.keys()].filter(
+    (id) => !matchingIds.has(id) && !respondedIds.has(id)
+  );
+
+  const now = new Date();
+
+  await db.$transaction(async (tx) => {
+    // Re-activate previously deleted entries
+    const toReactivate = toAdd.filter((id) => deletedByPerson.has(id));
+    if (toReactivate.length > 0) {
+      await tx.canvassListEntry.updateMany({
+        where: { id: { in: toReactivate.map((pid) => deletedByPerson.get(pid)!) } },
+        data: { deletedAt: null },
+      });
+    }
+
+    // Create brand-new entries
+    const toCreate = toAdd.filter((id) => !deletedByPerson.has(id));
+    if (toCreate.length > 0) {
+      await tx.canvassListEntry.createMany({
+        data: toCreate.map((personId) => ({
+          canvassListId: listId,
+          personId,
+          addedById: userId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Soft-delete entries that no longer match
+    if (toRemove.length > 0) {
+      await tx.canvassListEntry.updateMany({
+        where: { canvassListId: listId, personId: { in: toRemove }, deletedAt: null },
+        data: { deletedAt: now },
+      });
+    }
+
+    await tx.canvassList.update({
+      where: { id: listId },
+      data: { lastRefreshedAt: now },
+    });
+  });
+
+  return { added: toAdd.length, removed: toRemove.length };
+}
+
+// Public server action for the "Refresh now" button
+export async function refreshDynamicList(
+  listId: string
+): Promise<{ error?: string; added?: number; removed?: number }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageWalkLists(activeRole as Role)) {
+    return { error: "You don't have permission to manage walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { dynamicFilters: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (!list.dynamicFilters) return { error: "This list is not dynamic." };
+
+  const { added, removed } = await _doRefresh(listId, activeCampaignId, session.user.id);
+  revalidatePath(`/canvassing/${listId}`);
+  return { added, removed };
+}
+
+// ── Approval workflow ─────────────────────────────────────────────────────
+
+export async function approveList(
+  listId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !APPROVER_ROLES.includes(activeRole as Role)) {
+    return { error: "You don't have permission to approve walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, status: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (list.status !== CanvassListStatus.pending_approval) {
+    return { error: "This list is not pending approval." };
+  }
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { status: CanvassListStatus.active, rejectionReason: null },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_APPROVED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { name: list.name },
+  });
+
+  revalidatePath("/canvassing");
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function rejectList(
+  listId: string,
+  reason: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !APPROVER_ROLES.includes(activeRole as Role)) {
+    return { error: "You don't have permission to reject walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, status: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (list.status !== CanvassListStatus.pending_approval) {
+    return { error: "This list is not pending approval." };
+  }
+
+  const trimmed = reason.trim();
+  if (!trimmed) return { error: "Provide a reason for rejection." };
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { status: CanvassListStatus.draft, rejectionReason: trimmed },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_REJECTED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { name: list.name, reason: trimmed },
+  });
+
+  revalidatePath("/canvassing");
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
 }
 
 // ── Route optimization ────────────────────────────────────────────────────
@@ -166,7 +448,6 @@ export async function optimizeRoute(
     return { error: "You don't have permission to optimize routes." };
   }
 
-  // Verify list belongs to this campaign
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true },
@@ -189,7 +470,6 @@ export async function optimizeRoute(
     },
   });
 
-  // Partition into geocoded (has lat/lng) and ungeocoded
   type EntryWithCoords = { id: string; lat: number; lng: number };
   const geocoded: EntryWithCoords[] = [];
   const ungeocodedIds: string[] = [];
@@ -203,11 +483,9 @@ export async function optimizeRoute(
     }
   }
 
-  // Nearest-neighbor heuristic starting from the first entry's position
   const ordered: EntryWithCoords[] = [];
   const unvisited = new Set(geocoded);
 
-  // Seed with the first entry (stable starting point)
   if (unvisited.size > 0) {
     const first = geocoded[0];
     unvisited.delete(first);
@@ -233,18 +511,11 @@ export async function optimizeRoute(
     }
   }
 
-  // Build full ordered list: geocoded (optimized) + ungeocoded (appended)
-  const allOrdered = [
-    ...ordered.map((e) => e.id),
-    ...ungeocodedIds,
-  ];
+  const allOrdered = [...ordered.map((e) => e.id), ...ungeocodedIds];
 
   await db.$transaction(
     allOrdered.map((id, idx) =>
-      db.canvassListEntry.update({
-        where: { id },
-        data: { sortOrder: idx },
-      })
+      db.canvassListEntry.update({ where: { id }, data: { sortOrder: idx } })
     )
   );
 
@@ -281,20 +552,20 @@ export async function assignCanvasser(
 
   if (!canvasserId) return { error: "Select a canvasser." };
 
-  // Verify list belongs to campaign (tenant safety)
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!list) return { error: "Walk list not found." };
+  if (list.status === CanvassListStatus.pending_approval) {
+    return { error: "This list is pending approval and cannot have canvassers assigned yet." };
+  }
 
-  // Verify canvasser is a member of this campaign
   const membership = await db.campaignMembership.findFirst({
     where: { userId: canvasserId, campaignId: activeCampaignId, deletedAt: null, role: { not: "finance_lead" as const } },
   });
   if (!membership) return { error: "User is not eligible to be assigned to this walk list." };
 
-  // Prevent duplicate assignment
   const existing = await db.canvassAssignment.findFirst({
     where: { canvassListId: listId, canvasserId, deletedAt: null },
   });

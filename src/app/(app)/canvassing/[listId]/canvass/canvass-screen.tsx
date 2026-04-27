@@ -495,6 +495,19 @@ export function CanvassScreen({
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
   const coResidents = current.person.coResidents ?? [];
 
+  // Building context: how many entries share this base address, and which position is this.
+  const buildingBaseKey = addr ? `${addr.streetNumber} ${addr.streetName}` : null;
+  const buildingEntries = buildingBaseKey
+    ? entries.filter(e => {
+        const a = e.person.address;
+        return a && `${a.streetNumber} ${a.streetName}` === buildingBaseKey;
+      })
+    : [];
+  const isMultiUnit = buildingEntries.length > 1;
+  const buildingPosition = isMultiUnit
+    ? buildingEntries.findIndex(e => e.person.id === current.person.id) + 1
+    : 0;
+
   function fmtAddr(a: typeof addr): string {
     if (!a) return "";
     return `${a.streetNumber} ${a.streetName}${a.unitNumber ? ` #${a.unitNumber}` : ""}, ${a.city}, ${a.province}`;
@@ -598,7 +611,17 @@ export function CanvassScreen({
 
           {/* ── Household hero ── */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
+              {isMultiUnit && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-600 bg-sky-50 border border-sky-200 rounded-full px-2 h-4">
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  Unit {buildingPosition} of {buildingEntries.length}
+                </span>
+              )}
+            </div>
             <p className="text-xl font-extrabold text-slate-900 leading-tight">{addressLine}</p>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[12px] text-slate-500">

@@ -5,9 +5,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canCanvass, canManageWalkLists } from "@/lib/permissions";
 import { getCanvassLists, getAssignedLists } from "@/lib/canvassing";
+import { getCampaignTags } from "@/lib/people";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NewListButton } from "./new-list-button";
+import { ApproveRejectButtons } from "./approve-reject-buttons";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Canvassing" };
@@ -19,7 +21,6 @@ export default async function CanvassingPage() {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
 
-  // Canvassers see their own assigned lists
   if (activeRole === "canvasser") {
     return <CanvasserView userId={session.user.id} campaignId={activeCampaignId} />;
   }
@@ -28,8 +29,27 @@ export default async function CanvassingPage() {
     redirect("/dashboard");
   }
 
-  const lists = await getCanvassLists(activeCampaignId);
+  const [allLists, tags] = await Promise.all([
+    getCanvassLists(activeCampaignId),
+    getCampaignTags(activeCampaignId),
+  ]);
+
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
+  const isApprover = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "co_chair";
+  const isFieldOrganizer = activeRole === "field_organizer";
+
+  // Split lists by status for display
+  const pendingLists = isApprover
+    ? allLists.filter((l) => l.status === "pending_approval")
+    : [];
+  const activeLists = allLists.filter((l) =>
+    isFieldOrganizer
+      ? l.status !== "archived"
+      : l.status === "active" || l.status === "draft"
+  );
+  const visibleLists = isApprover
+    ? allLists.filter((l) => l.status === "active" || l.status === "draft")
+    : activeLists;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -38,7 +58,8 @@ export default async function CanvassingPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Canvassing</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {lists.length} walk list{lists.length !== 1 ? "s" : ""}
+            {allLists.filter((l) => l.status !== "archived").length} walk list
+            {allLists.filter((l) => l.status !== "archived").length !== 1 ? "s" : ""}
           </p>
         </div>
         {canManage && (
@@ -52,20 +73,73 @@ export default async function CanvassingPage() {
               </svg>
               Create walk list from map
             </Link>
-            <NewListButton />
+            <NewListButton tags={tags} />
           </div>
         )}
       </div>
 
-      {lists.length === 0 ? (
+      {/* Pending approval section — visible to approvers */}
+      {pendingLists.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-slate-700">Pending Approval</h2>
+            <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+              {pendingLists.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {pendingLists.map((list) => {
+              const assigneeNames = list.assignments
+                .map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`)
+                .slice(0, 3)
+                .join(", ");
+
+              return (
+                <Card key={list.id} padding="md" className="border-amber-200 bg-amber-50">
+                  <div className="flex items-start gap-4">
+                    <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Link href={`/canvassing/${list.id}`} className="font-semibold text-slate-900 hover:text-slate-700 transition-colors">
+                          {list.name}
+                        </Link>
+                        {list.dynamicFilters && (
+                          <DynamicBadge />
+                        )}
+                      </div>
+                      {list.description && (
+                        <p className="text-sm text-slate-500 truncate">{list.description}</p>
+                      )}
+                      <p className="text-xs text-slate-400 mt-1">
+                        {list.totalEntries} {list.totalEntries === 1 ? "person" : "people"}
+                        {assigneeNames ? ` · ${assigneeNames}` : ""}
+                      </p>
+                      <div className="mt-3">
+                        <ApproveRejectButtons listId={list.id} listName={list.name} />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* All other lists */}
+      {visibleLists.length === 0 && pendingLists.length === 0 ? (
         <EmptyState
           title="No walk lists yet"
           description="Create a walk list to start assigning canvassers and tracking door knocks."
-          action={canManage ? <NewListButton /> : undefined}
+          action={canManage ? <NewListButton tags={tags} /> : undefined}
         />
-      ) : (
+      ) : visibleLists.length === 0 ? null : (
         <div className="flex flex-col gap-3">
-          {lists.map((list) => {
+          {visibleLists.map((list) => {
             const assigneeNames = list.assignments
               .map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`)
               .slice(0, 3)
@@ -74,6 +148,7 @@ export default async function CanvassingPage() {
               list.assignments.length > 3
                 ? ` +${list.assignments.length - 3} more`
                 : "";
+            const isPending = list.status === "pending_approval";
 
             return (
               <Link key={list.id} href={`/canvassing/${list.id}`}>
@@ -82,66 +157,40 @@ export default async function CanvassingPage() {
                   className="hover:border-slate-200 hover:shadow-soft transition-all cursor-pointer"
                 >
                   <div className="flex items-start gap-4">
-                    {/* Icon */}
                     <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg
-                        className="h-5 w-5 text-slate-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.75}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                        />
+                      <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                       </svg>
                     </div>
 
-                    {/* Content */}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900">{list.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{list.name}</p>
+                        {list.dynamicFilters && <DynamicBadge />}
+                        {isPending && <PendingBadge />}
+                        {list.status === "draft" && <DraftBadge />}
+                      </div>
                       {list.description && (
-                        <p className="text-sm text-slate-500 mt-0.5 truncate">
-                          {list.description}
-                        </p>
+                        <p className="text-sm text-slate-500 mt-0.5 truncate">{list.description}</p>
                       )}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                         {list.assignments.length > 0 ? (
                           <span className="text-xs text-slate-500">
-                            {assigneeNames}
-                            {extraAssignees}
+                            {assigneeNames}{extraAssignees}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400">
-                            No canvassers assigned
-                          </span>
+                          <span className="text-xs text-slate-400">No canvassers assigned</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Stats */}
                     <div className="flex-shrink-0 text-right">
-                      <p className="text-2xl font-bold text-slate-900">
-                        {list.totalResponses}
-                      </p>
+                      <p className="text-2xl font-bold text-slate-900">{list.totalResponses}</p>
                       <p className="text-xs text-slate-400">doors</p>
                     </div>
 
-                    {/* Chevron */}
-                    <svg
-                      className="h-4 w-4 text-slate-300 flex-shrink-0 self-center"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 5l7 7-7 7"
-                      />
+                    <svg className="h-4 w-4 text-slate-300 flex-shrink-0 self-center" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
                 </Card>
@@ -154,15 +203,38 @@ export default async function CanvassingPage() {
   );
 }
 
+// ── Badges ─────────────────────────────────────────────────────────────────
+
+function DynamicBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 border border-sky-200">
+      <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Dynamic
+    </span>
+  );
+}
+
+function PendingBadge() {
+  return (
+    <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+      Pending approval
+    </span>
+  );
+}
+
+function DraftBadge() {
+  return (
+    <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+      Draft
+    </span>
+  );
+}
+
 // ── Canvasser view ─────────────────────────────────────────────────────────
 
-async function CanvasserView({
-  userId,
-  campaignId,
-}: {
-  userId: string;
-  campaignId: string;
-}) {
+async function CanvasserView({ userId, campaignId }: { userId: string; campaignId: string }) {
   const assignments = await getAssignedLists(userId, campaignId);
 
   return (
@@ -192,26 +264,14 @@ async function CanvasserView({
               <Card key={a.assignmentId} padding="md">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-slate-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.75}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                      />
+                    <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-slate-900">{a.list.name}</p>
                     {a.list.description && (
-                      <p className="text-sm text-slate-500 mt-0.5 truncate">
-                        {a.list.description}
-                      </p>
+                      <p className="text-sm text-slate-500 mt-0.5 truncate">{a.list.description}</p>
                     )}
                   </div>
                   <div className="flex-shrink-0 text-right">
@@ -220,13 +280,9 @@ async function CanvasserView({
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="mb-4">
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-slate-800 rounded-full transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
+                    <div className="h-full bg-slate-800 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between mt-1.5 text-xs text-slate-400">
                     <span>{a.totalResponses} recorded</span>
@@ -244,9 +300,7 @@ async function CanvasserView({
                   ].join(" ")}
                 >
                   {remaining > 0
-                    ? a.totalResponses === 0
-                      ? "Start canvassing"
-                      : "Continue canvassing"
+                    ? a.totalResponses === 0 ? "Start canvassing" : "Continue canvassing"
                     : "Review list"}
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

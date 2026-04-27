@@ -10,6 +10,7 @@ import {
   summariseOutcomes,
 } from "@/lib/canvassing";
 import { getCampaignTags } from "@/lib/people";
+import { _doRefresh } from "../actions";
 import { Card } from "@/components/ui/card";
 import { OutcomeBadge, SupportLevelBadge } from "@/components/ui/badge";
 import { AssignCanvasserButton } from "./assign-canvasser-button";
@@ -17,6 +18,7 @@ import { AddPeopleButton } from "./add-people-button";
 import { CsvImportButton } from "./csv-import-button";
 import { PrintButton } from "./print-button";
 import { OptimizeRouteButton } from "./optimize-route-button";
+import { RefreshListButton } from "./refresh-list-button";
 import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {
@@ -40,8 +42,22 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
   const canAssign = activeRole ? canAssignCanvassers(activeRole as Role) : false;
+  const isManagerRole = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "co_chair";
   const campaignName =
     session.user.memberships.find((m) => m.campaignId === activeCampaignId)?.campaignName ?? "Campaign";
+
+  // Auto-refresh dynamic lists for managers before fetching full detail
+  if (isManagerRole) {
+    const preview = await import("@/lib/db").then(({ db }) =>
+      db.canvassList.findFirst({
+        where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+        select: { dynamicFilters: true },
+      })
+    );
+    if (preview?.dynamicFilters) {
+      await _doRefresh(listId, activeCampaignId, session.user.id);
+    }
+  }
 
   const [list, availableCanvassers, tags] = await Promise.all([
     getCanvassListDetail(listId, activeCampaignId),
@@ -50,6 +66,11 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
   ]);
 
   if (!list) notFound();
+
+  const isDynamic = !!list.dynamicFilters;
+  const isPending = list.status === "pending_approval";
+  const isDraft = list.status === "draft";
+  const canAssignNow = canAssign && !isPending;
 
   const allResponses = list.assignments.flatMap((a) => a.responses);
   const outcomeSummary = summariseOutcomes(allResponses);
@@ -67,18 +88,26 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
     return addr && "streetNumber" in addr; // address exists = likely geocoded via the walk list
   }).length;
 
-  // Group entries by address for display.
-  // After optimization (isOptimized), preserve DB order (sortOrder → insertion order in Map).
-  // Before optimization, sort groups alphabetically.
+  // Group entries by base address (streetNumber + streetName, without unit).
+  // Units at the same building appear under one header, sorted numerically.
   type EntryWithPerson = (typeof list.entries)[number];
   const addressGroups = new Map<string, EntryWithPerson[]>();
   for (const entry of list.entries) {
     const addr = entry.person.household?.address;
-    const key = addr
-      ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
-      : "Unknown address";
+    const key = addr ? `${addr.streetNumber} ${addr.streetName}` : "Unknown address";
     if (!addressGroups.has(key)) addressGroups.set(key, []);
     addressGroups.get(key)!.push(entry);
+  }
+  // Sort units within each building numerically (Prisma sorts unit strings alphabetically).
+  for (const group of addressGroups.values()) {
+    group.sort((a, b) => {
+      const uA = a.person.household?.address?.unitNumber;
+      const uB = b.person.household?.address?.unitNumber;
+      const nA = uA ? (parseInt(uA, 10) || 0) : -1;
+      const nB = uB ? (parseInt(uB, 10) || 0) : -1;
+      if (nA !== nB) return nA - nB;
+      return a.person.lastName.localeCompare(b.person.lastName);
+    });
   }
   // When optimized, insertion order (from sortOrder-sorted DB query) is the route order.
   // When not optimized, sort alphabetically so managers can scan easily.
@@ -208,17 +237,63 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
         Canvassing
       </Link>
 
+      {/* Status banners */}
+      {isPending && (
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <svg className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Pending approval</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This list is awaiting approval from a campaign manager. Canvassers cannot be assigned until approved.
+            </p>
+          </div>
+        </div>
+      )}
+      {isDraft && list.rejectionReason && (
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <svg className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-red-800">List returned</p>
+            <p className="text-xs text-red-700 mt-0.5">{list.rejectionReason}</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{list.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900">{list.name}</h1>
+            {isDynamic && (
+              <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 border border-sky-200">
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Dynamic
+              </span>
+            )}
+          </div>
           {list.description && (
             <p className="text-slate-500 text-sm mt-1">{list.description}</p>
+          )}
+          {isDynamic && (
+            <div className="flex items-center gap-3 mt-1.5">
+              <p className="text-xs text-slate-400">
+                {list.lastRefreshedAt
+                  ? `Last refreshed ${new Date(list.lastRefreshedAt).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                  : "Not yet refreshed"}
+              </p>
+              {canManage && <RefreshListButton listId={list.id} />}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <PrintButton />
-          {canAssign && list.entries.length > 0 && (
+          {canAssignNow && list.entries.length > 0 && (
             <OptimizeRouteButton
               listId={list.id}
               geocodedCount={geocodedEntryCount}
@@ -246,7 +321,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               Export CSV
             </a>
           )}
-          {canAssign && availableCanvassers.length > 0 && (
+          {canAssignNow && availableCanvassers.length > 0 && (
             <AssignCanvasserButton listId={list.id} canvassers={availableCanvassers} />
           )}
         </div>
@@ -309,7 +384,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               </ul>
             )}
 
-            {canAssign && availableCanvassers.length > 0 && (
+            {canAssignNow && availableCanvassers.length > 0 && (
               <div className="mt-4 pt-4 border-t border-slate-100">
                 <AssignCanvasserButton
                   listId={list.id}
@@ -318,6 +393,11 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                   label="Assign canvasser"
                 />
               </div>
+            )}
+            {isPending && canManage && (
+              <p className="text-xs text-amber-600 mt-3">
+                Approve this list before assigning canvassers.
+              </p>
             )}
           </Card>
 
@@ -354,7 +434,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                   </span>
                 )}
               </h2>
-              {canManage && (
+              {canManage && !isDynamic && (
                 <div className="flex items-center gap-2">
                   <AddPeopleButton listId={list.id} tags={tags} />
                   <CsvImportButton listId={list.id} />
@@ -373,15 +453,26 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               </div>
             ) : (
               <div className="flex flex-col gap-4 -mx-5 sm:-mx-8">
-                {sortedGroups.map(([addressLine, entries]) => (
+                {sortedGroups.map(([addressLine, groupEntries]) => {
+                  const isBuilding = groupEntries.length > 1 || groupEntries.some(e => e.person.household?.address?.unitNumber);
+                  return (
                   <div key={addressLine}>
-                    <div className="px-5 sm:px-8 py-1.5 bg-slate-50 border-y border-slate-100">
+                    <div className="px-5 sm:px-8 py-1.5 bg-slate-50 border-y border-slate-100 flex items-center gap-1.5">
+                      {isBuilding && (
+                        <svg className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      )}
                       <p className="text-xs font-medium text-slate-500">{addressLine}</p>
+                      {isBuilding && groupEntries.length > 1 && (
+                        <span className="text-xs text-slate-400">{groupEntries.length} units</span>
+                      )}
                     </div>
                     <ul>
-                      {entries.map((entry) => {
+                      {groupEntries.map((entry) => {
                         const isCanvassed = canvassedPersonIds.has(entry.person.id);
                         const latestResponse = entry.person.canvassResponses[0];
+                        const unit = entry.person.household?.address?.unitNumber;
                         return (
                           <li
                             key={entry.id}
@@ -407,15 +498,20 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <Link
-                                href={`/people/${entry.person.id}`}
-                                className="text-sm font-medium text-slate-800 hover:text-slate-600 transition-colors"
-                              >
-                                {entry.person.firstName} {entry.person.lastName}
-                              </Link>
-                              {entry.person.pollNumber && (
-                                <span className="ml-2 text-xs text-slate-400">Poll {entry.person.pollNumber}</span>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Link
+                                  href={`/people/${entry.person.id}`}
+                                  className="text-sm font-medium text-slate-800 hover:text-slate-600 transition-colors"
+                                >
+                                  {entry.person.firstName} {entry.person.lastName}
+                                </Link>
+                                {unit && (
+                                  <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Unit {unit}</span>
+                                )}
+                                {entry.person.pollNumber && (
+                                  <span className="text-xs text-slate-400">Poll {entry.person.pollNumber}</span>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex-shrink-0">
@@ -433,7 +529,8 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                       })}
                     </ul>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -536,6 +633,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               {sortedGroups.flatMap(([addressKey, groupEntries]) =>
                 groupEntries.map((entry, personIdx) => {
                   const isFirst = personIdx === 0;
+                  const unit = entry.person.household?.address?.unitNumber;
                   const phone = entry.person.phoneMobile ?? entry.person.phoneHome ?? "";
                   const latestResponse = entry.person.canvassResponses[0];
                   const canvassStatus = !latestResponse
@@ -549,7 +647,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                       style={isFirst ? { borderTop: "2px solid #94a3b8" } : undefined}
                     >
                       <td style={{ fontWeight: isFirst ? 600 : "normal", color: isFirst ? "#334155" : "inherit" }}>
-                        {isFirst ? addressKey : ""}
+                        {isFirst ? addressKey : (unit ? `Unit ${unit}` : "")}
                       </td>
                       <td>{entry.person.firstName} {entry.person.lastName}</td>
                       <td className="col-phone">{phone}</td>
