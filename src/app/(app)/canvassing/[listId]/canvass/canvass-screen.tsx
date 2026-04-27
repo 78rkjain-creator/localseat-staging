@@ -60,6 +60,18 @@ function emptyDraft(): ResponseDraft {
   };
 }
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function draftFromLastResponse(
   response: { supportLevel: string | null } | null
 ): ResponseDraft {
@@ -482,11 +494,31 @@ export function CanvassScreen({
     : "Unknown address";
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
   const coResidents = current.person.coResidents ?? [];
+
+  function fmtAddr(a: typeof addr): string {
+    if (!a) return "";
+    return `${a.streetNumber} ${a.streetName}${a.unitNumber ? ` #${a.unitNumber}` : ""}, ${a.city}, ${a.province}`;
+  }
+
   const mapsUrl = addr
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-        `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}, ${addr.city}, ${addr.province}`
-      )}`
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(fmtAddr(addr))}&travelmode=walking`
     : null;
+
+  // "Navigate to next" — walking directions from current stop to next stop
+  const nextEntry = entries[currentIndex + 1] ?? null;
+  const nextAddr = nextEntry?.person?.address ?? null;
+  const navToNextUrl =
+    addr && nextAddr
+      ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(fmtAddr(addr))}&destination=${encodeURIComponent(fmtAddr(nextAddr))}&travelmode=walking`
+      : null;
+
+  // Walk estimate to next stop — Haversine distance at 5 km/h walking speed
+  const isLastEntry = currentIndex >= entries.length - 1;
+  const walkMinutes = (() => {
+    if (!addr?.lat || !addr?.lng || !nextAddr?.lat || !nextAddr?.lng) return null;
+    const km = haversineKm(addr.lat, addr.lng, nextAddr.lat, nextAddr.lng);
+    return Math.max(1, Math.round((km / 5) * 60));
+  })();
 
   // All people at this door — main person first, then co-residents
   const allResidents = [
@@ -572,18 +604,36 @@ export function CanvassScreen({
               <p className="text-[12px] text-slate-500">
                 {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
               </p>
-              {mapsUrl && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-medium hover:bg-slate-100 active:bg-slate-200 transition-colors flex-shrink-0"
-                >
-                  <Navigation className="h-3 w-3" />
-                  Navigate
-                </a>
-              )}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-medium hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                  >
+                    <Navigation className="h-3 w-3" />
+                    Navigate
+                  </a>
+                )}
+                {navToNextUrl && (
+                  <a
+                    href={navToNextUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-medium hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                  >
+                    <Navigation className="h-3 w-3" />
+                    Next stop
+                  </a>
+                )}
+              </div>
             </div>
+            {(isLastEntry || walkMinutes !== null) && (
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isLastEntry ? "Last stop on route" : `~${walkMinutes} min walk to next`}
+              </p>
+            )}
             {(current.person.phoneHome || current.person.phoneMobile) && (
               <div className="flex flex-col gap-1 mt-1.5">
                 {current.person.phoneHome && (
@@ -619,12 +669,6 @@ export function CanvassScreen({
                   </div>
                 )}
               </div>
-            )}
-            {current.lastResponse && (
-              <span className="inline-block mt-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                {current.visitCount === 1 ? "Visited once" : `${current.visitCount} visits`}
-                {" · "}last {formatVisitDate(current.lastResponse.respondedAt)}
-              </span>
             )}
           </div>
 

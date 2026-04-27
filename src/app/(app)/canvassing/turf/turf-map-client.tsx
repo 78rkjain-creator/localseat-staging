@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createTurfCanvassList } from "../actions";
 import { getWardBoundary } from "../[listId]/map/actions";
@@ -21,6 +21,21 @@ interface AddressPoint {
   lng: number;
 }
 
+interface ExistingTurf {
+  id: string;
+  name: string;
+  turfPolygon: object;
+  entryCount: number;
+  canvasserName: string | null;
+}
+
+interface ActiveTurf {
+  id: string;
+  name: string;
+  entryCount: number;
+  canvasserName: string | null;
+}
+
 interface Props {
   addresses: AddressPoint[];
   campaignId: string;
@@ -28,10 +43,21 @@ interface Props {
   geocodedCount: number;
   totalCount: number;
   geocodingInProgress: boolean;
+  assignedAddressIds: string[];
+  existingTurfs: ExistingTurf[];
 }
 
+// ── Existing turf overlay color palette ────────────────────────────────────
+
+const TURF_COLORS = [
+  { fill: "#818cf8", stroke: "#6366f1" }, // indigo
+  { fill: "#34d399", stroke: "#059669" }, // emerald
+  { fill: "#38bdf8", stroke: "#0284c7" }, // sky
+  { fill: "#f472b6", stroke: "#db2777" }, // pink
+  { fill: "#fbbf24", stroke: "#d97706" }, // amber
+];
+
 // ── Point-in-polygon (ray casting) ─────────────────────────────────────────
-// Returns true if [lng, lat] falls inside the GeoJSON polygon ring.
 
 function pointInPolygon(point: [number, number], ring: [number, number][]): boolean {
   const [px, py] = point;
@@ -100,7 +126,16 @@ function addWardBoundaryLayers(
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocodedCount, totalCount, geocodingInProgress }: Props) {
+export function TurfMapClient({
+  addresses,
+  campaignId,
+  ungeocodedCount,
+  geocodedCount,
+  totalCount,
+  geocodingInProgress,
+  assignedAddressIds,
+  existingTurfs,
+}: Props) {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,6 +150,10 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
   const [description, setDesc]  = useState("");
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [activeTurf, setActiveTurf] = useState<ActiveTurf | null>(null);
+
+  // Stable set of address IDs already on a walk list — used for dot color
+  const assignedSet = useMemo(() => new Set(assignedAddressIds), [assignedAddressIds]);
 
   // Auto-refresh every 30s while geocoding is in progress
   useEffect(() => {
@@ -164,8 +203,6 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let draw: any;
 
-    // Dynamic import keeps mapbox-gl out of the server bundle.
-    // CSS is imported from the npm package to guarantee version alignment.
     Promise.all([
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
@@ -191,29 +228,19 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
         },
         defaultMode: "simple_select",
         styles: [
-          // Filled polygon
           {
             id: "gl-draw-polygon-fill",
             type: "fill",
             filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
-            paint: {
-              "fill-color": "#F26522",
-              "fill-opacity": 0.15,
-            },
+            paint: { "fill-color": "#F26522", "fill-opacity": 0.15 },
           },
-          // Polygon outline
           {
             id: "gl-draw-polygon-stroke",
             type: "line",
             filter: ["all", ["==", "$type", "Polygon"], ["!=", "mode", "static"]],
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: {
-              "line-color": "#F26522",
-              "line-width": 3,
-              "line-opacity": 1,
-            },
+            paint: { "line-color": "#F26522", "line-width": 3, "line-opacity": 1 },
           },
-          // Vertex points
           {
             id: "gl-draw-polygon-and-line-vertex-active",
             type: "circle",
@@ -225,28 +252,18 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
               "circle-stroke-width": 2.5,
             },
           },
-          // Midpoint handles
           {
             id: "gl-draw-polygon-midpoint",
             type: "circle",
             filter: ["all", ["==", "$type", "Point"], ["==", "meta", "midpoint"]],
-            paint: {
-              "circle-radius": 4,
-              "circle-color": "#F26522",
-              "circle-opacity": 0.6,
-            },
+            paint: { "circle-radius": 4, "circle-color": "#F26522", "circle-opacity": 0.6 },
           },
-          // Active line while drawing
           {
             id: "gl-draw-line-active",
             type: "line",
             filter: ["all", ["==", "$type", "LineString"], ["==", "active", "true"]],
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: {
-              "line-color": "#F26522",
-              "line-width": 2.5,
-              "line-dasharray": [4, 2],
-            },
+            paint: { "line-color": "#F26522", "line-width": 2.5, "line-dasharray": [4, 2] },
           },
         ],
       });
@@ -255,12 +272,96 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
       map.addControl(draw, "top-right");
 
       map.on("load", () => {
-        // Ward boundary layers — added before address points so markers sit on top.
+        // Ward boundary — added first so it sits below everything
         if (wardBoundary) {
           addWardBoundaryLayers(map, wardBoundary);
         }
 
-        // Add address points source
+        // Existing turf polygon overlays — added before address dots
+        if (existingTurfs.length > 0) {
+          map.addSource("existing-turfs", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: existingTurfs.map((t, i) => {
+                const palette = TURF_COLORS[i % TURF_COLORS.length];
+                return {
+                  type: "Feature",
+                  geometry: t.turfPolygon,
+                  properties: {
+                    id: t.id,
+                    name: t.name,
+                    entryCount: t.entryCount,
+                    canvasserName: t.canvasserName ?? "",
+                    fillColor: palette.fill,
+                    strokeColor: palette.stroke,
+                  },
+                };
+              }),
+            },
+          });
+
+          map.addLayer({
+            id: "existing-turf-fills",
+            type: "fill",
+            source: "existing-turfs",
+            paint: {
+              "fill-color": ["get", "fillColor"],
+              "fill-opacity": 0.2,
+            },
+          });
+
+          map.addLayer({
+            id: "existing-turf-strokes",
+            type: "line",
+            source: "existing-turfs",
+            paint: {
+              "line-color": ["get", "strokeColor"],
+              "line-width": 2,
+              "line-opacity": 0.8,
+            },
+          });
+
+          map.addLayer({
+            id: "existing-turf-labels",
+            type: "symbol",
+            source: "existing-turfs",
+            layout: {
+              "text-field": ["get", "name"],
+              "text-size": 12,
+              "text-font": ["Open Sans SemiBold", "Arial Unicode MS Bold"],
+              "text-anchor": "center",
+            },
+            paint: {
+              "text-color": "#1e293b",
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 1.5,
+            },
+          });
+
+          // Click a turf polygon to show its details in the sidebar
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          map.on("click", "existing-turf-fills", (e: any) => {
+            const feature = e.features?.[0];
+            if (!feature) return;
+            const p = feature.properties;
+            setActiveTurf({
+              id: p.id,
+              name: p.name,
+              entryCount: p.entryCount,
+              canvasserName: p.canvasserName || null,
+            });
+          });
+
+          map.on("mouseenter", "existing-turf-fills", () => {
+            map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", "existing-turf-fills", () => {
+            map.getCanvas().style.cursor = "";
+          });
+        }
+
+        // Address dots — added last so they sit above turf fills
         map.addSource("addresses", {
           type: "geojson",
           data: {
@@ -268,7 +369,11 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
             features: addresses.map((a) => ({
               type: "Feature",
               geometry: { type: "Point", coordinates: [a.lng, a.lat] },
-              properties: { id: a.id, label: addressLabel(a) },
+              properties: {
+                id: a.id,
+                label: addressLabel(a),
+                assigned: assignedSet.has(a.id) ? 1 : 0,
+              },
             })),
           },
         });
@@ -279,7 +384,11 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
           source: "addresses",
           paint: {
             "circle-radius": 5,
-            "circle-color": "#f97316",   // brand orange
+            "circle-color": [
+              "case",
+              ["==", ["get", "assigned"], 1], "#3b82f6",
+              "#cbd5e1",
+            ],
             "circle-opacity": 0.85,
             "circle-stroke-width": 1,
             "circle-stroke-color": "#ffffff",
@@ -287,7 +396,6 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
         });
       });
 
-      // Evaluate polygon on draw/update/delete
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onUpdate = (e: any) => {
         const features = draw.getAll()?.features ?? [];
@@ -317,6 +425,12 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
     evaluatePolygon(features[0] ?? null);
   }, [evaluatePolygon]);
 
+  function handleClear() {
+    drawRef.current?.deleteAll();
+    setSelectedAddresses([]);
+    setCurrentPolygon(null);
+  }
+
   async function handleSave() {
     if (!currentPolygon || !name.trim() || selectedAddresses.length === 0) return;
     setSaveError(null);
@@ -343,6 +457,9 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
   const canSave     = hasPoly && hasSelected && name.trim().length > 0 && !saving;
 
   const unmappedCount = totalCount - geocodedCount;
+
+  // Suppress unused-variable warning — campaignId reserved for future use
+  void campaignId;
 
   return (
     <div className="flex flex-col" style={{ height: "100dvh", paddingTop: "64px" }}>
@@ -380,14 +497,11 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
       {/* Map + side panel */}
       <div className="flex flex-1 min-h-0">
         {/* Map */}
-        <div
-          ref={mapContainer}
-          className="flex-1"
-          style={{ minHeight: 0 }}
-        />
+        <div ref={mapContainer} className="flex-1" style={{ minHeight: 0 }} />
 
         {/* Side panel */}
         <div className="w-72 flex-shrink-0 bg-white border-l border-slate-100 flex flex-col overflow-y-auto">
+
           {/* Header */}
           <div className="px-4 py-4 border-b border-slate-100">
             <h2 className="font-semibold text-slate-900">Create walk list from map</h2>
@@ -396,19 +510,79 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
             </p>
           </div>
 
+          {/* Active turf info — shown when user clicks an existing turf polygon */}
+          {activeTurf && (
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900 leading-snug">{activeTurf.name}</p>
+                <button
+                  onClick={() => setActiveTurf(null)}
+                  className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors mt-0.5"
+                  aria-label="Close"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeTurf.entryCount} {activeTurf.entryCount === 1 ? "person" : "people"} on list
+              </p>
+              <p className="text-xs text-slate-500">
+                {activeTurf.canvasserName
+                  ? `Assigned to ${activeTurf.canvasserName}`
+                  : "No canvasser assigned"}
+              </p>
+              <button
+                onClick={() => router.push(`/canvassing/${activeTurf.id}`)}
+                className="mt-2 text-xs text-brand-600 hover:text-brand-700 font-medium transition-colors"
+              >
+                Open list →
+              </button>
+            </div>
+          )}
+
+          {/* Map legend */}
+          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-4">
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+              Assigned to list
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300 flex-shrink-0" />
+              Unassigned
+            </span>
+          </div>
+
           {/* Selection feedback */}
           <div className="px-4 py-4 border-b border-slate-100 flex-shrink-0">
             {!hasPoly ? (
               <p className="text-sm text-slate-400">No polygon drawn yet.</p>
             ) : !hasSelected ? (
-              <p className="text-sm text-amber-600">
-                No addresses in this area — try a larger polygon.
-              </p>
+              <>
+                <p className="text-sm text-amber-600">
+                  No addresses in this area — try a larger polygon.
+                </p>
+                <button
+                  onClick={handleClear}
+                  className="mt-2 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  Clear drawing
+                </button>
+              </>
             ) : (
               <div>
-                <p className="text-sm font-semibold text-slate-900 mb-2">
-                  {selectedAddresses.length} address{selectedAddresses.length !== 1 ? "es" : ""} selected
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {selectedAddresses.length} address{selectedAddresses.length !== 1 ? "es" : ""} selected
+                  </p>
+                  <button
+                    onClick={handleClear}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
                 <ul className="flex flex-col gap-1">
                   {selectedAddresses.slice(0, 5).map((a) => (
                     <li key={a.id} className="text-xs text-slate-600 truncate">
@@ -425,7 +599,7 @@ export function TurfMapClient({ addresses, campaignId, ungeocodedCount, geocoded
             )}
           </div>
 
-          {/* Save form — only shown when polygon is drawn and addresses selected */}
+          {/* Save form — only shown when polygon drawn and addresses selected */}
           {hasPoly && hasSelected && (
             <div className="px-4 py-4 flex flex-col gap-3">
               <div className="flex flex-col gap-1">

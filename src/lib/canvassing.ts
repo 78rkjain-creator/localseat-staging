@@ -73,7 +73,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
       },
       entries: {
         where: { deletedAt: null },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         include: {
           person: {
             select: {
@@ -319,6 +319,7 @@ export async function getCanvassingQueue(
     db.canvassListEntry.findMany({
       where: { canvassListId: listId, deletedAt: null },
       orderBy: [
+        { sortOrder: "asc" },
         { person: { household: { address: { streetName: "asc" } } } },
         { person: { household: { address: { streetNumber: "asc" } } } },
         { person: { lastName: "asc" } },

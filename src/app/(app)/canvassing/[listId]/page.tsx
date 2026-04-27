@@ -16,6 +16,7 @@ import { AssignCanvasserButton } from "./assign-canvasser-button";
 import { AddPeopleButton } from "./add-people-button";
 import { CsvImportButton } from "./csv-import-button";
 import { PrintButton } from "./print-button";
+import { OptimizeRouteButton } from "./optimize-route-button";
 import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {
@@ -57,7 +58,18 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
   // Build a set of personIds that have at least one response (for canvassed indicator)
   const canvassedPersonIds = new Set(allResponses.map((r) => r.person.id));
 
-  // Group entries by address for display
+  // Detect whether route optimization has been run (any entry has sortOrder > 0)
+  const isOptimized = list.entries.some((e) => e.sortOrder > 0);
+
+  // Geocoded entry count (for optimize button)
+  const geocodedEntryCount = list.entries.filter((e) => {
+    const addr = e.person.household?.address;
+    return addr && "streetNumber" in addr; // address exists = likely geocoded via the walk list
+  }).length;
+
+  // Group entries by address for display.
+  // After optimization (isOptimized), preserve DB order (sortOrder → insertion order in Map).
+  // Before optimization, sort groups alphabetically.
   type EntryWithPerson = (typeof list.entries)[number];
   const addressGroups = new Map<string, EntryWithPerson[]>();
   for (const entry of list.entries) {
@@ -68,9 +80,11 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
     if (!addressGroups.has(key)) addressGroups.set(key, []);
     addressGroups.get(key)!.push(entry);
   }
-  const sortedGroups = [...addressGroups.entries()].sort(([a], [b]) =>
-    a.localeCompare(b)
-  );
+  // When optimized, insertion order (from sortOrder-sorted DB query) is the route order.
+  // When not optimized, sort alphabetically so managers can scan easily.
+  const sortedGroups = isOptimized
+    ? [...addressGroups.entries()]
+    : [...addressGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   const printDate = new Date().toLocaleDateString("en-CA", {
     year: "numeric",
@@ -204,6 +218,13 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <PrintButton />
+          {canAssign && list.entries.length > 0 && (
+            <OptimizeRouteButton
+              listId={list.id}
+              geocodedCount={geocodedEntryCount}
+              totalCount={list.entries.length}
+            />
+          )}
           <Link
             href={`/canvassing/${list.id}/map`}
             className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"

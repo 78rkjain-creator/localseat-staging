@@ -140,6 +140,127 @@ export async function createTurfCanvassList(data: {
   return { listId: list.id };
 }
 
+// ── Route optimization ────────────────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function optimizeRoute(
+  listId: string
+): Promise<{ error?: string; count?: number }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
+    return { error: "You don't have permission to optimize routes." };
+  }
+
+  // Verify list belongs to this campaign
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+
+  const entries = await db.canvassListEntry.findMany({
+    where: { canvassListId: listId, deletedAt: null },
+    select: {
+      id: true,
+      person: {
+        select: {
+          household: {
+            select: {
+              address: { select: { lat: true, lng: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Partition into geocoded (has lat/lng) and ungeocoded
+  type EntryWithCoords = { id: string; lat: number; lng: number };
+  const geocoded: EntryWithCoords[] = [];
+  const ungeocodedIds: string[] = [];
+
+  for (const e of entries) {
+    const addr = e.person.household?.address;
+    if (addr?.lat !== null && addr?.lat !== undefined && addr?.lng !== null && addr?.lng !== undefined) {
+      geocoded.push({ id: e.id, lat: addr.lat, lng: addr.lng });
+    } else {
+      ungeocodedIds.push(e.id);
+    }
+  }
+
+  // Nearest-neighbor heuristic starting from the first entry's position
+  const ordered: EntryWithCoords[] = [];
+  const unvisited = new Set(geocoded);
+
+  // Seed with the first entry (stable starting point)
+  if (unvisited.size > 0) {
+    const first = geocoded[0];
+    unvisited.delete(first);
+    ordered.push(first);
+
+    while (unvisited.size > 0) {
+      const last = ordered[ordered.length - 1];
+      let nearest: EntryWithCoords | null = null;
+      let nearestDist = Infinity;
+
+      for (const candidate of unvisited) {
+        const dist = haversineKm(last.lat, last.lng, candidate.lat, candidate.lng);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearest = candidate;
+        }
+      }
+
+      if (nearest) {
+        unvisited.delete(nearest);
+        ordered.push(nearest);
+      }
+    }
+  }
+
+  // Build full ordered list: geocoded (optimized) + ungeocoded (appended)
+  const allOrdered = [
+    ...ordered.map((e) => e.id),
+    ...ungeocodedIds,
+  ];
+
+  await db.$transaction(
+    allOrdered.map((id, idx) =>
+      db.canvassListEntry.update({
+        where: { id },
+        data: { sortOrder: idx },
+      })
+    )
+  );
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "ROUTE_OPTIMIZED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { geocodedCount: geocoded.length, ungeocodedCount: ungeocodedIds.length },
+  });
+
+  revalidatePath(`/canvassing/${listId}`);
+  return { count: allOrdered.length };
+}
+
 // ── Assign canvasser ──────────────────────────────────────────────────────
 
 export async function assignCanvasser(

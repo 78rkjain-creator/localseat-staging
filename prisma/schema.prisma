@@ -444,6 +444,7 @@ model CanvassListEntry {
   canvassListId String
   personId      String
   addedById     String
+  sortOrder     Int       @default(0)
   createdAt     DateTime  @default(now())
   deletedAt     DateTime?
 
