@@ -9,6 +9,7 @@ import {
   getAvailableCanvassers,
   summariseOutcomes,
 } from "@/lib/canvassing";
+import type { DynamicFilters } from "@/lib/canvassing";
 import { getCampaignTags } from "@/lib/people";
 import { _doRefresh } from "../actions";
 import { Card } from "@/components/ui/card";
@@ -19,6 +20,9 @@ import { CsvImportButton } from "./csv-import-button";
 import { PrintButton } from "./print-button";
 import { OptimizeRouteButton } from "./optimize-route-button";
 import { RefreshListButton } from "./refresh-list-button";
+import { ArchiveDeleteButtons } from "./archive-delete-buttons";
+import { EditListButton } from "./edit-list-button";
+import { RemovePersonButton } from "./remove-person-button";
 import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {
@@ -43,6 +47,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
   const canAssign = activeRole ? canAssignCanvassers(activeRole as Role) : false;
   const isManagerRole = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "co_chair";
+  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager";
   const campaignName =
     session.user.memberships.find((m) => m.campaignId === activeCampaignId)?.campaignName ?? "Campaign";
 
@@ -291,7 +296,24 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+          {canAssign && (
+            <EditListButton
+              listId={list.id}
+              currentName={list.name}
+              isDynamic={isDynamic}
+              currentFilters={isDynamic ? (list.dynamicFilters as DynamicFilters | null) : null}
+              tags={tags}
+            />
+          )}
+          {canManage && (
+            <ArchiveDeleteButtons
+              listId={list.id}
+              listName={list.name}
+              isArchived={list.status === "archived"}
+              canDelete={isFullAccess}
+            />
+          )}
           <PrintButton />
           {canAssignNow && list.entries.length > 0 && (
             <OptimizeRouteButton
@@ -514,7 +536,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                               </div>
                             </div>
 
-                            <div className="flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               {latestResponse?.supportLevel && (
                                 <SupportLevelBadge
                                   level={latestResponse.supportLevel as SupportLevel}
@@ -522,6 +544,13 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                               )}
                               {isCanvassed && latestResponse && !latestResponse.supportLevel && (
                                 <OutcomeBadge outcome={latestResponse.outcome as CanvassOutcome} />
+                              )}
+                              {canAssign && !isDynamic && (
+                                <RemovePersonButton
+                                  listId={list.id}
+                                  entryId={entry.id}
+                                  hasResponses={isCanvassed}
+                                />
                               )}
                             </div>
                           </li>

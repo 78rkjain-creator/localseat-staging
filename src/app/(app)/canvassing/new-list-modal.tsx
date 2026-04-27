@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createCanvassList } from "./actions";
+import { createCanvassList, getFilterMatchCount } from "./actions";
 import type { DynamicFilters } from "@/lib/canvassing";
 
 interface Tag {
@@ -35,6 +35,7 @@ const WARD_OPTIONS = [
 
 export function NewListModal({ open, onClose, tags = [] }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -44,6 +45,42 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [canvassStatus, setCanvassStatus] = useState<DynamicFilters["canvassStatus"]>("");
   const [wardStatuses, setWardStatuses] = useState<string[]>([]);
+
+  // Live match count
+  const [matchCount, setMatchCount] = useState<number | null>(null);
+  const [isCountPending, startCount] = useTransition();
+
+  const fetchMatchCount = useCallback(() => {
+    const hasFilters =
+      supportLevels.length > 0 ||
+      tagIds.length > 0 ||
+      !!canvassStatus ||
+      wardStatuses.length > 0;
+
+    if (!hasFilters) {
+      setMatchCount(null);
+      return;
+    }
+
+    const filters: DynamicFilters = {
+      ...(supportLevels.length ? { supportLevels } : {}),
+      ...(tagIds.length ? { tagIds } : {}),
+      ...(canvassStatus ? { canvassStatus } : {}),
+      ...(wardStatuses.length ? { wardStatuses } : {}),
+    };
+
+    startCount(async () => {
+      const result = await getFilterMatchCount(filters);
+      if ("count" in result) setMatchCount(result.count);
+    });
+  }, [supportLevels, tagIds, canvassStatus, wardStatuses]);
+
+  useEffect(() => {
+    if (!isDynamic) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(fetchMatchCount, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [isDynamic, fetchMatchCount]);
 
   function toggleItem<T extends string>(
     arr: T[],
@@ -86,6 +123,7 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
     setTagIds([]);
     setCanvassStatus("");
     setWardStatuses([]);
+    setMatchCount(null);
     onClose();
   }
 
@@ -256,6 +294,21 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
                   </div>
                 </div>
               )}
+
+              {/* Live match count */}
+              <div className="pt-3 border-t border-slate-200">
+                {isCountPending ? (
+                  <p className="text-xs text-slate-400">Counting matches…</p>
+                ) : matchCount === null ? (
+                  <p className="text-xs text-slate-400">Select filters to see matching count</p>
+                ) : matchCount === 0 ? (
+                  <p className="text-xs font-medium text-amber-600">0 people match — try adjusting filters</p>
+                ) : (
+                  <p className="text-xs font-medium text-emerald-700">
+                    {matchCount.toLocaleString()} {matchCount === 1 ? "person matches" : "people match"} these filters
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>

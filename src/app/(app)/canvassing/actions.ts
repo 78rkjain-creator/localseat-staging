@@ -532,6 +532,404 @@ export async function optimizeRoute(
   return { count: allOrdered.length };
 }
 
+// ── Archive / Unarchive / Delete ─────────────────────────────────────────
+
+export async function archiveList(listId: string): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageWalkLists(activeRole as Role)) {
+    return { error: "You don't have permission to archive walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, status: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (list.status === CanvassListStatus.archived) return {};
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { status: CanvassListStatus.archived },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_ARCHIVED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { name: list.name },
+  });
+
+  revalidatePath("/canvassing");
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function unarchiveList(listId: string): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageWalkLists(activeRole as Role)) {
+    return { error: "You don't have permission to manage walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, status: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (list.status !== CanvassListStatus.archived) return {};
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { status: CanvassListStatus.active },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_UNARCHIVED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { name: list.name },
+  });
+
+  revalidatePath("/canvassing");
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function deleteList(listId: string): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !["candidate", "campaign_manager"].includes(activeRole)) {
+    return { error: "You don't have permission to delete walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+
+  const responseCount = await db.canvassResponse.count({
+    where: { assignment: { canvassListId: listId } },
+  });
+  if (responseCount > 0) {
+    return {
+      error: `This list has ${responseCount} canvass ${responseCount === 1 ? "response" : "responses"}. Archive it instead to preserve the data.`,
+    };
+  }
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_DELETED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { name: list.name },
+  });
+
+  revalidatePath("/canvassing");
+  redirect("/canvassing");
+}
+
+// ── Edit list ─────────────────────────────────────────────────────────────
+
+export async function updateListName(
+  listId: string,
+  name: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
+    return { error: "You don't have permission to edit walk lists." };
+  }
+
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Name is required." };
+  if (trimmed.length > 120) return { error: "Name is too long." };
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (list.name === trimmed) return {};
+
+  await db.canvassList.update({ where: { id: listId }, data: { name: trimmed } });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "WALK_LIST_RENAMED",
+    entityType: "canvass_list",
+    entityId: listId,
+    details: { oldName: list.name, newName: trimmed },
+  });
+
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function updateListFilters(
+  listId: string,
+  filters: DynamicFilters
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
+    return { error: "You don't have permission to edit walk lists." };
+  }
+
+  const list = await db.canvassList.findFirst({
+    where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, dynamicFilters: true },
+  });
+  if (!list) return { error: "Walk list not found." };
+  if (!list.dynamicFilters) return { error: "This is not a dynamic list." };
+
+  await db.canvassList.update({
+    where: { id: listId },
+    data: { dynamicFilters: filters as Prisma.InputJsonValue },
+  });
+
+  await _doRefresh(listId, activeCampaignId, session.user.id, filters);
+
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function removePersonFromList(
+  listId: string,
+  entryId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
+    return { error: "You don't have permission to edit walk lists." };
+  }
+
+  const entry = await db.canvassListEntry.findFirst({
+    where: {
+      id: entryId,
+      canvassList: { id: listId, campaignId: activeCampaignId },
+      deletedAt: null,
+    },
+    select: { id: true, personId: true },
+  });
+  if (!entry) return { error: "Entry not found." };
+
+  const responseCount = await db.canvassResponse.count({
+    where: { personId: entry.personId, assignment: { canvassListId: listId } },
+  });
+  if (responseCount > 0) {
+    return { error: "This person has canvass responses and cannot be removed." };
+  }
+
+  await db.canvassListEntry.update({
+    where: { id: entryId },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+export async function searchPeopleForList(
+  listId: string,
+  query: string
+): Promise<{ id: string; firstName: string; lastName: string; addressLine: string }[]> {
+  const session = await getServerSession(authOptions);
+  if (!session) return [];
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId || !activeRole || !canAssignCanvassers(activeRole as Role)) return [];
+
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  const inList = await db.canvassListEntry.findMany({
+    where: { canvassListId: listId, deletedAt: null },
+    select: { personId: true },
+  });
+  const inListIds = new Set(inList.map((e) => e.personId));
+
+  const parts = trimmed.split(/\s+/);
+  const orConditions: Prisma.PersonWhereInput[] =
+    parts.length >= 2
+      ? [
+          {
+            AND: [
+              { firstName: { contains: parts[0], mode: "insensitive" } },
+              { lastName: { contains: parts.slice(1).join(" "), mode: "insensitive" } },
+            ],
+          },
+          {
+            AND: [
+              { lastName: { contains: parts[0], mode: "insensitive" } },
+              { firstName: { contains: parts.slice(1).join(" "), mode: "insensitive" } },
+            ],
+          },
+          { household: { address: { streetName: { contains: trimmed, mode: "insensitive" } } } },
+        ]
+      : [
+          { firstName: { contains: trimmed, mode: "insensitive" } },
+          { lastName: { contains: trimmed, mode: "insensitive" } },
+          { household: { address: { streetName: { contains: trimmed, mode: "insensitive" } } } },
+          { household: { address: { streetNumber: { contains: trimmed, mode: "insensitive" } } } },
+        ];
+
+  const people = await db.person.findMany({
+    where: { campaignId: activeCampaignId, deletedAt: null, OR: orConditions },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      household: {
+        select: {
+          address: {
+            select: { streetNumber: true, streetName: true, unitNumber: true, city: true },
+          },
+        },
+      },
+    },
+    take: 8,
+  });
+
+  return people
+    .filter((p) => !inListIds.has(p.id))
+    .map((p) => {
+      const addr = p.household?.address;
+      const addressLine = addr
+        ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}, ${addr.city}`
+        : "Unknown address";
+      return { id: p.id, firstName: p.firstName, lastName: p.lastName, addressLine };
+    });
+}
+
+export async function addPersonToList(
+  listId: string,
+  personId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
+    return { error: "You don't have permission to edit walk lists." };
+  }
+
+  const [person, list] = await Promise.all([
+    db.person.findFirst({ where: { id: personId, campaignId: activeCampaignId, deletedAt: null }, select: { id: true } }),
+    db.canvassList.findFirst({ where: { id: listId, campaignId: activeCampaignId, deletedAt: null }, select: { id: true } }),
+  ]);
+  if (!person) return { error: "Person not found." };
+  if (!list) return { error: "Walk list not found." };
+
+  const existing = await db.canvassListEntry.findFirst({
+    where: { canvassListId: listId, personId },
+  });
+
+  if (existing) {
+    if (existing.deletedAt) {
+      await db.canvassListEntry.update({ where: { id: existing.id }, data: { deletedAt: null } });
+    }
+  } else {
+    await db.canvassListEntry.create({
+      data: { canvassListId: listId, personId, addedById: session.user.id },
+    });
+  }
+
+  revalidatePath(`/canvassing/${listId}`);
+  return {};
+}
+
+// ── Live filter match count ────────────────────────────────────────────────
+
+export async function getFilterMatchCount(
+  filters: DynamicFilters
+): Promise<{ count: number } | { error: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageWalkLists(activeRole as Role)) {
+    return { error: "Not authorized." };
+  }
+
+  const andConditions: Prisma.PersonWhereInput[] = [];
+
+  if (filters.supportLevels?.length) {
+    andConditions.push({
+      canvassResponses: {
+        some: { supportLevel: { in: filters.supportLevels as ("strong_yes" | "soft_yes" | "undecided" | "soft_no" | "strong_no")[] } },
+      },
+    });
+  }
+
+  if (filters.canvassStatus === "not_yet_canvassed") {
+    andConditions.push({ canvassResponses: { none: {} } });
+  } else if (filters.canvassStatus === "canvassed") {
+    andConditions.push({ canvassResponses: { some: {} } });
+  } else if (filters.canvassStatus === "not_home") {
+    andConditions.push({ canvassResponses: { some: { outcome: "not_home" } } });
+  }
+
+  if (filters.tagIds?.length) {
+    andConditions.push({ tags: { some: { tagId: { in: filters.tagIds } } } });
+  }
+
+  if (filters.wardStatuses?.length) {
+    andConditions.push({ wardStatus: { in: filters.wardStatuses as WardStatus[] } });
+  }
+
+  const where: Prisma.PersonWhereInput = {
+    campaignId: activeCampaignId,
+    deletedAt: null,
+    isOutOfDistrict: false,
+    OR: [
+      { includeInWalkLists: true },
+      {
+        AND: [
+          { listSource: { notIn: [ListSource.manual, ListSource.team] } },
+          { wardStatus: { notIn: [WardStatus.outside, WardStatus.pending_review] } },
+        ],
+      },
+    ],
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
+  };
+
+  const count = await db.person.count({ where });
+  return { count };
+}
+
 // ── Assign canvasser ──────────────────────────────────────────────────────
 
 export async function assignCanvasser(

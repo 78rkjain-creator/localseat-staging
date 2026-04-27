@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NewListButton } from "./new-list-button";
 import { ApproveRejectButtons } from "./approve-reject-buttons";
+import { ArchivedSection } from "./archived-section";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Canvassing" };
@@ -41,15 +42,14 @@ export default async function CanvassingPage() {
   // Split lists by status for display
   const pendingLists = isApprover
     ? allLists.filter((l) => l.status === "pending_approval")
+    : isFieldOrganizer
+    ? allLists.filter((l) => l.status === "pending_approval")
     : [];
-  const activeLists = allLists.filter((l) =>
-    isFieldOrganizer
-      ? l.status !== "archived"
-      : l.status === "active" || l.status === "draft"
+  const activeLists = allLists.filter(
+    (l) => l.status === "active" || l.status === "draft"
   );
-  const visibleLists = isApprover
-    ? allLists.filter((l) => l.status === "active" || l.status === "draft")
-    : activeLists;
+  const archivedLists = allLists.filter((l) => l.status === "archived");
+  const visibleLists = activeLists;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -58,8 +58,7 @@ export default async function CanvassingPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Canvassing</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {allLists.filter((l) => l.status !== "archived").length} walk list
-            {allLists.filter((l) => l.status !== "archived").length !== 1 ? "s" : ""}
+            {activeLists.length} active walk list{activeLists.length !== 1 ? "s" : ""}
           </p>
         </div>
         {canManage && (
@@ -130,7 +129,7 @@ export default async function CanvassingPage() {
         </div>
       )}
 
-      {/* All other lists */}
+      {/* Active lists */}
       {visibleLists.length === 0 && pendingLists.length === 0 ? (
         <EmptyState
           title="No walk lists yet"
@@ -138,6 +137,15 @@ export default async function CanvassingPage() {
           action={canManage ? <NewListButton tags={tags} /> : undefined}
         />
       ) : visibleLists.length === 0 ? null : (
+        <>
+          {(pendingLists.length > 0 || archivedLists.length > 0) && (
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-semibold text-slate-700">Active Lists</h2>
+              <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                {visibleLists.length}
+              </span>
+            </div>
+          )}
         <div className="flex flex-col gap-3">
           {visibleLists.map((list) => {
             const assigneeNames = list.assignments
@@ -198,7 +206,10 @@ export default async function CanvassingPage() {
             );
           })}
         </div>
+        </>
       )}
+
+      <ArchivedSection lists={archivedLists} />
     </div>
   );
 }
