@@ -9,7 +9,18 @@ interface Props {
 }
 
 export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
-  const [assignments, tasks] = await Promise.all([
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const statsWhere = {
+    assignment: {
+      canvasserId: userId,
+      canvassList: { campaignId },
+      deletedAt: null,
+    },
+  } as const;
+
+  const [assignments, tasks, totalDoors, doorsToday, signs, volunteers, followUps] = await Promise.all([
     getAssignedLists(userId, campaignId),
     db.task.findMany({
       where: { campaignId, assignedTo: userId, completed: false, deletedAt: null },
@@ -18,6 +29,11 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
       },
       orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
     }),
+    db.canvassResponse.count({ where: statsWhere }),
+    db.canvassResponse.count({ where: { ...statsWhere, respondedAt: { gte: todayStart } } }),
+    db.canvassResponse.count({ where: { ...statsWhere, signRequest: true } }),
+    db.canvassResponse.count({ where: { ...statsWhere, volunteerInterest: true } }),
+    db.canvassResponse.count({ where: { ...statsWhere, needsFollowUp: true } }),
   ]);
 
   const now = new Date();
@@ -27,6 +43,22 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">Good to see you, {firstName}</h1>
         <p className="text-slate-500 mt-1 text-sm">Canvasser</p>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-8">
+        {[
+          { label: "Total doors",  value: totalDoors },
+          { label: "Today",        value: doorsToday },
+          { label: "Signs",        value: signs },
+          { label: "Volunteers",   value: volunteers },
+          { label: "Follow-ups",   value: followUps },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-3 py-4 text-center">
+            <p className="text-2xl font-bold text-slate-900">{value}</p>
+            <p className="text-xs text-slate-400 mt-0.5 leading-snug">{label}</p>
+          </div>
+        ))}
       </div>
 
       <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">My walk lists</h2>

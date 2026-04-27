@@ -382,6 +382,160 @@ export async function getFinanceDashboardData(campaignId: string) {
   };
 }
 
+// ── Canvasser performance stats ────────────────────────────────────────────
+
+export async function getCanvasserStats(campaignId: string) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const assignments = await db.canvassAssignment.findMany({
+    where: { canvassList: { campaignId }, deletedAt: null },
+    select: {
+      id: true,
+      canvasserId: true,
+      canvasser: { select: { firstName: true, lastName: true } },
+      canvassList: { select: { _count: { select: { entries: true } } } },
+      responses: {
+        select: {
+          personId: true,
+          signRequest: true,
+          volunteerInterest: true,
+          respondedAt: true,
+        },
+      },
+    },
+  });
+
+  type Agg = {
+    canvasserId: string;
+    firstName: string;
+    lastName: string;
+    assignmentCount: number;
+    totalEntries: number;
+    allPersonIds: Set<string>;
+    todayPersonIds: Set<string>;
+    signs: number;
+    volunteers: number;
+    lastActive: Date | null;
+  };
+
+  const map = new Map<string, Agg>();
+
+  for (const a of assignments) {
+    let agg = map.get(a.canvasserId);
+    if (!agg) {
+      agg = {
+        canvasserId: a.canvasserId,
+        firstName: a.canvasser.firstName,
+        lastName: a.canvasser.lastName,
+        assignmentCount: 0,
+        totalEntries: 0,
+        allPersonIds: new Set(),
+        todayPersonIds: new Set(),
+        signs: 0,
+        volunteers: 0,
+        lastActive: null,
+      };
+      map.set(a.canvasserId, agg);
+    }
+    agg.assignmentCount += 1;
+    agg.totalEntries += a.canvassList._count.entries;
+    for (const r of a.responses) {
+      agg.allPersonIds.add(r.personId);
+      if (r.respondedAt >= todayStart) agg.todayPersonIds.add(r.personId);
+      if (r.signRequest) agg.signs += 1;
+      if (r.volunteerInterest) agg.volunteers += 1;
+      if (!agg.lastActive || r.respondedAt > agg.lastActive) agg.lastActive = r.respondedAt;
+    }
+  }
+
+  return Array.from(map.values())
+    .filter((c) => c.allPersonIds.size > 0)
+    .map((c) => ({
+      canvasserId: c.canvasserId,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      totalDoors: c.allPersonIds.size,
+      doorsToday: c.todayPersonIds.size,
+      signs: c.signs,
+      volunteers: c.volunteers,
+      avgDoorsPerAssignment:
+        c.assignmentCount > 0 ? Math.round(c.allPersonIds.size / c.assignmentCount) : 0,
+      completionPct:
+        c.totalEntries > 0
+          ? Math.min(100, Math.round((c.allPersonIds.size / c.totalEntries) * 100))
+          : 0,
+      lastActive: c.lastActive?.toISOString() ?? null,
+    }))
+    .sort((a, b) => b.totalDoors - a.totalDoors);
+}
+
+export type CanvasserStat = Awaited<ReturnType<typeof getCanvasserStats>>[number];
+
+// ── Recent canvass activity ────────────────────────────────────────────────
+
+export async function getRecentCanvassActivity(campaignId: string) {
+  const responses = await db.canvassResponse.findMany({
+    where: { assignment: { canvassList: { campaignId } } },
+    orderBy: { respondedAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      outcome: true,
+      supportLevel: true,
+      signRequest: true,
+      volunteerInterest: true,
+      donorInterest: true,
+      respondedAt: true,
+      assignment: {
+        select: {
+          canvasser: { select: { firstName: true, lastName: true } },
+        },
+      },
+      person: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          household: {
+            select: {
+              address: {
+                select: {
+                  streetNumber: true,
+                  streetName: true,
+                  unitNumber: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return responses.map((r) => {
+    const addr = r.person.household?.address;
+    return {
+      id: r.id,
+      canvasserName: `${r.assignment.canvasser.firstName} ${r.assignment.canvasser.lastName}`,
+      canvasserInitials: `${r.assignment.canvasser.firstName[0]}${r.assignment.canvasser.lastName[0]}`,
+      personName: `${r.person.firstName} ${r.person.lastName}`,
+      personId: r.person.id,
+      address: addr
+        ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
+        : null,
+      outcome: r.outcome as string,
+      supportLevel: r.supportLevel as string | null,
+      signRequest: r.signRequest,
+      volunteerInterest: r.volunteerInterest,
+      donorInterest: r.donorInterest,
+      respondedAt: r.respondedAt.toISOString(),
+    };
+  });
+}
+
+export type CanvassActivityEntry = Awaited<ReturnType<typeof getRecentCanvassActivity>>[number];
+
 // ── Needs-you queue ────────────────────────────────────────────────────────
 
 type QueuePriority = "overdue" | "today" | "this-week" | "neutral";

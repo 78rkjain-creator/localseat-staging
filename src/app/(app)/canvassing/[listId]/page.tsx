@@ -15,6 +15,7 @@ import { OutcomeBadge, SupportLevelBadge } from "@/components/ui/badge";
 import { AssignCanvasserButton } from "./assign-canvasser-button";
 import { AddPeopleButton } from "./add-people-button";
 import { CsvImportButton } from "./csv-import-button";
+import { PrintButton } from "./print-button";
 import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {
@@ -38,6 +39,8 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
   const canAssign = activeRole ? canAssignCanvassers(activeRole as Role) : false;
+  const campaignName =
+    session.user.memberships.find((m) => m.campaignId === activeCampaignId)?.campaignName ?? "Campaign";
 
   const [list, availableCanvassers, tags] = await Promise.all([
     getCanvassListDetail(listId, activeCampaignId),
@@ -69,8 +72,117 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
     a.localeCompare(b)
   );
 
+  const printDate = new Date().toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const canvasserNames =
+    list.assignments.length === 0
+      ? "Unassigned"
+      : list.assignments
+          .map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`)
+          .join(", ");
+
   return (
-    <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
+    <>
+    <style dangerouslySetInnerHTML={{ __html: `
+      @media print {
+        /* Hide app shell */
+        aside, nav { display: none !important; }
+
+        /* Remove height / overflow constraints from layout wrappers */
+        html, body, body > div, body > div > div {
+          height: auto !important;
+          overflow: visible !important;
+          display: block !important;
+        }
+
+        main {
+          overflow: visible !important;
+          height: auto !important;
+          padding-bottom: 0 !important;
+          background: white !important;
+          width: 100% !important;
+        }
+
+        /* Show / hide */
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+
+        /* ── Print layout ── */
+        .wl-print-wrap {
+          font-family: system-ui, -apple-system, sans-serif;
+          padding: 0;
+          color: #0f172a;
+        }
+
+        .wl-print-header { margin-bottom: 18px; }
+        .wl-print-header h1 { font-size: 20px; font-weight: 700; margin: 0 0 3px; }
+        .wl-print-header h2 { font-size: 13px; font-weight: 400; color: #64748b; margin: 0 0 10px; }
+        .wl-print-meta {
+          display: flex;
+          gap: 24px;
+          font-size: 11px;
+          color: #64748b;
+          border-bottom: 1px solid #e2e8f0;
+          padding-bottom: 10px;
+          margin-bottom: 16px;
+        }
+
+        .wl-print-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+          page-break-inside: auto;
+        }
+
+        .wl-print-table thead { display: table-header-group; }
+
+        .wl-print-table th {
+          background: #f1f5f9 !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          font-weight: 700;
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          padding: 5px 8px;
+          border: 1px solid #cbd5e1;
+          text-align: left;
+          white-space: nowrap;
+        }
+
+        .wl-print-table td {
+          padding: 6px 8px;
+          border: 1px solid #e2e8f0;
+          vertical-align: top;
+          line-height: 1.4;
+        }
+
+        .wl-print-table tr { page-break-inside: avoid; }
+
+        .wl-print-addr-row td {
+          background: #f8fafc !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          font-weight: 600;
+          font-size: 10px;
+          border-top: 2px solid #94a3b8;
+          padding: 4px 8px;
+          color: #334155;
+        }
+
+        .wl-print-table .col-support { width: 64px; }
+        .wl-print-table .col-notes   { width: 130px; }
+        .wl-print-table .col-poll    { width: 52px; }
+        .wl-print-table .col-canvass { width: 80px; }
+        .wl-print-table .col-phone   { width: 100px; white-space: nowrap; }
+      }
+    `}} />
+
+    <div className="no-print px-4 sm:px-6 py-8 max-w-5xl mx-auto">
       {/* Back */}
       <Link
         href="/canvassing"
@@ -91,6 +203,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <PrintButton />
           <Link
             href={`/canvassing/${list.id}/map`}
             className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
@@ -140,8 +253,10 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
             ) : (
               <ul className="flex flex-col gap-3">
                 {list.assignments.map((assignment) => {
-                  const assignmentOutcomes = summariseOutcomes(assignment.responses);
-                  const doorsForAssignment = assignment.responses.length;
+                  const distinctDoors = new Set(assignment.responses.map((r) => r.person.id)).size;
+                  const completionPct = list.entries.length > 0
+                    ? Math.min(100, Math.round((distinctDoors / list.entries.length) * 100))
+                    : 0;
                   return (
                     <li key={assignment.id} className="flex items-center gap-3">
                       <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -155,12 +270,18 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                           {assignment.canvasser.firstName} {assignment.canvasser.lastName}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {doorsForAssignment} door{doorsForAssignment !== 1 ? "s" : ""}
-                          {assignmentOutcomes["contacted"]
-                            ? ` · ${assignmentOutcomes["contacted"]} contacted`
-                            : ""}
+                          {distinctDoors} door{distinctDoors !== 1 ? "s" : ""}
                         </p>
                       </div>
+                      {distinctDoors > 0 && (
+                        <span className={[
+                          "text-xs font-semibold flex-shrink-0",
+                          completionPct >= 75 ? "text-emerald-600" :
+                          completionPct >= 50 ? "text-amber-600" : "text-red-500",
+                        ].join(" ")}>
+                          {completionPct}%
+                        </span>
+                      )}
                     </li>
                   );
                 })}
@@ -359,7 +480,72 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+    </div>{/* end no-print */}
+
+    {/* ── Print-only walk list ── hidden on screen, shown by @media print ── */}
+    <div className="print-only" style={{ display: "none" }}>
+      <div className="wl-print-wrap">
+
+        <div className="wl-print-header">
+          <h1>{campaignName}</h1>
+          <h2>Walk List: {list.name}</h2>
+          <div className="wl-print-meta">
+            <span>Date: {printDate}</span>
+            <span>Canvassers: {canvasserNames}</span>
+            <span>{list.entries.length} people</span>
+          </div>
+        </div>
+
+        {list.entries.length === 0 ? (
+          <p style={{ fontSize: "12px", color: "#64748b" }}>No people on this list yet.</p>
+        ) : (
+          <table className="wl-print-table">
+            <thead>
+              <tr>
+                <th>Address</th>
+                <th>Name</th>
+                <th className="col-phone">Phone</th>
+                <th className="col-poll">Poll #</th>
+                <th className="col-canvass">Last Canvass</th>
+                <th className="col-support">Support</th>
+                <th className="col-notes">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedGroups.flatMap(([addressKey, groupEntries]) =>
+                groupEntries.map((entry, personIdx) => {
+                  const isFirst = personIdx === 0;
+                  const phone = entry.person.phoneMobile ?? entry.person.phoneHome ?? "";
+                  const latestResponse = entry.person.canvassResponses[0];
+                  const canvassStatus = !latestResponse
+                    ? ""
+                    : latestResponse.supportLevel
+                    ? (({ strong_yes: "Strong Yes", soft_yes: "Soft Yes", undecided: "Undecided", soft_no: "Soft No", strong_no: "Strong No" } as Record<string, string>)[latestResponse.supportLevel] ?? "")
+                    : (({ not_home: "Not home", refused: "Refused", moved: "Moved", unavailable: "Unavailable", deceased: "Deceased", other_candidate: "Other cand." } as Record<string, string>)[latestResponse.outcome] ?? "");
+                  return (
+                    <tr
+                      key={entry.id}
+                      style={isFirst ? { borderTop: "2px solid #94a3b8" } : undefined}
+                    >
+                      <td style={{ fontWeight: isFirst ? 600 : "normal", color: isFirst ? "#334155" : "inherit" }}>
+                        {isFirst ? addressKey : ""}
+                      </td>
+                      <td>{entry.person.firstName} {entry.person.lastName}</td>
+                      <td className="col-phone">{phone}</td>
+                      <td className="col-poll">{entry.person.pollNumber ?? ""}</td>
+                      <td className="col-canvass">{canvassStatus}</td>
+                      <td className="col-support" />
+                      <td className="col-notes" />
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
+  </>
   );
 }
 

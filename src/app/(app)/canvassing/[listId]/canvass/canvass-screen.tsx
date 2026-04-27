@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
+import { Navigation, Phone, MessageSquare } from "lucide-react";
 import { saveCanvassResponse } from "./actions";
 import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
@@ -448,6 +449,11 @@ export function CanvassScreen({
     : "Unknown address";
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
   const coResidents = current.person.coResidents ?? [];
+  const mapsUrl = addr
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}, ${addr.city}, ${addr.province}`
+      )}`
+    : null;
 
   // All people at this door — main person first, then co-residents
   const allResidents = [
@@ -529,9 +535,48 @@ export function CanvassScreen({
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
             <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{addressLine}</p>
-            <p className="text-[12px] text-slate-500">
-              {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[12px] text-slate-500">
+                {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
+              </p>
+              {mapsUrl && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-medium hover:bg-slate-100 active:bg-slate-200 transition-colors flex-shrink-0"
+                >
+                  <Navigation className="h-3 w-3" />
+                  Navigate
+                </a>
+              )}
+            </div>
+            {(current.person.phoneHome || current.person.phoneMobile) && (
+              <div className="flex flex-wrap gap-3 mt-1">
+                {current.person.phoneHome && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="h-3 w-3 text-slate-400" />
+                    <a href={`tel:${current.person.phoneHome}`} className="text-[11px] text-brand-600">
+                      {current.person.phoneHome}
+                    </a>
+                    <a href={`sms:${current.person.phoneHome}`} aria-label="SMS" className="text-slate-400 hover:text-slate-600 transition-colors">
+                      <MessageSquare className="h-3 w-3" />
+                    </a>
+                  </span>
+                )}
+                {current.person.phoneMobile && current.person.phoneMobile !== current.person.phoneHome && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="h-3 w-3 text-slate-400" />
+                    <a href={`tel:${current.person.phoneMobile}`} className="text-[11px] text-brand-600">
+                      {current.person.phoneMobile}
+                    </a>
+                    <a href={`sms:${current.person.phoneMobile}`} aria-label="SMS" className="text-slate-400 hover:text-slate-600 transition-colors">
+                      <MessageSquare className="h-3 w-3" />
+                    </a>
+                  </span>
+                )}
+              </div>
+            )}
             {current.lastResponse && (
               <span className="inline-block mt-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 text-[11px] font-medium">
                 Previously recorded

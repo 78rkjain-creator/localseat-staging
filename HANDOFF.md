@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 26, 2026 — People restructure (5-tab /people/*, team-as-people, district classification, FO approval flow), offline queue reliability._
+_Last updated: April 27, 2026 — Code quality sweep, security hardening (CSP, CSRF, session versioning, IDOR fix), demo infra consolidation._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -53,21 +53,17 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 ---
 
 ## Deployment Workflow
-1. Dev work → `git push staging main`
-2. Vercel auto-deploys staging
+1. Dev work → `git push origin main && git push staging main` (**both remotes every time**)
+2. Vercel auto-deploys staging from the staging remote
 3. **Test on staging before every production deploy**
-4. `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
+4. SSH → `cd /var/www/localseat && ./deploy.sh`
 5. **Always deploy app and demo together — never leave out of sync**
+
+`deploy.sh` on both servers now runs `git checkout -- public/sw.js` before `git pull` to prevent sw.js build-stamp conflicts.
 
 Demo deploy (same repo as prod, separate checkout at /var/www/demo with DEMO_MODE=true in .env):
 ```
-cd /var/www/demo
-git pull origin main
-npm install
-npm run build
-pm2 restart localseat-demo --update-env
-npx prisma migrate deploy
-npx prisma db seed
+cd /var/www/demo && ./deploy.sh
 ```
 
 ---
@@ -230,6 +226,7 @@ Candidate
 20260425150000_people_restructure_foundation
 20260425160000_add_not_required_approval_status
 20260426000001_add_ood_request_fields
+20260427000001_add_session_version
 ```
 
 ---
@@ -245,7 +242,8 @@ Candidate
 - CampaignCompetitor, AddressChangeRequest, ContactSubmission
 
 **Key enums:**
-- Role: candidate, campaign_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer, super_user
+- Role: candidate, campaign_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
+- PlatformRole (on User): super_user, super_admin
 - ListImportType: list, telephone_list, official_voters_list
 - PersonListMembershipStatus: matched, created, pending_review, accepted
 - SignStatus: to_be_installed, installed
@@ -366,6 +364,20 @@ Candidate
 - Pending marks do NOT exclude from walk lists — exclusion only on approved
 - Team members skip the OOD approval flow entirely
 
+### Code Quality (April 27, 2026)
+- Deleted ~1,800 lines of dead /voter-list code (10 files). Redirect stubs remain at voter-list/page.tsx, confirmed/page.tsx, confirmed/[personId]/page.tsx
+- Consolidated duplicated logic: `mergePersons` → `src/lib/people.ts`, `requireSuperUser` / `requirePlatformAdmin` → `src/lib/permissions.ts`, classify actions unified in `src/lib/classify-actions.ts` with shared modal in `src/components/classify-modal.tsx`. Old files are thin re-exports
+- Added try-catch error handling to all server actions with DB writes (28 action files) and all 5 export route handlers
+- Removed 4 debug console.log statements from follow-ups
+- Removed `typescript.ignoreBuildErrors: true` from next.config.ts — build passes clean
+- Removed `as any` casts on votingRecord (8 occurrences across voting-records.ts and dashboard.ts)
+- Moved `@types/nodemailer` from dependencies to devDependencies
+- Standardized 11 PascalCase .tsx files to kebab-case (e.g., WardMapClient.tsx → ward-map-client.tsx)
+- Fixed N+1 in geocoding: batch findMany + $transaction instead of per-address findUnique + update
+- Fixed N+1 in voter import: pre-fetch all people/addresses into memory maps, batch creates at end. ~10,000 DB queries → ~8 for a 2,000-row import
+- Converted team management from API route handlers (/api/team/*) to server actions in `src/app/(app)/team/actions.ts`. 4 route handler files deleted
+- Deleted unused `src/components/ui/sync-status-bar.tsx`
+
 ### Offline Queue
 - Retry state persisted in IndexedDB (survives page reload)
 - Dead-letter: parked after 3 lifetime attempts
@@ -378,11 +390,15 @@ Candidate
 
 ### Security
 - Security headers in next.config.ts: X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy
+- Content-Security-Policy header in next.config.ts: self, unsafe-inline, Google Fonts, Mapbox (tiles/events/API), blob: workers
+- CSRF origin check helper in `src/lib/auth.ts` (`checkOrigin`). Applied to contact, demo-leads, and contact/[id]/read route handlers
+- Competitor IDOR fixed: server reads `activeCampaignId` from session instead of accepting it from the client
+- Session versioning: `sessionVersion` field on User, incremented whenever a member is removed or restored, checked on every JWT token refresh. Mismatch sets `sessionExpiresAt: 0` → proxy forces re-auth
+- Demo rate limiting: 10 registrations per IP per hour on `registerDemo` action
 - Session timeout: 8h all roles, 4h canvassers (checked in proxy.ts)
 - Rate limiting on auth routes
 - Input sanitization on canvassing and outreach actions
 - nodemailer v8 (SMTP injection CVEs patched)
-- CSP (Content Security Policy) — NOT YET APPLIED, test on staging first
 
 ---
 
@@ -396,12 +412,13 @@ Candidate
   campaign-settings/ward, competitors, script, custom-fields
   voter-import/review
   people/[personId]/out-of-district-actions.ts, out-of-district-control.tsx
-  people/classify-actions.ts, classify-banner.tsx, classify-modal.tsx
+  people/classify-banner.tsx (thin re-export wrapper)
   people/out-of-district/pending/page.tsx, queue-row.tsx
   people/residents/page.tsx, filters-client.tsx
   people/team/page.tsx
   people/voters/page.tsx
-  team/classify-actions.ts, classify-modal.tsx
+  team/actions.ts (team server actions — add, remove, restore, list members)
+  team/classify-actions.ts, team/classify-modal.tsx (thin re-exports)
 /src/app/admin/campaigns, users, audit-log, export, demo-leads, settings
 /src/app/onboarding/choose-plan, create-campaign
 /src/lib/
@@ -409,7 +426,8 @@ Candidate
   people.ts, canvassing.ts, outreach.ts, activity.ts, dashboard.ts
   geocoding.ts, ward.ts, address-normalize.ts, competitors.ts
   email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
-  format-poll-number.ts
+  format-poll-number.ts, classify-actions.ts
+/src/components/classify-modal.tsx (shared classify modal — used by people/ and team/ re-exports)
 /src/components/layout/sidebar.tsx, mobile-nav.tsx
 /src/components/ui/tag-picker.tsx, address-picker.tsx
 /src/hooks/useOfflineSync.ts
@@ -450,7 +468,7 @@ Candidate
 - Rate limiter resets on server restart — needs Redis for production scale
 - Offline queue is per-device only
 - Demo site shares one DB — multiple simultaneous users see each other's changes (deferred)
-- staging and localseat.io repos can drift — always copy seed.ts and key shared files
+- Both remotes (origin + staging) must be pushed on every deploy — `git push origin main && git push staging main`. Forgetting one causes demo/staging or prod to fall behind
 - Staging Neon DB must have migrations applied manually (`prisma migrate deploy`) — Vercel does not auto-run migrations
 - EPERM on Windows during `prisma generate` = known DLL lock from running dev server, not a real error
 - Seed data: Downtown East Route has 38 entries but seed creates ~139 canvass responses (~3.6 per door). Not a bug — distinct-personId counting handles it correctly. Just an artifact of the seed data volume.
@@ -464,6 +482,8 @@ Candidate
 
 **April 26, 2026** — People restructure deployed. 3 migrations applied to prod (people_restructure_foundation, add_not_required_approval_status, add_ood_request_fields). No data loss. Staging, prod, demo all in sync.
 
+**April 27, 2026** — Code quality sweep and security hardening. Migration `add_session_version` applied (adds `sessionVersion Int @default(0)` to users table). No data loss. CSP header live. Deploy scripts updated with sw.js checkout step. Demo directory deleted — demo now runs from main codebase. Both remotes (origin + staging) must be pushed on every deploy going forward.
+
 ---
 
 ## Remaining Work
@@ -473,13 +493,15 @@ Candidate
 |---|---|
 | People restructure — 5 tabs (/people/*), team-as-people, district classification, FO out-of-district approval flow | Deployed April 26, 2026 |
 | Offline queue persistence — retry state in IndexedDB, parked items, no head-of-line blocking | Deployed April 26, 2026 |
+| Code quality sweep — dead code deleted, N+1 queries fixed, try-catch on all DB server actions, `as any` removed, PascalCase files renamed, team management moved to server actions, debug logs removed | April 27, 2026 |
+| Security hardening — CSP header, CSRF origin check, competitor IDOR fix, session versioning, demo rate limiting | April 27, 2026 |
+| Demo infra consolidation — demo/ directory deleted, demo now runs from main codebase with DEMO_MODE=true | April 27, 2026 |
 
 ### High Priority
 | Item | Effort |
 |---|---|
 | Activity timeline on person detail | Small |
 | PWA manifest and install prompt — SW cache busting shipped; manifest and install prompt still needed | Small |
-| Content Security Policy (CSP) — prompt written, test on staging first | Small |
 
 ### Medium Priority
 | Item | Effort |
@@ -530,13 +552,13 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 
 ## How to Start the Next Session
 1. `npm run dev`
-2. Sign in at http://localhost:3001 (or 3000)
+2. Sign in at http://localhost:3000
 3. Candidate: alex.chen@example.com / password
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
 6. All new dev → localseat-staging repo first
 7. Test on staging before production deploy
-8. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
+8. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh`
 9. If staging DB schema out of sync: `$env:DATABASE_URL='<neon-url>' ; npx prisma migrate deploy`
 10. Run `npx prisma generate` after any migration
 11. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)

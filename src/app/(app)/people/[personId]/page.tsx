@@ -12,6 +12,7 @@ import { TagChip } from "@/components/ui/tag-chip";
 import { AddNoteForm } from "./add-note-form";
 import { PersonEditForm } from "./person-edit-form";
 import { AddressEditButton } from "./address-edit-button";
+import { MapPin, Navigation, Phone, MessageSquare } from "lucide-react";
 import type { SupportLevel, CanvassOutcome, OutreachChannel, ListSource } from "@/types";
 import { OUTREACH_CHANNEL_LABELS, LIST_SOURCE_LABELS } from "@/types";
 import { CustomFieldsEditor } from "./custom-fields-editor";
@@ -161,11 +162,22 @@ export default async function PersonDetailPage({ params }: PageProps) {
             <ListSourceBadge source={person.listSource as ListSource} />
           </div>
           {address && (
-            <p className="text-slate-500 mt-0.5">
-              {address.streetNumber} {address.streetName}
-              {address.unitNumber ? ` #${address.unitNumber}` : ""},{" "}
-              {address.city}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+              <p className="text-slate-500">
+                {address.streetNumber} {address.streetName}
+                {address.unitNumber ? ` #${address.unitNumber}` : ""},{" "}
+                {address.city}
+              </p>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${address.streetNumber} ${address.streetName}${address.unitNumber ? ` #${address.unitNumber}` : ""}, ${address.city}, ${address.province}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600 transition-colors"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Navigate
+              </a>
+            </div>
           )}
           {person.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -200,6 +212,32 @@ export default async function PersonDetailPage({ params }: PageProps) {
               wardStatus={person.wardStatus}
               readOnly={readOnly}
             />
+            {(person.phoneHome || person.phoneMobile) && (
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">
+                {person.phoneHome && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                    <a href={`tel:${person.phoneHome}`} className="text-sm text-brand-600 hover:underline flex-1 min-w-0 truncate">
+                      {person.phoneHome}
+                    </a>
+                    <a href={`sms:${person.phoneHome}`} aria-label={`SMS ${person.phoneHome}`} className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
+                {person.phoneMobile && person.phoneMobile !== person.phoneHome && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                    <a href={`tel:${person.phoneMobile}`} className="text-sm text-brand-600 hover:underline flex-1 min-w-0 truncate">
+                      {person.phoneMobile}
+                    </a>
+                    <a href={`sms:${person.phoneMobile}`} aria-label={`SMS ${person.phoneMobile}`} className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
             {person.importSource && (
               <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
                 Source: {person.importSource}
@@ -291,12 +329,23 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 )}
               </div>
               {address && (
-                <p className="text-sm text-slate-600 mb-2">
-                  {address.streetNumber} {address.streetName}
-                  {address.unitNumber ? ` #${address.unitNumber}` : ""}
-                  <br />
-                  {address.city}, {address.province} {address.postalCode}
-                </p>
+                <div className="flex items-start gap-2 mb-2">
+                  <p className="text-sm text-slate-600 flex-1">
+                    {address.streetNumber} {address.streetName}
+                    {address.unitNumber ? ` #${address.unitNumber}` : ""}
+                    <br />
+                    {address.city}, {address.province} {address.postalCode}
+                  </p>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${address.streetNumber} ${address.streetName}${address.unitNumber ? ` #${address.unitNumber}` : ""}, ${address.city}, ${address.province} ${address.postalCode}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 h-8 px-2.5 rounded-xl border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 flex-shrink-0 transition-colors"
+                  >
+                    <Navigation className="h-3.5 w-3.5" />
+                    Navigate
+                  </a>
+                </div>
               )}
               {householdMembers.length > 0 && (
                 <div className="flex flex-col gap-1.5">

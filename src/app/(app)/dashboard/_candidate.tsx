@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { getCandidateDashboardData, getNeedsYouQueue } from "@/lib/dashboard";
+import { getCandidateDashboardData, getNeedsYouQueue, getCanvasserStats, getRecentCanvassActivity } from "@/lib/dashboard";
 import { getRecentActivity } from "@/lib/activity";
 import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
+import { CanvassActivityFeed } from "@/components/dashboard/canvass-activity-feed";
 import type { DonorStatus, OutreachChannel, Role } from "@/types";
 import { ROLE_LABELS, OUTREACH_CHANNEL_LABELS, DONOR_STATUS_LABELS } from "@/types";
 
@@ -13,10 +14,12 @@ interface Props {
 }
 
 export async function CandidateDashboard({ campaignId }: Props) {
-  const [data, activityEntries, needsYouQueue] = await Promise.all([
+  const [data, activityEntries, needsYouQueue, canvasserStats, canvassActivity] = await Promise.all([
     getCandidateDashboardData(campaignId),
     getRecentActivity(campaignId, 20),
     getNeedsYouQueue(campaignId),
+    getCanvasserStats(campaignId),
+    getRecentCanvassActivity(campaignId),
   ]);
   const {
     total, forUs, againstUs, undecided, notHome, uncontacted,
@@ -284,6 +287,62 @@ export async function CandidateDashboard({ campaignId }: Props) {
         </div>
       )}
 
+      {/* Canvasser performance */}
+      {canvasserStats.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Canvasser performance</h2>
+          <Card className="!p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Canvasser</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Doors</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Today</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Signs</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Volunteers</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Last active</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Complete</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {canvasserStats.map((c) => (
+                    <tr key={c.canvasserId} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3 font-medium text-slate-900">{c.firstName} {c.lastName}</td>
+                      <td className="px-4 py-3 text-right text-slate-700 tabular">{c.totalDoors.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right hidden sm:table-cell tabular">
+                        <span className={c.doorsToday > 0 ? "text-emerald-600 font-medium" : "text-slate-400"}>
+                          {c.doorsToday > 0 ? c.doorsToday : "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600 hidden sm:table-cell tabular">{c.signs}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 hidden sm:table-cell tabular">{c.volunteers}</td>
+                      <td className="px-4 py-3 text-right text-slate-400 text-xs hidden md:table-cell">
+                        {c.lastActive ? relativeTime(c.lastActive) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={[
+                          "text-xs font-semibold tabular",
+                          c.completionPct >= 75 ? "text-emerald-600" :
+                          c.completionPct >= 50 ? "text-amber-600" : "text-red-500",
+                        ].join(" ")}>
+                          {c.completionPct}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Live canvass activity feed */}
+      <Card padding="md" className="mb-8">
+        <CanvassActivityFeed initialEntries={canvassActivity} />
+      </Card>
+
       {/* Follow-ups + Donor pipeline */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <Card padding="md">
@@ -390,6 +449,19 @@ export async function CandidateDashboard({ campaignId }: Props) {
       </div>
     </div>
   );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────

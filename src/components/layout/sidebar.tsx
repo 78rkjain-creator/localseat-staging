@@ -423,6 +423,9 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                       }]
                     : []),
                   { href: "/people/team", label: "Team" },
+                  ...(role === "candidate" || role === "campaign_manager" || role === "co_chair" || role === "field_organizer"
+                    ? [{ href: "/people/map", label: "Contact Map" }]
+                    : []),
                 ] as { href: string; label: string; badge?: number }[]).map((item) => {
                   const isActive =
                     item.href === "/people"

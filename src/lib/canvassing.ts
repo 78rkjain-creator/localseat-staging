@@ -80,6 +80,8 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
               id: true,
               firstName: true,
               lastName: true,
+              phoneHome: true,
+              phoneMobile: true,
               pollNumber: true,
               household: {
                 select: {
