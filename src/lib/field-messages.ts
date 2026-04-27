@@ -12,7 +12,7 @@ export interface FieldMessageItem {
 
 export async function getActiveFieldMessages(campaignId: string): Promise<FieldMessageItem[]> {
   const now = new Date();
-  const rows = await (db as any).fieldMessage.findMany({
+  return db.fieldMessage.findMany({
     where: {
       campaignId,
       deletedAt: null,
@@ -29,11 +29,10 @@ export async function getActiveFieldMessages(campaignId: string): Promise<FieldM
     },
     orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
   });
-  return rows as FieldMessageItem[];
 }
 
 export async function getAllFieldMessages(campaignId: string): Promise<FieldMessageItem[]> {
-  const rows = await (db as any).fieldMessage.findMany({
+  return db.fieldMessage.findMany({
     where: { campaignId, deletedAt: null },
     select: {
       id: true,
@@ -46,5 +45,4 @@ export async function getAllFieldMessages(campaignId: string): Promise<FieldMess
     },
     orderBy: [{ createdAt: "desc" }],
   });
-  return rows as FieldMessageItem[];
 }

@@ -29,7 +29,7 @@ export async function createFieldMessage(formData: FormData) {
 
   const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
-  await (db as any).fieldMessage.create({
+  await db.fieldMessage.create({
     data: {
       campaignId: activeCampaignId,
       title,
@@ -57,7 +57,7 @@ export async function deleteFieldMessage(id: string) {
     return;
   }
 
-  await (db as any).fieldMessage.updateMany({
+  await db.fieldMessage.updateMany({
     where: { id, campaignId: activeCampaignId },
     data: { deletedAt: new Date() },
   });

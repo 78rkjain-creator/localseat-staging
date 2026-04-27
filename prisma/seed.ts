@@ -215,7 +215,7 @@ async function main() {
     db.sign.deleteMany(),
     db.eventAttendee.deleteMany(),
     db.event.deleteMany(),
-    (db as any).fieldMessage.deleteMany(),
+    db.fieldMessage.deleteMany(),
     db.person.deleteMany(),
     db.household.deleteMany(),
     db.address.deleteMany(),
