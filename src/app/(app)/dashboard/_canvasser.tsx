@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { getAssignedLists } from "@/lib/canvassing";
+import { getActiveFieldMessages } from "@/lib/field-messages";
+import { FieldMessagesBanner } from "@/components/field-messages-banner";
 
 interface Props {
   userId: string;
@@ -20,7 +22,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
     },
   } as const;
 
-  const [assignments, tasks, totalDoors, doorsToday, signs, volunteers, followUps] = await Promise.all([
+  const [assignments, tasks, totalDoors, doorsToday, signs, volunteers, followUps, fieldMessages] = await Promise.all([
     getAssignedLists(userId, campaignId),
     db.task.findMany({
       where: { campaignId, assignedTo: userId, completed: false, deletedAt: null },
@@ -34,6 +36,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
     db.canvassResponse.count({ where: { ...statsWhere, signRequest: true } }),
     db.canvassResponse.count({ where: { ...statsWhere, volunteerInterest: true } }),
     db.canvassResponse.count({ where: { ...statsWhere, needsFollowUp: true } }),
+    getActiveFieldMessages(campaignId),
   ]);
 
   const now = new Date();
@@ -44,6 +47,8 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
         <h1 className="text-2xl font-bold text-slate-900">Good to see you, {firstName}</h1>
         <p className="text-slate-500 mt-1 text-sm">Canvasser</p>
       </div>
+
+      {fieldMessages.length > 0 && <FieldMessagesBanner messages={fieldMessages} />}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-8">

@@ -10,6 +10,8 @@ import { VoterChangeModal } from "@/components/voter-change-modal";
 import { AddResidentModal } from "@/components/add-resident-modal";
 import { enqueue } from "@/lib/offline-queue";
 import type { QueuedResponse } from "@/lib/offline-queue";
+import type { FieldMessageItem } from "@/lib/field-messages";
+import { FieldMessagesBanner } from "@/components/field-messages-banner";
 
 function formatVisitDate(iso: string | Date): string {
   const d = new Date(iso);
@@ -171,6 +173,7 @@ interface CanvassScreenProps {
   competitors: { id: string; name: string }[];
   /** personId → ISO datetime string of upcoming appointment */
   appointmentsByPersonId?: Record<string, string>;
+  fieldMessages?: FieldMessageItem[];
 }
 
 export function CanvassScreen({
@@ -183,6 +186,7 @@ export function CanvassScreen({
   entries: initialEntries,
   competitors,
   appointmentsByPersonId = {},
+  fieldMessages = [],
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -592,6 +596,13 @@ export function CanvassScreen({
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Field messages */}
+      {fieldMessages.length > 0 && (
+        <div className="flex-none px-3 pt-2">
+          <FieldMessagesBanner messages={fieldMessages} />
         </div>
       )}
 

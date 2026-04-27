@@ -13,6 +13,7 @@ import { AddNoteForm } from "./add-note-form";
 import { PersonEditForm } from "./person-edit-form";
 import { AddressEditButton } from "./address-edit-button";
 import { MapPin, Navigation, Phone, MessageSquare } from "lucide-react";
+import { ContactDropdown } from "./contact-dropdown";
 import type { SupportLevel, CanvassOutcome, OutreachChannel, ListSource } from "@/types";
 import { OUTREACH_CHANNEL_LABELS, LIST_SOURCE_LABELS } from "@/types";
 import { CustomFieldsEditor } from "./custom-fields-editor";
@@ -199,6 +200,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
         <div className="lg:col-span-1 flex flex-col gap-4">
           {/* Contact info */}
           <Card padding="md">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Contact</h2>
+              {(person.phoneHome || person.phoneMobile || person.email) && (
+                <ContactDropdown
+                  phoneHome={person.phoneHome}
+                  phoneMobile={person.phoneMobile}
+                  email={person.email}
+                />
+              )}
+            </div>
             <PersonEditForm
               personId={person.id}
               firstName={person.firstName}
@@ -237,6 +248,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
                   </div>
                 )}
               </div>
+            )}
+            {person.outreachLogs[0] && (
+              <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+                Last contacted:{" "}
+                <span className="text-slate-600">
+                  {OUTREACH_CHANNEL_LABELS[person.outreachLogs[0].channel as OutreachChannel] ?? person.outreachLogs[0].channel}
+                  {" · "}
+                  {formatDate(new Date(person.outreachLogs[0].date))}
+                </span>
+              </p>
             )}
             {person.importSource && (
               <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCanvassingQueue } from "@/lib/canvassing";
 import { db } from "@/lib/db";
+import { getActiveFieldMessages } from "@/lib/field-messages";
 import { CanvassScreen } from "./canvass-screen";
 
 interface PageProps {
@@ -24,9 +25,10 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign] = await Promise.all([
+  const [queue, campaign, fieldMessages] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
+    getActiveFieldMessages(activeCampaignId),
   ]);
   if (!queue) notFound();
 
@@ -66,6 +68,7 @@ export default async function CanvassPage({ params }: PageProps) {
       entries={queue.entries}
       competitors={queue.competitors}
       appointmentsByPersonId={appointmentsByPersonId}
+      fieldMessages={fieldMessages}
     />
   );
 }

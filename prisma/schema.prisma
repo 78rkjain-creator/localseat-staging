@@ -93,6 +93,11 @@ enum TaskType {
   appointment
 }
 
+enum FieldMessagePriority {
+  normal
+  urgent
+}
+
 enum EventType {
   campaign_event
   fundraiser
@@ -200,6 +205,7 @@ model Campaign {
   signs                 Sign[]
   tags                  Tag[]
   events                Event[]
+  fieldMessages         FieldMessage[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -249,6 +255,7 @@ model User {
   outOfDistrictRequests     Person[] @relation("OodRequester")
   eventsCreated             Event[]  @relation("EventCreator")
   eventAttendances          EventAttendee[]
+  fieldMessagesCreated      FieldMessage[] @relation("FieldMessageAuthor")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -1016,4 +1023,25 @@ model EventAttendee {
   @@index([userId])
   @@index([deletedAt])
   @@map("event_attendees")
+}
+
+// ─── Field Messages ───────────────────────────────────────────────────────────
+
+model FieldMessage {
+  id          String               @id @default(cuid())
+  campaignId  String
+  title       String
+  content     String               @db.VarChar(500)
+  priority    FieldMessagePriority @default(normal)
+  createdById String
+  expiresAt   DateTime?
+  createdAt   DateTime             @default(now())
+  deletedAt   DateTime?
+
+  campaign  Campaign @relation(fields: [campaignId], references: [id])
+  createdBy User     @relation("FieldMessageAuthor", fields: [createdById], references: [id])
+
+  @@index([campaignId])
+  @@index([deletedAt])
+  @@map("field_messages")
 }
