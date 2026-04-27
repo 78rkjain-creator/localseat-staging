@@ -244,6 +244,15 @@ export function CanvassScreen({
     setDone(true);
   }
 
+  function handlePrevious() {
+    if (currentIndex <= 0) return;
+    const prevIndex = currentIndex - 1;
+    setCurrentIndex(prevIndex);
+    setDraft(emptyDraft());
+    setError(null);
+    setSelectedPersonId(entries[prevIndex].person.id);
+  }
+
   async function handleNotHome() {
     if (isPending) return;
     setError(null);
@@ -884,8 +893,19 @@ export function CanvassScreen({
               Add Resident
             </button>
           </div>
-          {/* Row 2 — primary actions */}
+          {/* Row 2 — primary actions: back | skip | save and next */}
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handlePrevious}
+              disabled={isPending || currentIndex === 0}
+              aria-label="Previous person"
+              className="h-12 w-12 flex-shrink-0 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={handleSkip}
