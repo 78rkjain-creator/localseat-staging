@@ -30,6 +30,31 @@ export default async function CanvassPage({ params }: PageProps) {
   ]);
   if (!queue) notFound();
 
+  // Fetch upcoming appointments for people on this list
+  const personIds = queue.entries.map((e) => e.person.id);
+  const appointmentsByPersonId: Record<string, string> = {};
+
+  if (personIds.length > 0) {
+    const appointments = await db.task.findMany({
+      where: {
+        campaignId: activeCampaignId,
+        type: "appointment",
+        completed: false,
+        deletedAt: null,
+        personId: { in: personIds },
+        dueDate: { gte: new Date() },
+      },
+      select: { personId: true, dueDate: true },
+      orderBy: { dueDate: "asc" },
+    });
+
+    for (const appt of appointments) {
+      if (appt.personId && appt.dueDate && !appointmentsByPersonId[appt.personId]) {
+        appointmentsByPersonId[appt.personId] = appt.dueDate.toISOString();
+      }
+    }
+  }
+
   return (
     <CanvassScreen
       listId={listId}
@@ -40,6 +65,7 @@ export default async function CanvassPage({ params }: PageProps) {
       canvassScript={campaign?.canvassScript ?? null}
       entries={queue.entries}
       competitors={queue.competitors}
+      appointmentsByPersonId={appointmentsByPersonId}
     />
   );
 }

@@ -25,6 +25,10 @@ export interface SaveResponseInput {
   notes: string;
   needsFollowUp: boolean;
   competitorId?: string | null;
+  /** ISO date string "YYYY-MM-DD" — when set, creates an appointment Task. */
+  appointmentDate?: string | null;
+  /** "HH:mm" — combined with appointmentDate to set task dueDate. */
+  appointmentTime?: string | null;
   /** Client-side timestamp (ms) from the offline queue. When present and within
    *  48 hours, used as respondedAt so door-knock times reflect when the canvasser
    *  was at the door, not when the sync ran. */
@@ -242,6 +246,31 @@ export async function saveCanvassResponse(
     } catch (err) {
       // Log but don't fail — canvass response is already saved
       console.error("[saveCanvassResponse] Failed to create follow-up task:", err);
+    }
+  }
+
+  // Create appointment task when date/time are provided
+  if (input.appointmentDate && input.appointmentTime) {
+    try {
+      const [year, month, day] = input.appointmentDate.split("-").map(Number);
+      const [hour, minute] = input.appointmentTime.split(":").map(Number);
+      const apptDate = new Date(year, month - 1, day, hour, minute);
+
+      if (!isNaN(apptDate.getTime()) && apptDate > new Date()) {
+        await db.task.create({
+          data: {
+            campaignId: activeCampaignId,
+            personId: input.personId,
+            type: "appointment",
+            assignedTo: session.user.id,
+            title: `Appointment: ${person.firstName} ${person.lastName}`,
+            notes: `Scheduled during canvass${noteText ? `\n\n${noteText}` : ""}`,
+            dueDate: apptDate,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[saveCanvassResponse] Failed to create appointment task:", err);
     }
   }
 

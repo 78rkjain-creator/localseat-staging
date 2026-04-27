@@ -25,6 +25,12 @@ function formatVisitDate(iso: string | Date): string {
 }
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
+function fmtApptBadge(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-CA", { month: "short", day: "numeric" }) +
+    " " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type LocalEntry = CanvassingQueue["entries"][number] & {
@@ -45,6 +51,9 @@ interface ResponseDraft {
   notes: string;
   needsFollowUp: boolean;
   competitorId: string | null;
+  scheduleAppointment: boolean;
+  appointmentDate: string;
+  appointmentTime: string;
 }
 
 function emptyDraft(): ResponseDraft {
@@ -57,6 +66,9 @@ function emptyDraft(): ResponseDraft {
     notes: "",
     needsFollowUp: false,
     competitorId: null,
+    scheduleAppointment: false,
+    appointmentDate: "",
+    appointmentTime: "",
   };
 }
 
@@ -157,6 +169,8 @@ interface CanvassScreenProps {
   canvassScript?: string | null;
   entries: CanvassingQueue["entries"];
   competitors: { id: string; name: string }[];
+  /** personId → ISO datetime string of upcoming appointment */
+  appointmentsByPersonId?: Record<string, string>;
 }
 
 export function CanvassScreen({
@@ -168,6 +182,7 @@ export function CanvassScreen({
   canvassScript,
   entries: initialEntries,
   competitors,
+  appointmentsByPersonId = {},
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -434,6 +449,8 @@ export function CanvassScreen({
         notes: draft.notes,
         needsFollowUp: draft.needsFollowUp,
         competitorId,
+        appointmentDate: draft.scheduleAppointment ? draft.appointmentDate : null,
+        appointmentTime: draft.scheduleAppointment ? draft.appointmentTime : null,
       });
       if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
@@ -699,6 +716,8 @@ export function CanvassScreen({
           <div className="mb-1.5">
             {allResidents.map((r) => {
               const isSelected = selectedPersonId === r.id;
+              const apptIso = appointmentsByPersonId[r.id];
+              const apptLabel = apptIso ? fmtApptBadge(apptIso) : null;
               return (
                 <button
                   key={r.id}
@@ -719,6 +738,11 @@ export function CanvassScreen({
                   ].join(" ")}>
                     {r.firstName} {r.lastName}
                   </span>
+                  {apptLabel && (
+                    <span className="ml-1 inline-flex items-center h-4 px-1.5 rounded-full text-[9px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 flex-shrink-0">
+                      {apptLabel}
+                    </span>
+                  )}
                   {isSelected && <span className="text-xs text-slate-400 ml-auto">recording…</span>}
                 </button>
               );
@@ -877,7 +901,7 @@ export function CanvassScreen({
             </div>
           )}
 
-          {/* ── Details panel — notes + follow-up ── */}
+          {/* ── Details panel — notes + follow-up + appointment ── */}
           {showDetails && (
             <div className="bg-white border-t-2 border-slate-200 divide-y divide-slate-100 mt-1.5">
               <CompactToggle
@@ -885,6 +909,27 @@ export function CanvassScreen({
                 checked={draft.needsFollowUp}
                 onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
               />
+              <CompactToggle
+                label="Schedule appointment"
+                checked={draft.scheduleAppointment}
+                onChange={(v) => setDraft((d) => ({ ...d, scheduleAppointment: v }))}
+              />
+              {draft.scheduleAppointment && (
+                <div className="px-4 py-2 flex gap-2">
+                  <input
+                    type="date"
+                    value={draft.appointmentDate}
+                    onChange={(e) => setDraft((d) => ({ ...d, appointmentDate: e.target.value }))}
+                    className="flex-1 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                  <input
+                    type="time"
+                    value={draft.appointmentTime}
+                    onChange={(e) => setDraft((d) => ({ ...d, appointmentTime: e.target.value }))}
+                    className="w-28 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              )}
               <textarea
                 value={draft.notes}
                 onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}

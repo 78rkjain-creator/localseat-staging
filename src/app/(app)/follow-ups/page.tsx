@@ -11,6 +11,7 @@ import {
   getFullFollowUpQueue,
   getMyFollowUpTasks,
   getCampaignTeamMembers,
+  getUpcomingAppointments,
   type FollowUpTask,
 } from "@/lib/follow-ups";
 import { completeTask } from "./actions";
@@ -30,9 +31,10 @@ export default async function FollowUpsPage() {
   const readOnly = isReadOnly(role);
 
   if (isManager) {
-    const [queue, teamMembers] = await Promise.all([
+    const [queue, teamMembers, appointments] = await Promise.all([
       getFullFollowUpQueue(activeCampaignId),
       readOnly ? Promise.resolve([]) : getCampaignTeamMembers(activeCampaignId),
+      getUpcomingAppointments(activeCampaignId),
     ]);
 
     return (
@@ -41,6 +43,7 @@ export default async function FollowUpsPage() {
         assigned={queue.assigned}
         teamMembers={teamMembers}
         readOnly={readOnly}
+        appointments={appointments}
       />
     );
   }
@@ -57,11 +60,13 @@ function ManagerView({
   assigned,
   teamMembers,
   readOnly,
+  appointments,
 }: {
   unassigned: FollowUpTask[];
   assigned: FollowUpTask[];
   teamMembers: { id: string; firstName: string; lastName: string; role: string }[];
   readOnly: boolean;
+  appointments: FollowUpTask[];
 }) {
   const now = new Date();
 
@@ -71,8 +76,23 @@ function ManagerView({
         <h1 className="text-2xl font-bold text-slate-900">Follow-ups</h1>
         <p className="text-slate-500 mt-1 text-sm">
           {unassigned.length} unassigned · {assigned.length} assigned
+          {appointments.length > 0 ? ` · ${appointments.length} upcoming appointment${appointments.length !== 1 ? "s" : ""}` : ""}
         </p>
       </div>
+
+      {/* Upcoming appointments */}
+      {appointments.length > 0 && (
+        <section className="mb-10">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Upcoming Appointments ({appointments.length})
+          </h2>
+          <div className="flex flex-col gap-3">
+            {appointments.map((task) => (
+              <AppointmentCard key={task.id} task={task} now={now} readOnly={readOnly} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Unassigned */}
       <section className="mb-10">
@@ -155,6 +175,89 @@ function CanvasserView({ tasks }: { tasks: FollowUpTask[] }) {
             <TaskCard key={task.id} task={task} now={now} teamMembers={[]} showAssign={false} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Appointment card ───────────────────────────────────────────────────────
+
+function AppointmentCard({
+  task,
+  now,
+  readOnly,
+}: {
+  task: FollowUpTask;
+  now: Date;
+  readOnly: boolean;
+}) {
+  const address = task.person?.address;
+  const addressLine = address
+    ? `${address.streetNumber} ${address.streetName}${address.unitNumber ? ` #${address.unitNumber}` : ""}, ${address.city}`
+    : null;
+
+  const isOverdue = task.dueDate && task.dueDate < now;
+
+  return (
+    <div className={[
+      "bg-white rounded-2xl border px-5 py-4",
+      isOverdue ? "border-red-200" : "border-violet-200 bg-violet-50/30",
+    ].join(" ")}>
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-slate-900 text-base leading-tight">
+              {task.person
+                ? `${task.person.firstName} ${task.person.lastName}`
+                : task.title}
+            </p>
+            <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700 border border-violet-200">
+              Appointment
+            </span>
+          </div>
+          {addressLine && (
+            <p className="text-xs text-slate-500 mt-0.5 truncate">{addressLine}</p>
+          )}
+        </div>
+        {isOverdue && (
+          <span className="text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 rounded-full px-2 py-0.5 flex-shrink-0">
+            Overdue
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-3">
+        {task.assignee && (
+          <span>
+            With{" "}
+            <span className="font-medium text-slate-700">
+              {task.assignee.firstName} {task.assignee.lastName}
+            </span>
+          </span>
+        )}
+        {task.dueDate && (
+          <span className="font-medium text-violet-700">
+            {task.dueDate.toLocaleDateString("en-CA", { month: "short", day: "numeric" })}
+            {" at "}
+            {task.dueDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </span>
+        )}
+      </div>
+
+      {!readOnly && (
+        <form
+          action={async () => {
+            "use server";
+            await completeTask(task.id);
+          }}
+        >
+          <button
+            type="submit"
+            className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-medium transition-colors"
+          >
+            Mark complete
+          </button>
+        </form>
       )}
     </div>
   );

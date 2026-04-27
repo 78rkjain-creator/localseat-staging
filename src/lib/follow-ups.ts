@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 
 export interface FollowUpTask {
   id: string;
+  type: string;
   title: string;
   notes: string | null;
   dueDate: Date | null;
@@ -35,7 +36,7 @@ export async function getFullFollowUpQueue(campaignId: string): Promise<{
   assigned: FollowUpTask[];
 }> {
   const tasks = await db.task.findMany({
-    where: { campaignId, completed: false, deletedAt: null },
+    where: { campaignId, completed: false, deletedAt: null, type: { not: "appointment" } },
     include: {
       person: {
         select: {
@@ -152,6 +153,47 @@ export async function getFollowUpSummary(campaignId: string) {
   return { overdue, dueToday, upcomingCount: upcoming };
 }
 
+// ── Upcoming appointments (type=appointment) ───────────────────────────────
+
+export async function getUpcomingAppointments(campaignId: string): Promise<FollowUpTask[]> {
+  const tasks = await db.task.findMany({
+    where: {
+      campaignId,
+      type: "appointment",
+      completed: false,
+      deletedAt: null,
+      dueDate: { gte: new Date() },
+    },
+    include: {
+      person: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          household: {
+            select: {
+              address: {
+                select: {
+                  streetNumber: true,
+                  streetName: true,
+                  unitNumber: true,
+                  city: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      assignee: {
+        select: { id: true, firstName: true, lastName: true },
+      },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
+  return tasks.map(shapeTask);
+}
+
 // ── Team members available for assignment ──────────────────────────────────
 
 export async function getCampaignTeamMembers(campaignId: string) {
@@ -170,6 +212,7 @@ export async function getCampaignTeamMembers(campaignId: string) {
 
 function shapeTask(task: {
   id: string;
+  type: string;
   title: string;
   notes: string | null;
   dueDate: Date | null;
@@ -193,6 +236,7 @@ function shapeTask(task: {
 }): FollowUpTask {
   return {
     id: task.id,
+    type: task.type,
     title: task.title,
     notes: task.notes,
     dueDate: task.dueDate,

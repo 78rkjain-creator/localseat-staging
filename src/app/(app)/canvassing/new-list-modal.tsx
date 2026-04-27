@@ -51,17 +51,6 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
   const [isCountPending, startCount] = useTransition();
 
   const fetchMatchCount = useCallback(() => {
-    const hasFilters =
-      supportLevels.length > 0 ||
-      tagIds.length > 0 ||
-      !!canvassStatus ||
-      wardStatuses.length > 0;
-
-    if (!hasFilters) {
-      setMatchCount(null);
-      return;
-    }
-
     const filters: DynamicFilters = {
       ...(supportLevels.length ? { supportLevels } : {}),
       ...(tagIds.length ? { tagIds } : {}),
@@ -81,6 +70,15 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
     debounceRef.current = setTimeout(fetchMatchCount, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [isDynamic, fetchMatchCount]);
+
+  // Support levels are only meaningful when "Canvassed" is the selected status
+  const supportLevelsEnabled = canvassStatus === "canvassed";
+
+  function handleCanvassStatusChange(value: DynamicFilters["canvassStatus"]) {
+    setCanvassStatus(value);
+    // Clear support level selections when switching away from "Canvassed"
+    if (value !== "canvassed") setSupportLevels([]);
+  }
 
   function toggleItem<T extends string>(
     arr: T[],
@@ -198,7 +196,7 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setCanvassStatus(opt.value as DynamicFilters["canvassStatus"])}
+                      onClick={() => handleCanvassStatusChange(opt.value as DynamicFilters["canvassStatus"])}
                       className={[
                         "h-7 px-3 rounded-lg text-xs font-medium border transition-colors",
                         canvassStatus === opt.value
@@ -212,11 +210,16 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
                 </div>
               </div>
 
-              {/* Support levels */}
-              <div>
+              {/* Support levels — only active when "Canvassed" is selected */}
+              <div className={supportLevelsEnabled ? "" : "opacity-50"}>
                 <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
                   Support level
                 </p>
+                {!supportLevelsEnabled && (
+                  <p className="text-xs text-slate-400 mb-2">
+                    Select &ldquo;Canvassed&rdquo; status to filter by support level
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {SUPPORT_OPTIONS.map((opt) => {
                     const checked = supportLevels.includes(opt.value);
@@ -224,10 +227,13 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
                       <button
                         key={opt.value}
                         type="button"
+                        disabled={!supportLevelsEnabled}
                         onClick={() => toggleItem(supportLevels, setSupportLevels, opt.value)}
                         className={[
                           "h-7 px-3 rounded-lg text-xs font-medium border transition-colors",
-                          checked
+                          !supportLevelsEnabled
+                            ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                            : checked
                             ? "bg-brand-500 text-white border-brand-500"
                             : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
                         ].join(" ")}
@@ -296,19 +302,25 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
               )}
 
               {/* Live match count */}
-              <div className="pt-3 border-t border-slate-200">
-                {isCountPending ? (
-                  <p className="text-xs text-slate-400">Counting matches…</p>
-                ) : matchCount === null ? (
-                  <p className="text-xs text-slate-400">Select filters to see matching count</p>
-                ) : matchCount === 0 ? (
-                  <p className="text-xs font-medium text-amber-600">0 people match — try adjusting filters</p>
-                ) : (
-                  <p className="text-xs font-medium text-emerald-700">
-                    {matchCount.toLocaleString()} {matchCount === 1 ? "person matches" : "people match"} these filters
-                  </p>
-                )}
-              </div>
+              {(() => {
+                const hasFilters = !!(canvassStatus || supportLevels.length || tagIds.length || wardStatuses.length);
+                return (
+                  <div className="pt-3 border-t border-slate-200">
+                    {isCountPending ? (
+                      <p className="text-xs text-slate-400">Counting…</p>
+                    ) : matchCount === null ? (
+                      <p className="text-xs text-slate-400">Loading count…</p>
+                    ) : matchCount === 0 && hasFilters ? (
+                      <p className="text-xs font-medium text-amber-600">0 people match — try adjusting filters</p>
+                    ) : (
+                      <p className="text-xs font-medium text-emerald-700">
+                        {matchCount.toLocaleString()} {matchCount === 1 ? "person" : "people"}
+                        {hasFilters ? " match these filters" : " eligible (no filters = all)"}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

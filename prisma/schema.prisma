@@ -90,6 +90,31 @@ enum SignStatus {
 enum TaskType {
   general
   volunteer_follow_up
+  appointment
+}
+
+enum EventType {
+  campaign_event
+  fundraiser
+  town_hall
+  debate
+  canvass_kickoff
+  volunteer_training
+  other
+}
+
+enum EventStatus {
+  upcoming
+  in_progress
+  completed
+  cancelled
+}
+
+enum EventAttendeeStatus {
+  invited
+  confirmed
+  attended
+  no_show
 }
 
 enum SignLocationType {
@@ -174,6 +199,7 @@ model Campaign {
   personListMemberships PersonListMembership[]
   signs                 Sign[]
   tags                  Tag[]
+  events                Event[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -221,6 +247,8 @@ model User {
   signsAdded                Sign[]   @relation("SignsAdded")
   signsInstalled            Sign[]   @relation("SignsInstalled")
   outOfDistrictRequests     Person[] @relation("OodRequester")
+  eventsCreated             Event[]  @relation("EventCreator")
+  eventAttendances          EventAttendee[]
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -446,6 +474,7 @@ model CanvassList {
   campaign    Campaign            @relation(fields: [campaignId], references: [id])
   assignments CanvassAssignment[]
   entries     CanvassListEntry[]
+  events      Event[]
 
   @@map("canvass_lists")
 }
@@ -937,4 +966,54 @@ model PersonListMembership {
   @@index([listImportId])
   @@index([campaignId])
   @@map("person_list_memberships")
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+model Event {
+  id            String      @id @default(cuid())
+  campaignId    String
+  name          String
+  description   String?
+  date          DateTime    // date only — time portions on startTime/endTime
+  startTime     String      // "09:00"
+  endTime       String?     // "12:00"
+  location      String?
+  eventType     EventType   @default(other)
+  status        EventStatus @default(upcoming)
+  canvassListId String?
+  createdById   String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+
+  campaign     Campaign      @relation(fields: [campaignId], references: [id])
+  createdBy    User          @relation("EventCreator", fields: [createdById], references: [id])
+  canvassList  CanvassList?  @relation(fields: [canvassListId], references: [id])
+  attendees    EventAttendee[]
+
+  @@index([campaignId])
+  @@index([date])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model EventAttendee {
+  id          String              @id @default(cuid())
+  eventId     String
+  userId      String
+  status      EventAttendeeStatus @default(confirmed)
+  checkedInAt DateTime?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([deletedAt])
+  @@map("event_attendees")
 }
