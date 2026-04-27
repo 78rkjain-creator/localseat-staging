@@ -29,15 +29,11 @@ export default async function FollowUpsPage() {
   const isManager = canManageFollowUps(role);
   const readOnly = isReadOnly(role);
 
-  console.log("[follow-ups] userId:", userId, "| activeCampaignId:", activeCampaignId, "| activeRole:", activeRole, "| isManager:", isManager);
-
   if (isManager) {
     const [queue, teamMembers] = await Promise.all([
       getFullFollowUpQueue(activeCampaignId),
       readOnly ? Promise.resolve([]) : getCampaignTeamMembers(activeCampaignId),
     ]);
-
-    console.log("[follow-ups] unassigned:", queue.unassigned.length, "| assigned:", queue.assigned.length);
 
     return (
       <ManagerView

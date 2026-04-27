@@ -1,9 +1,7 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isSuperUser } from "@/lib/permissions";
+import { requireSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { formatAuditDescription } from "@/lib/audit-descriptions";
 import { Role } from "@prisma/client";
@@ -39,17 +37,6 @@ function endOfDay(dateStr: string): Date {
   const d = new Date(dateStr);
   d.setUTCHours(23, 59, 59, 999);
   return d;
-}
-
-// ── Auth guard ────────────────────────────────────────────────────────────────
-
-async function requireSuperUser() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: "Not authenticated." } as const;
-  if (!isSuperUser(session.user.platformRole)) {
-    return { error: "Super user access required." } as const;
-  }
-  return { session } as const;
 }
 
 // ── Voters export ─────────────────────────────────────────────────────────────

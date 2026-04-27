@@ -26,6 +26,7 @@ export async function GET() {
   });
   if (!membership) return new Response("Forbidden", { status: 403 });
 
+  try {
   const logs = await getAllOutreachLogsForExport(activeCampaignId);
 
   const headers = [
@@ -78,6 +79,9 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="outreach-history.csv"`,
     },
   });
+  } catch {
+    return Response.json({ error: "Export failed." }, { status: 500 });
+  }
 }
 
 function csvRow(fields: string[]): string {

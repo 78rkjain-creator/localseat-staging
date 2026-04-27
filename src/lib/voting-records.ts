@@ -20,7 +20,7 @@ export async function getVotingRecordsForPerson(
   personId: string,
   campaignId: string
 ): Promise<VotingRecord[]> {
-  return (db as any).votingRecord.findMany({
+  return db.votingRecord.findMany({
     where: { personId, campaignId, deletedAt: null },
     orderBy: [{ electionYear: "desc" }, { electionType: "asc" }],
   });
@@ -38,7 +38,7 @@ export async function addVotingRecord(
     notes?: string;
   }
 ): Promise<VotingRecord> {
-  return (db as any).votingRecord.create({
+  return db.votingRecord.create({
     data: { campaignId, personId, ...data },
   });
 }
@@ -55,7 +55,7 @@ export async function updateVotingRecord(
     notes: string | null;
   }>
 ): Promise<VotingRecord> {
-  return (db as any).votingRecord.update({
+  return db.votingRecord.update({
     where: { id },
     data,
   });
@@ -66,11 +66,11 @@ export async function deleteVotingRecord(
   campaignId: string
 ): Promise<void> {
   // Verify it belongs to this campaign before soft-deleting
-  const record = await (db as any).votingRecord.findFirst({
+  const record = await db.votingRecord.findFirst({
     where: { id, campaignId, deletedAt: null },
   });
   if (!record) return;
-  await (db as any).votingRecord.update({
+  await db.votingRecord.update({
     where: { id },
     data: { deletedAt: new Date() },
   });
@@ -95,7 +95,7 @@ export async function importVotingRecords(
 
   for (const row of rows) {
     // Skip if a record already exists for this person + year + type
-    const existing = await (db as any).votingRecord.findFirst({
+    const existing = await db.votingRecord.findFirst({
       where: {
         campaignId,
         personId: row.personId,
@@ -108,7 +108,7 @@ export async function importVotingRecords(
       skipped++;
       continue;
     }
-    await (db as any).votingRecord.create({
+    await db.votingRecord.create({
       data: { campaignId, ...row },
     });
     imported++;

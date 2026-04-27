@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { getFieldOrganizerDashboardData } from "@/lib/dashboard";
 import { getRecentActivity } from "@/lib/activity";
-import { RecentActivityFeed } from "@/components/dashboard/RecentActivityFeed";
+import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
 import { ROLE_LABELS } from "@/types";
 
 interface Props {

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { WardMapClient } from "./WardMapClient";
+import { WardMapClient } from "./ward-map-client";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 

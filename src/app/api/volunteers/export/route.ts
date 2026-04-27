@@ -24,7 +24,7 @@ export async function GET() {
   });
   if (!membership) return new Response("Forbidden", { status: 403 });
 
-  // Get all people whose most recent canvass response includes volunteerInterest: true
+  try {
   const responses = await db.canvassResponse.findMany({
     where: {
       person: { campaignId: activeCampaignId, deletedAt: null },
@@ -107,6 +107,9 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="volunteers.csv"`,
     },
   });
+  } catch {
+    return Response.json({ error: "Export failed." }, { status: 500 });
+  }
 }
 
 function csvRow(fields: string[]): string {

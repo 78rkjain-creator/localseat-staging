@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { WardReviewClient } from "./WardReviewClient";
+import { WardReviewClient } from "./ward-review-client";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Ward boundary review" };

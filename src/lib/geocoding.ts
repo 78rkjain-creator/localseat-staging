@@ -16,7 +16,6 @@ export async function geocodeAddress(
     const address = await db.address.findUnique({ where: { id: addressId } });
     if (!address) return null;
 
-    // Already geocoded — return cached values
     if (address.lat !== null && address.lng !== null) {
       return { lat: address.lat, lng: address.lng };
     }
@@ -116,7 +115,6 @@ export async function geocodeAddressesForCanvassList(
       },
     });
 
-    // Collect unique addressIds that have not yet been geocoded
     const seenIds = new Set<string>();
     const addressIds: string[] = [];
 
@@ -127,7 +125,6 @@ export async function geocodeAddressesForCanvassList(
       addressIds.push(addressId);
     }
 
-    // Filter to only addresses missing coordinates
     const ungeocoded = await db.address.findMany({
       where: { id: { in: addressIds }, lat: null },
       select: { id: true },
@@ -141,8 +138,9 @@ export async function geocodeAddressesForCanvassList(
 }
 
 // ── geocodeInBatches ───────────────────────────────────────────────────────
-// Splits addressIds into chunks of BATCH_SIZE, fires each chunk concurrently
-// with Promise.all, and waits BETWEEN_BATCHES_MS between chunks.
+// Splits addressIds into chunks of BATCH_SIZE.
+// Per chunk: one findMany to load all rows, concurrent Mapbox API calls for
+// the ungeocoded subset, then one $transaction to write all coordinates.
 
 async function geocodeInBatches(
   addressIds: string[],
@@ -153,6 +151,12 @@ async function geocodeInBatches(
 
   if (addressIds.length === 0) return { geocoded, failed };
 
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) {
+    console.warn("[geocoding] NEXT_PUBLIC_MAPBOX_TOKEN is not set");
+    return { geocoded: 0, failed: addressIds.length };
+  }
+
   const totalBatches = Math.ceil(addressIds.length / BATCH_SIZE);
   console.log(
     `[geocoding] Starting batch geocoding — ${addressIds.length} addresses, ${totalBatches} batches of ${BATCH_SIZE} (${label})`
@@ -160,19 +164,86 @@ async function geocodeInBatches(
 
   try {
     for (let b = 0; b < totalBatches; b++) {
-      const chunk = addressIds.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+      const chunkIds = addressIds.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
 
-      const results = await Promise.all(chunk.map((id) => geocodeAddress(id)));
+      // One query for the whole chunk
+      const addresses = await db.address.findMany({
+        where: { id: { in: chunkIds } },
+        select: {
+          id: true,
+          lat: true,
+          lng: true,
+          streetNumber: true,
+          streetName: true,
+          city: true,
+          province: true,
+          postalCode: true,
+        },
+      });
 
-      let batchGeocoded = 0;
-      let batchFailed = 0;
-      for (const result of results) {
-        if (result) { geocoded++; batchGeocoded++; }
-        else         { failed++;   batchFailed++;   }
+      const alreadyCached = addresses.filter((a) => a.lat !== null && a.lng !== null).length;
+      geocoded += alreadyCached;
+
+      const toGeocode = addresses.filter((a) => a.lat === null || a.lng === null);
+
+      // Concurrent Mapbox calls for ungeocoded addresses
+      const apiResults = await Promise.all(
+        toGeocode.map(async (address) => {
+          try {
+            const query = [
+              address.streetNumber,
+              address.streetName,
+              address.city,
+              address.province,
+              address.postalCode,
+              "Canada",
+            ].join(", ");
+
+            const url =
+              `${MAPBOX_BASE}/${encodeURIComponent(query)}.json` +
+              `?access_token=${token}&country=ca&limit=1`;
+
+            const res = await fetch(url);
+            if (!res.ok) {
+              console.warn(`[geocoding] Mapbox returned ${res.status} for address ${address.id}`);
+              return { id: address.id, coords: null as null };
+            }
+
+            const data = (await res.json()) as {
+              features?: { center: [number, number] }[];
+            };
+
+            const center = data.features?.[0]?.center;
+            if (!center) return { id: address.id, coords: null as null };
+
+            const [lng, lat] = center;
+            return { id: address.id, coords: { lat, lng } };
+          } catch (err) {
+            console.error(`[geocoding] Error geocoding address ${address.id}:`, err);
+            return { id: address.id, coords: null as null };
+          }
+        })
+      );
+
+      const successful = apiResults.filter(
+        (r): r is { id: string; coords: { lat: number; lng: number } } => r.coords !== null
+      );
+      const batchFailed = apiResults.length - successful.length;
+
+      // One transaction for all coordinate writes in this chunk
+      if (successful.length > 0) {
+        await db.$transaction(
+          successful.map(({ id, coords }) =>
+            db.address.update({ where: { id }, data: { lat: coords.lat, lng: coords.lng } })
+          )
+        );
       }
 
+      geocoded += successful.length;
+      failed += batchFailed;
+
       console.log(
-        `[geocoding] Batch ${b + 1}/${totalBatches} complete — ${batchGeocoded} geocoded, ${batchFailed} failed`
+        `[geocoding] Batch ${b + 1}/${totalBatches} complete — ${successful.length} geocoded, ${alreadyCached} cached, ${batchFailed} failed`
       );
 
       if (b < totalBatches - 1) {

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ScriptFormClient } from "./ScriptFormClient";
+import { ScriptFormClient } from "./script-form-client";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Canvassing Script" };

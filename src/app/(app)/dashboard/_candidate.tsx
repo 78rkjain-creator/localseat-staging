@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { getCandidateDashboardData, getNeedsYouQueue } from "@/lib/dashboard";
 import { getRecentActivity } from "@/lib/activity";
-import { RecentActivityFeed } from "@/components/dashboard/RecentActivityFeed";
+import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
 import type { DonorStatus, OutreachChannel, Role } from "@/types";
 import { ROLE_LABELS, OUTREACH_CHANNEL_LABELS, DONOR_STATUS_LABELS } from "@/types";
 

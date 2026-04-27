@@ -26,6 +26,7 @@ export async function GET() {
   });
   if (!membership) return new Response("Forbidden", { status: 403 });
 
+  try {
   const showAmounts = canViewDonorAmounts(activeRole as Role);
   const donors = await getAllDonorsForExport(activeCampaignId);
 
@@ -82,6 +83,9 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="donors.csv"`,
     },
   });
+  } catch {
+    return Response.json({ error: "Export failed." }, { status: 500 });
+  }
 }
 
 function csvRow(fields: string[]): string {

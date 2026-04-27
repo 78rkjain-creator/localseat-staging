@@ -6,6 +6,7 @@ import type { Role } from "@/types";
 import { ROLE_LABELS } from "@/types";
 import { changeUserRole, transferCandidateRole } from "./role-actions";
 import { TeamMemberClassifyModal } from "./classify-modal";
+import { getTeamMembers, getRemovedMembers, addTeamMember, removeTeamMember, restoreTeamMember } from "./actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,18 +127,13 @@ export default function TeamPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const [activeRes, removedRes] = await Promise.all([
-        fetch("/api/team"),
-        fetch("/api/team/removed"),
+      const [activeResult, removedResult] = await Promise.all([
+        getTeamMembers(),
+        getRemovedMembers(),
       ]);
-      if (!activeRes.ok) throw new Error(await activeRes.text());
-      const data: TeamMember[] = await activeRes.json();
-      setMembers(sortMembers(data));
-
-      if (removedRes.ok) {
-        const removedData: RemovedMember[] = await removedRes.json();
-        setRemovedMembers(removedData);
-      }
+      if (activeResult.error) throw new Error(activeResult.error);
+      setMembers(sortMembers(activeResult.members ?? []));
+      if (!removedResult.error) setRemovedMembers(removedResult.members ?? []);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Failed to load team");
     } finally {
@@ -303,36 +299,27 @@ function AddMemberForm({
     const fd = new FormData(e.currentTarget);
     const firstNameVal = (fd.get("firstName") as string).trim();
     const lastNameVal = (fd.get("lastName") as string).trim();
-    const phoneHome = (fd.get("phoneHome") as string).trim();
-    const phoneMobile = (fd.get("phoneMobile") as string).trim();
     try {
-      const res = await fetch("/api/team", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: firstNameVal,
-          lastName: lastNameVal,
-          email: fd.get("email"),
-          phoneHome: phoneHome || null,
-          phoneMobile: phoneMobile || null,
-          role: fd.get("role"),
-          skipVerification: fd.get("skipVerification") === "on",
-        }),
+      const result = await addTeamMember({
+        firstName: firstNameVal,
+        lastName: lastNameVal,
+        email: fd.get("email") as string,
+        phoneHome: (fd.get("phoneHome") as string).trim() || null,
+        phoneMobile: (fd.get("phoneMobile") as string).trim() || null,
+        role: fd.get("role") as string,
+        skipVerification: fd.get("skipVerification") === "on",
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        setError(body.error ?? "Failed to add member");
+      if (result.error) {
+        setError(result.error);
         return;
       }
-      const body = await res.json();
-      setSaving(false);
-      if (body.personId) {
-        setClassifyTarget({ personId: body.personId, firstName: firstNameVal, lastName: lastNameVal });
+      if (result.personId) {
+        setClassifyTarget({ personId: result.personId, firstName: firstNameVal, lastName: lastNameVal });
       } else {
         onSuccess();
       }
     } catch {
-      setError("Network error — please try again");
+      setError("Failed to add member — please try again");
     } finally {
       setSaving(false);
     }
@@ -533,16 +520,15 @@ function MemberRow({
     setRemoving(true);
     setRemoveError(null);
     try {
-      const res = await fetch(`/api/team/${member.user.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        setRemoveError(body.error ?? "Failed to remove member");
+      const result = await removeTeamMember(member.user.id);
+      if (result?.error) {
+        setRemoveError(result.error);
         setConfirmRemove(false);
         return;
       }
       onChanged();
     } catch {
-      setRemoveError("Network error");
+      setRemoveError("Failed to remove member");
     } finally {
       setRemoving(false);
       setConfirmRemove(false);
@@ -781,15 +767,14 @@ function RemovedMemberRow({
     setRestoring(true);
     setError(null);
     try {
-      const res = await fetch(`/api/team/${member.user.id}/restore`, { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        setError(body.error ?? "Failed to restore member");
+      const result = await restoreTeamMember(member.user.id);
+      if (result?.error) {
+        setError(result.error);
         return;
       }
       onRestored();
     } catch {
-      setError("Network error — please try again");
+      setError("Failed to restore member — please try again");
     } finally {
       setRestoring(false);
     }

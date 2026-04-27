@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ContactSubmissionsClient } from "./ContactSubmissionsClient";
+import { ContactSubmissionsClient } from "./contact-submissions-client";
 
 export default async function ContactSubmissionsPage() {
   const session = await getServerSession(authOptions);

@@ -34,7 +34,6 @@ export async function getFullFollowUpQueue(campaignId: string): Promise<{
   unassigned: FollowUpTask[];
   assigned: FollowUpTask[];
 }> {
-  console.log("[getFullFollowUpQueue] querying campaignId:", campaignId);
   const tasks = await db.task.findMany({
     where: { campaignId, completed: false, deletedAt: null },
     include: {
@@ -64,7 +63,6 @@ export async function getFullFollowUpQueue(campaignId: string): Promise<{
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
   });
 
-  console.log("[getFullFollowUpQueue] raw task count:", tasks.length, "| ids:", tasks.map(t => t.id));
   const shaped = tasks.map(shapeTask);
   return {
     unassigned: shaped.filter((t) => !t.assignee),

@@ -11,7 +11,7 @@ import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { normalizeFullAddress } from "@/lib/address-normalize";
-import { WardStatus, ListSource } from "@prisma/client";
+import { Prisma, WardStatus, ListSource } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
@@ -70,7 +70,19 @@ export interface VoterImportResult {
   flaggedRows?: FlaggedRow[];
 }
 
-// ── importVoterRows ───────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────────────
+
+function sanitizeCustomFields(
+  incoming: Record<string, string> | undefined,
+  validIds: Set<string>
+): Record<string, string> | null {
+  if (!incoming || validIds.size === 0) return null;
+  const safe: Record<string, string> = {};
+  for (const [k, v] of Object.entries(incoming)) {
+    if (validIds.has(k) && v.trim()) safe[k] = v.trim();
+  }
+  return Object.keys(safe).length > 0 ? safe : null;
+}
 
 // ── checkDuplicatesForImport ──────────────────────────────────────────────
 // Fetches all existing persons for the campaign once, builds a lookup map,
@@ -194,7 +206,6 @@ export async function importVoterRows(
       ? (campaign.wardBoundary as unknown as Polygon | MultiPolygon)
       : null;
 
-  // Build set of valid custom field ids to validate incoming values
   type CampaignCustomField = { id: string; label: string };
   const validCustomFieldIds = new Set<string>(
     ((campaign?.customFields as CampaignCustomField[] | null) ?? []).map((f) => f.id)
@@ -223,357 +234,384 @@ export async function importVoterRows(
       });
       listImportId = listImport.id;
 
+      // ── Pre-fetch all existing campaign data ────────────────────────────
+
+      const [existingPeople, existingAddresses, existingHouseholds] = await Promise.all([
+        tx.person.findMany({
+          where: { campaignId, deletedAt: null },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            household: {
+              select: {
+                id: true,
+                addressId: true,
+                address: {
+                  select: {
+                    id: true,
+                    streetNumber: true,
+                    streetName: true,
+                    unitNumber: true,
+                    city: true,
+                    postalCode: true,
+                    lat: true,
+                    lng: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        tx.address.findMany({
+          where: { campaignId, deletedAt: null },
+          select: {
+            id: true,
+            streetNumber: true,
+            streetName: true,
+            unitNumber: true,
+            city: true,
+            postalCode: true,
+            lat: true,
+            lng: true,
+          },
+        }),
+        tx.household.findMany({
+          where: { campaignId, deletedAt: null },
+          select: { id: true, addressId: true },
+        }),
+      ]);
+
+      // ── Build lookup maps ───────────────────────────────────────────────
+
+      // address key: streetNumber|streetName|unit|postalCode (lowercase)
+      const makeAddrKey = (sn: string, st: string, unit: string | null, pc: string) =>
+        `${sn.toLowerCase()}|${st.toLowerCase()}|${(unit ?? "").toLowerCase()}|${pc.toLowerCase().replace(/\s/g, "")}`;
+
+      // regular-list person key: firstName|lastName|streetNumber|streetName|unit|postalCode
+      const makePersonKey = (fn: string, ln: string, sn: string, st: string, unit: string | null, pc: string) =>
+        `${fn.toLowerCase()}|${ln.toLowerCase()}|${sn.toLowerCase()}|${st.toLowerCase()}|${(unit ?? "").toLowerCase()}|${pc.toLowerCase().replace(/\s/g, "")}`;
+
+      // address map: addrKey → { id, lat, lng }
+      const addressMap = new Map<string, { id: string; lat: number | null; lng: number | null }>();
+      for (const a of existingAddresses) {
+        addressMap.set(makeAddrKey(a.streetNumber, a.streetName, a.unitNumber, a.postalCode), {
+          id: a.id,
+          lat: a.lat,
+          lng: a.lng,
+        });
+      }
+
+      // household map: addressId → householdId
+      const householdMap = new Map<string, string>();
+      for (const h of existingHouseholds) {
+        householdMap.set(h.addressId, h.id);
+      }
+
+      type OvlStub = {
+        id: string;
+        firstNameLower: string;
+        lastNameLower: string;
+        normAddr: string | null;
+        unitLower: string;
+      };
+
+      // Regular-list person map: personKey → personId
+      const personByNameAddr = new Map<string, string>();
+
+      // OVL lookup maps
+      const ovlByNormName   = new Map<string, OvlStub[]>(); // "normFirst|normLast" → stubs
+      const ovlByStreetCity = new Map<string, OvlStub[]>(); // "streetNumber|city" → stubs
+
+      for (const p of existingPeople) {
+        const addr = p.household?.address;
+        const fnLower = p.firstName.toLowerCase();
+        const lnLower = p.lastName.toLowerCase();
+
+        // Regular-list lookup
+        if (addr) {
+          personByNameAddr.set(
+            makePersonKey(p.firstName, p.lastName, addr.streetNumber, addr.streetName, addr.unitNumber, addr.postalCode),
+            p.id
+          );
+        }
+
+        // OVL stubs
+        const normAddr = addr
+          ? normalizeFullAddress(`${addr.streetNumber} ${addr.streetName}`, addr.city)
+          : null;
+        const stub: OvlStub = {
+          id: p.id,
+          firstNameLower: fnLower,
+          lastNameLower: lnLower,
+          normAddr,
+          unitLower: (addr?.unitNumber ?? "").toLowerCase().trim(),
+        };
+
+        const nameKey = `${fnLower}|${lnLower}`;
+        const nameList = ovlByNormName.get(nameKey);
+        if (nameList) nameList.push(stub);
+        else ovlByNormName.set(nameKey, [stub]);
+
+        if (addr) {
+          const scKey = `${addr.streetNumber.toLowerCase()}|${addr.city.toLowerCase()}`;
+          const scList = ovlByStreetCity.get(scKey);
+          if (scList) scList.push(stub);
+          else ovlByStreetCity.set(scKey, [stub]);
+        }
+      }
+
+      // ── Write accumulators ──────────────────────────────────────────────
+
+      type AddrRow = {
+        id: string; campaignId: string;
+        streetNumber: string; streetName: string; unitNumber: string | null;
+        city: string; province: string; postalCode: string;
+      };
+      type HouseholdRow = { id: string; campaignId: string; addressId: string };
+
+      const newAddressRows:    AddrRow[]                                  = [];
+      const newHouseholdRows:  HouseholdRow[]                             = [];
+      const newPersonRows:     Prisma.PersonCreateManyInput[]             = [];
+      const newMembershipRows: Prisma.PersonListMembershipCreateManyInput[] = [];
+      const personUpdateOps:   Array<{ id: string; isConfirmedVoter: true; pollNumber?: string }> = [];
+
+      // ── Address / household helpers ─────────────────────────────────────
+
+      function getOrStageAddress(
+        sn: string, st: string, unit: string | null,
+        city: string, province: string, pc: string
+      ): { id: string; lat: number | null; lng: number | null } {
+        const key = makeAddrKey(sn, st, unit, pc);
+        const hit = addressMap.get(key);
+        if (hit) return hit;
+        const id = crypto.randomUUID();
+        newAddressRows.push({ id, campaignId, streetNumber: sn, streetName: st, unitNumber: unit, city, province, postalCode: pc });
+        newAddressIds.push(id);
+        const entry = { id, lat: null as null, lng: null as null };
+        addressMap.set(key, entry);
+        return entry;
+      }
+
+      function getOrStageHousehold(addressId: string): string {
+        const hit = householdMap.get(addressId);
+        if (hit) return hit;
+        const id = crypto.randomUUID();
+        newHouseholdRows.push({ id, campaignId, addressId });
+        householdMap.set(addressId, id);
+        return id;
+      }
+
+      // ── Main loop ───────────────────────────────────────────────────────
+
       for (const row of rows) {
-        const firstName   = row.firstName.trim();
-        const lastName    = row.lastName.trim();
+        const firstName    = row.firstName.trim();
+        const lastName     = row.lastName.trim();
         const streetNumber = row.streetNumber.trim();
-        const streetName  = row.streetName.trim();
-        const city        = row.city.trim();
-        const province    = row.province.trim();
-        const postalCode  = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
-        const unitNumber  = row.unitNumber?.trim() || null;
-        const phoneHome   = sanitizePhone(row.phoneHome);
-        const phoneMobile = sanitizePhone(row.phoneMobile);
-        const email       = sanitizeEmail(row.email);
-        const birthDate   = sanitizeBirthDate(row.birthDate);
-        const pollNumber  = row.pollNumber?.trim() || null;
+        const streetName   = row.streetName.trim();
+        const city         = row.city.trim();
+        const province     = row.province.trim();
+        const postalCode   = row.postalCode.trim().replace(/\s/g, "").toUpperCase();
+        const unitNumber   = row.unitNumber?.trim() || null;
+        const phoneHome    = sanitizePhone(row.phoneHome);
+        const phoneMobile  = sanitizePhone(row.phoneMobile);
+        const email        = sanitizeEmail(row.email);
+        const birthDate    = sanitizeBirthDate(row.birthDate);
+        const pollNumber   = row.pollNumber?.trim() || null;
 
         if (!firstName || !lastName || !streetNumber || !streetName || !city || !province || !postalCode) {
           skipped++;
           continue;
         }
 
-        // ── Official Voters List matching ─────────────────────────────────────
-        if (listImportType === "official_voters_list") {
-          // 1. Normalize name: join firstName+lastName, take first and last token
-          //    so "JOHN MICHAEL SMITH" → normFirst="john", normLast="smith"
-          const nameTokens = `${firstName} ${lastName}`.trim().split(/\s+/).filter(Boolean);
-          const normFirst = (nameTokens[0] ?? firstName).toLowerCase();
-          const normLast  = (nameTokens.length > 1 ? nameTokens[nameTokens.length - 1] : lastName).toLowerCase();
+        // ── Official Voters List matching ─────────────────────────────────
 
-          // 2. Normalize incoming address (strips units, expands abbreviations)
+        if (listImportType === "official_voters_list") {
+          // Normalize name: take first and last token so "JOHN MICHAEL SMITH" → "john" / "smith"
+          const nameTokens = `${firstName} ${lastName}`.trim().split(/\s+/).filter(Boolean);
+          const normFirst  = (nameTokens[0] ?? firstName).toLowerCase();
+          const normLast   = (nameTokens.length > 1 ? nameTokens[nameTokens.length - 1] : lastName).toLowerCase();
+
           const incomingAddrKey = normalizeFullAddress(`${streetNumber} ${streetName}`, city);
           const incomingUnit    = (unitNumber ?? "").toLowerCase().trim();
 
-          // 3a. Query candidates by name
-          const nameMatchRows = await tx.person.findMany({
-            where: {
-              campaignId,
-              deletedAt: null,
-              firstName: { equals: normFirst, mode: "insensitive" },
-              lastName:  { equals: normLast,  mode: "insensitive" },
-            },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              household: { select: { address: { select: { streetNumber: true, streetName: true, unitNumber: true, city: true } } } },
-            },
-          });
-
-          // 3b. Query candidates by street number + city as a pre-filter for address-only matches
-          const addrCandidateRows = await tx.person.findMany({
-            where: {
-              campaignId,
-              deletedAt: null,
-              household: {
-                address: {
-                  streetNumber: { equals: streetNumber, mode: "insensitive" },
-                  city:         { equals: city,         mode: "insensitive" },
-                },
-              },
-            },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              household: { select: { address: { select: { streetNumber: true, streetName: true, unitNumber: true, city: true } } } },
-            },
-          });
-
-          // 4. Classify — merge both result sets, deduplicate by id
-          const seen = new Set<string>();
-          const allCandidates = [...nameMatchRows, ...addrCandidateRows].filter((p) => {
-            if (seen.has(p.id)) return false;
-            seen.add(p.id);
-            return true;
-          });
+          // Pull candidates from in-memory indexes (replaces two per-row findMany calls)
+          const nameKey = `${normFirst}|${normLast}`;
+          const scKey   = `${streetNumber.toLowerCase()}|${city.toLowerCase()}`;
+          const seen    = new Set<string>();
+          const allCandidates: OvlStub[] = [];
+          for (const s of [...(ovlByNormName.get(nameKey) ?? []), ...(ovlByStreetCity.get(scKey) ?? [])]) {
+            if (!seen.has(s.id)) { seen.add(s.id); allCandidates.push(s); }
+          }
 
           type MatchKind = "full" | "unit_mismatch" | "name_only" | "addr_only";
+          const priority: Record<MatchKind, number> = { full: 0, unit_mismatch: 1, name_only: 2, addr_only: 2 };
           let bestKind: MatchKind | null = null;
           let bestCandidateId: string | null = null;
 
-          for (const candidate of allCandidates) {
-            const addr = candidate.household?.address;
-            const candNormAddr = addr
-              ? normalizeFullAddress(`${addr.streetNumber} ${addr.streetName}`, addr.city)
-              : null;
-            const candUnit      = (addr?.unitNumber ?? "").toLowerCase().trim();
-            const candFirstNorm = candidate.firstName.toLowerCase();
-            const candLastNorm  = candidate.lastName.toLowerCase();
-
-            const nameMatch = candFirstNorm === normFirst && candLastNorm === normLast;
-            const addrMatch = candNormAddr !== null && candNormAddr === incomingAddrKey;
-            const unitMatch = candUnit === incomingUnit;
+          for (const stub of allCandidates) {
+            const nameMatch = stub.firstNameLower === normFirst && stub.lastNameLower === normLast;
+            const addrMatch = stub.normAddr !== null && stub.normAddr === incomingAddrKey;
+            const unitMatch = stub.unitLower === incomingUnit;
 
             let kind: MatchKind | null = null;
-            if (nameMatch && addrMatch && unitMatch)  kind = "full";
-            else if (nameMatch && addrMatch)          kind = "unit_mismatch";
-            else if (nameMatch)                       kind = "name_only";
-            else if (addrMatch)                       kind = "addr_only";
+            if      (nameMatch && addrMatch && unitMatch) kind = "full";
+            else if (nameMatch && addrMatch)              kind = "unit_mismatch";
+            else if (nameMatch)                           kind = "name_only";
+            else if (addrMatch)                           kind = "addr_only";
 
-            // Prefer more specific matches (full > unit_mismatch > name_only / addr_only)
-            const priority: Record<MatchKind, number> = { full: 0, unit_mismatch: 1, name_only: 2, addr_only: 2 };
             if (kind && (bestKind === null || priority[kind] < priority[bestKind])) {
               bestKind = kind;
-              bestCandidateId = candidate.id;
+              bestCandidateId = stub.id;
             }
-
-            if (bestKind === "full") break; // can't do better
+            if (bestKind === "full") break;
           }
 
           if (bestKind === "full" && bestCandidateId) {
-            // Full match — confirm voter, no review needed
             matched++;
-            await tx.person.update({ where: { id: bestCandidateId }, data: { isConfirmedVoter: true, ...(pollNumber ? { pollNumber } : {}) } });
-            await tx.personListMembership.create({
-              data: { personId: bestCandidateId, listImportId, campaignId, status: "matched" },
+            personUpdateOps.push({
+              id: bestCandidateId,
+              isConfirmedVoter: true,
+              ...(pollNumber ? { pollNumber } : {}),
             });
+            newMembershipRows.push({ personId: bestCandidateId, listImportId, campaignId, status: "matched" });
 
           } else if (bestKind !== null && bestCandidateId) {
-            // Partial match — flag for review with reason
             reviewCount++;
             const reviewReason =
               bestKind === "unit_mismatch" ? "Same address, different unit" :
               bestKind === "name_only"     ? "Name matches, address differs" :
                                              "Address matches, name differs";
-            await tx.personListMembership.create({
-              data: { personId: bestCandidateId, listImportId, campaignId, status: "pending_review", reviewReason },
-            });
+            newMembershipRows.push({ personId: bestCandidateId, listImportId, campaignId, status: "pending_review", reviewReason });
 
           } else {
-            // No match anywhere — create a new confirmed-voter record
-            const existingOvlAddress = await tx.address.findFirst({
-              where: {
-                campaignId,
-                deletedAt: null,
-                streetNumber: { equals: streetNumber, mode: "insensitive" },
-                streetName:   { equals: streetName,   mode: "insensitive" },
-                unitNumber:   unitNumber ? { equals: unitNumber, mode: "insensitive" } : null,
-                postalCode:   { equals: postalCode,   mode: "insensitive" },
-              },
-              select: { id: true },
+            // No match — create a new confirmed-voter record
+            const ovlAddr      = getOrStageAddress(streetNumber, streetName, unitNumber, city, province, postalCode);
+            const householdId  = getOrStageHousehold(ovlAddr.id);
+            const personId     = crypto.randomUUID();
+            const cfv          = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
+
+            newPersonRows.push({
+              id: personId,
+              campaignId,
+              householdId,
+              firstName,
+              lastName,
+              phoneHome:        phoneHome   ?? undefined,
+              phoneMobile:      phoneMobile ?? undefined,
+              email:            email       ?? undefined,
+              birthDate:        birthDate   ?? undefined,
+              importSource:     "Official Voters List",
+              isConfirmedVoter: true,
+              listSource:       ListSource.voters_list,
+              pollNumber:       pollNumber ?? undefined,
+              ...(cfv ? { customFieldValues: cfv as Prisma.InputJsonValue } : {}),
             });
+            newMembershipRows.push({ personId, listImportId, campaignId, status: "created" });
 
-            let ovlAddressId: string;
-            if (existingOvlAddress) {
-              ovlAddressId = existingOvlAddress.id;
-            } else {
-              const newAddr = await tx.address.create({
-                data: { campaignId, streetNumber, streetName, unitNumber, city, province, postalCode },
-                select: { id: true },
-              });
-              ovlAddressId = newAddr.id;
-              newAddressIds.push(ovlAddressId);
-            }
+            // Index the new person so a second OVL row for the same person gets matched
+            const newNormAddr = normalizeFullAddress(`${streetNumber} ${streetName}`, city);
+            const newStub: OvlStub = {
+              id: personId,
+              firstNameLower: firstName.toLowerCase(),
+              lastNameLower:  lastName.toLowerCase(),
+              normAddr: newNormAddr,
+              unitLower: (unitNumber ?? "").toLowerCase().trim(),
+            };
+            const nk = `${firstName.toLowerCase()}|${lastName.toLowerCase()}`;
+            const nkList = ovlByNormName.get(nk);
+            if (nkList) nkList.push(newStub); else ovlByNormName.set(nk, [newStub]);
+            const sk = `${streetNumber.toLowerCase()}|${city.toLowerCase()}`;
+            const skList = ovlByStreetCity.get(sk);
+            if (skList) skList.push(newStub); else ovlByStreetCity.set(sk, [newStub]);
 
-            let ovlHousehold = await tx.household.findFirst({
-              where: { campaignId, addressId: ovlAddressId, deletedAt: null },
-              select: { id: true },
-            });
-            if (!ovlHousehold) {
-              ovlHousehold = await tx.household.create({
-                data: { campaignId, addressId: ovlAddressId },
-                select: { id: true },
-              });
-            }
-
-            const sanitisedCfv: Record<string, string> | null = (() => {
-              const incoming = row.customFieldValues;
-              if (!incoming || validCustomFieldIds.size === 0) return null;
-              const safe: Record<string, string> = {};
-              for (const [k, v] of Object.entries(incoming)) {
-                if (validCustomFieldIds.has(k) && v.trim()) safe[k] = v.trim();
-              }
-              return Object.keys(safe).length > 0 ? safe : null;
-            })();
-
-            const ovlPerson = await tx.person.create({
-              data: {
-                campaignId,
-                householdId:      ovlHousehold.id,
-                firstName,
-                lastName,
-                phoneHome:        phoneHome   ?? undefined,
-                phoneMobile:      phoneMobile ?? undefined,
-                email:            email       ?? undefined,
-                birthDate:        birthDate   ?? undefined,
-                importSource:     "Official Voters List",
-                isConfirmedVoter: true,
-                listSource:       ListSource.voters_list,
-                pollNumber:       pollNumber ?? undefined,
-                ...(sanitisedCfv ? { customFieldValues: sanitisedCfv } : {}),
-              },
-              select: { id: true },
-            });
-
-            await tx.personListMembership.create({
-              data: { personId: ovlPerson.id, listImportId, campaignId, status: "created" },
-            });
             created++;
           }
 
           continue; // skip regular-list logic below
         }
 
-        // 1. Try to match an existing person by name + address
-        const existingPerson = await tx.person.findFirst({
-          where: {
-            campaignId,
-            deletedAt: null,
-            firstName: { equals: firstName, mode: "insensitive" },
-            lastName:  { equals: lastName,  mode: "insensitive" },
-            household: {
-              address: {
-                streetNumber: { equals: streetNumber, mode: "insensitive" },
-                streetName:   { equals: streetName,   mode: "insensitive" },
-                unitNumber:   unitNumber
-                  ? { equals: unitNumber, mode: "insensitive" }
-                  : null,
-                postalCode:   { equals: postalCode,   mode: "insensitive" },
-              },
-            },
-          },
-          select: { id: true },
-        });
+        // ── Regular list matching ─────────────────────────────────────────
 
-        if (existingPerson) {
+        // 1. Match existing person by name + address (in-memory lookup)
+        const pKey            = makePersonKey(firstName, lastName, streetNumber, streetName, unitNumber, postalCode);
+        const existingPersonId = personByNameAddr.get(pKey);
+
+        if (existingPersonId) {
           matched++;
-          await tx.personListMembership.create({
-            data: {
-              personId:     existingPerson.id,
-              listImportId: listImportId,
-              campaignId,
-              status:       "matched",
-            },
-          });
+          newMembershipRows.push({ personId: existingPersonId, listImportId, campaignId, status: "matched" });
           continue;
         }
 
-        // 2. Find or create address
-        // Select lat/lng so we can check ward membership for existing geocoded addresses.
-        let addressId: string;
-        let addressLat: number | null = null;
-        let addressLng: number | null = null;
+        // 2. Find or stage address
+        const addrEntry = getOrStageAddress(streetNumber, streetName, unitNumber, city, province, postalCode);
 
-        const existingAddress = await tx.address.findFirst({
-          where: {
-            campaignId,
-            deletedAt: null,
-            streetNumber: { equals: streetNumber, mode: "insensitive" },
-            streetName:   { equals: streetName,   mode: "insensitive" },
-            unitNumber:   unitNumber
-              ? { equals: unitNumber, mode: "insensitive" }
-              : null,
-            postalCode:   { equals: postalCode,   mode: "insensitive" },
-          },
-          select: { id: true, lat: true, lng: true },
-        });
-
-        if (existingAddress) {
-          addressId  = existingAddress.id;
-          addressLat = existingAddress.lat;
-          addressLng = existingAddress.lng;
-        } else {
-          const newAddress = await tx.address.create({
-            data: { campaignId, streetNumber, streetName, unitNumber, city, province, postalCode },
-            select: { id: true },
-          });
-          addressId = newAddress.id;
-          newAddressIds.push(addressId);
-          // lat/lng are null — geocoding fires after the transaction
-        }
-
-        // 2a. Ward boundary check
-        // Only possible when the campaign has a boundary AND the address is already geocoded.
-        // Newly created addresses have no lat/lng yet → not_checked.
+        // 3. Ward boundary check (only possible when address is already geocoded)
         let wardStatus: WardStatus = WardStatus.not_checked;
-        if (wardBoundary && addressLat !== null && addressLng !== null) {
-          wardStatus = isPointInWard(addressLat, addressLng, wardBoundary)
+        if (wardBoundary && addrEntry.lat !== null && addrEntry.lng !== null) {
+          wardStatus = isPointInWard(addrEntry.lat, addrEntry.lng, wardBoundary)
             ? WardStatus.inside
             : WardStatus.outside;
         }
 
         if (wardStatus === WardStatus.outside) {
-          flaggedRows.push({
-            firstName,
-            lastName,
-            streetNumber,
-            streetName,
-            unitNumber,
-            city,
-            province,
-            postalCode,
-            wardStatus: "outside",
-          });
-          // Do not create the person record — leave address/household in place
+          flaggedRows.push({ firstName, lastName, streetNumber, streetName, unitNumber, city, province, postalCode, wardStatus: "outside" });
           continue;
         }
 
-        // 3. Find or create household
-        let household = await tx.household.findFirst({
-          where: { campaignId, addressId, deletedAt: null },
-          select: { id: true },
+        // 4. Find or stage household
+        const householdId = getOrStageHousehold(addrEntry.id);
+
+        // 5. Stage person create
+        const personId = crypto.randomUUID();
+        const cfv      = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
+
+        newPersonRows.push({
+          id: personId,
+          campaignId,
+          householdId,
+          firstName,
+          lastName,
+          phoneHome:    phoneHome   ?? undefined,
+          phoneMobile:  phoneMobile ?? undefined,
+          email:        email       ?? undefined,
+          birthDate:    birthDate   ?? undefined,
+          importSource: importSource.trim() || "voter-list-import",
+          wardStatus,
+          listSource:   ListSource.residents_list,
+          pollNumber:   pollNumber ?? undefined,
+          ...(cfv ? { customFieldValues: cfv as Prisma.InputJsonValue } : {}),
         });
+        newMembershipRows.push({ personId, listImportId, campaignId, status: "created" });
 
-        if (!household) {
-          household = await tx.household.create({
-            data: { campaignId, addressId },
-            select: { id: true },
-          });
-        }
-
-        // 4. Create person
-        // Filter incoming custom field values to only known field ids
-        const sanitisedCustomFieldValues: Record<string, string> | null = (() => {
-          const incoming = row.customFieldValues;
-          if (!incoming || validCustomFieldIds.size === 0) return null;
-          const safe: Record<string, string> = {};
-          for (const [k, v] of Object.entries(incoming)) {
-            if (validCustomFieldIds.has(k) && v.trim()) safe[k] = v.trim();
-          }
-          return Object.keys(safe).length > 0 ? safe : null;
-        })();
-
-        const newPerson = await tx.person.create({
-          data: {
-            campaignId,
-            householdId: household.id,
-            firstName,
-            lastName,
-            phoneHome:    phoneHome ?? undefined,
-            phoneMobile:  phoneMobile ?? undefined,
-            email:        email ?? undefined,
-            birthDate:    birthDate ?? undefined,
-            importSource: importSource.trim() || "voter-list-import",
-            wardStatus,
-            listSource:   ListSource.residents_list,
-            pollNumber:   pollNumber ?? undefined,
-            ...(sanitisedCustomFieldValues ? { customFieldValues: sanitisedCustomFieldValues } : {}),
-          },
-          select: { id: true },
-        });
-
-        await tx.personListMembership.create({
-          data: {
-            personId:     newPerson.id,
-            listImportId: listImportId,
-            campaignId,
-            status:       "created",
-          },
-        });
-
+        // Keep lookup map current so a duplicate row in the same import is treated as a match
+        personByNameAddr.set(pKey, personId);
         created++;
+      }
+
+      // ── Batch writes (dependency order: address → household → person → membership) ──
+
+      if (newAddressRows.length > 0) {
+        await tx.address.createMany({ data: newAddressRows });
+      }
+      if (newHouseholdRows.length > 0) {
+        await tx.household.createMany({ data: newHouseholdRows });
+      }
+      if (newPersonRows.length > 0) {
+        await tx.person.createMany({ data: newPersonRows });
+      }
+      if (newMembershipRows.length > 0) {
+        await tx.personListMembership.createMany({ data: newMembershipRows });
+      }
+      if (personUpdateOps.length > 0) {
+        await Promise.all(
+          personUpdateOps.map(({ id, isConfirmedVoter, pollNumber }) =>
+            tx.person.update({
+              where: { id },
+              data: { isConfirmedVoter, ...(pollNumber !== undefined ? { pollNumber } : {}) },
+            })
+          )
+        );
       }
     },
     { timeout: 60_000 }
@@ -603,96 +641,4 @@ export async function importVoterRows(
   }
 
   return { matched, created, skipped, reviewCount, flaggedRows };
-}
-
-// ── mergePersons ──────────────────────────────────────────────────────────
-
-export async function mergePersons(input: {
-  winnerId: string;
-  loserId: string;
-}): Promise<{ error?: string; ok?: boolean }> {
-  const auth = await requireVoterListManager();
-  if ("error" in auth) return auth;
-  const { session, campaignId } = auth;
-
-  if (input.winnerId === input.loserId) {
-    return { error: "Cannot merge a record with itself." };
-  }
-
-  const [winner, loser] = await Promise.all([
-    db.person.findFirst({
-      where: { id: input.winnerId, campaignId, deletedAt: null },
-      select: { id: true, firstName: true, lastName: true },
-    }),
-    db.person.findFirst({
-      where: { id: input.loserId, campaignId, deletedAt: null },
-      select: { id: true, firstName: true, lastName: true, tags: { select: { tagId: true } } },
-    }),
-  ]);
-
-  if (!winner) return { error: "Winning record not found." };
-  if (!loser)  return { error: "Record to merge away not found." };
-
-  const outdatedTag = await db.tag.findFirst({
-    where: { campaignId, name: "record-outdated", deletedAt: null },
-    select: { id: true },
-  });
-
-  const loserTagIds = loser.tags.map((t) => t.tagId);
-
-  const winnerTags = await db.personTag.findMany({
-    where: { personId: input.winnerId, deletedAt: null },
-    select: { tagId: true },
-  });
-  const winnerTagIds = new Set(winnerTags.map((t) => t.tagId));
-
-  await db.$transaction(async (tx) => {
-    const tagsToTransfer = loserTagIds.filter((id) => !winnerTagIds.has(id));
-    if (tagsToTransfer.length > 0) {
-      await tx.personTag.createMany({
-        data: tagsToTransfer.map((tagId) => ({
-          personId: input.winnerId,
-          tagId,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    if (outdatedTag) {
-      await tx.personTag.upsert({
-        where: {
-          personId_tagId: { personId: input.loserId, tagId: outdatedTag.id },
-        },
-        create: { personId: input.loserId, tagId: outdatedTag.id },
-        update: {},
-      });
-    }
-
-    await tx.person.update({
-      where: { id: input.loserId },
-      data: { deletedAt: new Date() },
-    });
-
-    const loserName = `${loser.firstName} ${loser.lastName}`;
-    await tx.note.create({
-      data: {
-        personId: input.winnerId,
-        authorId: session.user.id,
-        body: `Record merged: duplicate entry for ${loserName} (ID: ${input.loserId}) was removed and this record was kept as the primary.`,
-      },
-    });
-  });
-
-  await createAuditLog({
-    campaignId,
-    userId: session.user.id,
-    action: "PERSON_MERGED",
-    entityType: "person",
-    entityId: input.winnerId,
-    details: { winnerId: input.winnerId, loserId: input.loserId },
-  });
-
-  revalidatePath("/voter-import");
-  revalidatePath("/voter-import/duplicates");
-  return { ok: true };
 }

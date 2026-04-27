@@ -1,17 +1,8 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
-
-async function requireSuperUser() {
-  const session = await getServerSession(authOptions);
-  if (!session) throw new Error("Unauthenticated");
-  const role = session.user.platformRole;
-  if (role !== "super_user" && role !== "super_admin") throw new Error("Forbidden");
-  return session.user;
-}
 
 export interface LeadFilters {
   search?:    string;
@@ -36,7 +27,8 @@ export interface DemoLead {
 }
 
 export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[]> {
-  await requireSuperUser();
+  const auth = await requireSuperUser();
+  if ("error" in auth) throw new Error(auth.error);
 
   const { search, emailed, officeType, dateFrom, dateTo } = filters;
 
@@ -104,7 +96,8 @@ export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[
 }
 
 export async function markAsEmailed(email: string): Promise<void> {
-  const user = await requireSuperUser();
+  const auth = await requireSuperUser();
+  if ("error" in auth) throw new Error(auth.error);
   const now = new Date();
 
   await db.demoRegistration.updateMany({
@@ -113,7 +106,7 @@ export async function markAsEmailed(email: string): Promise<void> {
   });
 
   await createAuditLog({
-    userId:     user.id,
+    userId:     auth.session.user.id,
     action:     "DEMO_LEAD_EMAILED",
     entityType: "demo_registration",
     entityId:   email.toLowerCase(),
@@ -122,7 +115,8 @@ export async function markAsEmailed(email: string): Promise<void> {
 }
 
 export async function unmarkAsEmailed(email: string): Promise<void> {
-  const user = await requireSuperUser();
+  const auth = await requireSuperUser();
+  if ("error" in auth) throw new Error(auth.error);
 
   await db.demoRegistration.updateMany({
     where: { email: email.toLowerCase() },
@@ -130,7 +124,7 @@ export async function unmarkAsEmailed(email: string): Promise<void> {
   });
 
   await createAuditLog({
-    userId:     user.id,
+    userId:     auth.session.user.id,
     action:     "DEMO_LEAD_EMAILED",
     entityType: "demo_registration",
     entityId:   email.toLowerCase(),
@@ -139,7 +133,8 @@ export async function unmarkAsEmailed(email: string): Promise<void> {
 }
 
 export async function exportDemoLeadsCSV(filters: LeadFilters = {}): Promise<string> {
-  await requireSuperUser();
+  const auth = await requireSuperUser();
+  if ("error" in auth) throw new Error(auth.error);
   const leads = await getDemoLeads(filters);
 
   const header = "Email,First Name,Last Name,Phone,Municipality,Office,Registrations,First Seen,Last Seen,Emailed,Consented";

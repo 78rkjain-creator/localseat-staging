@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const campaignId = session.user.activeCampaignId;
   const listId = req.nextUrl.searchParams.get("listId") ?? undefined;
 
-  // Fetch entries scoped to the campaign, optionally filtered by listId
+  try {
   const entries = await db.canvassListEntry.findMany({
     where: {
       deletedAt: null,
@@ -133,4 +133,7 @@ export async function GET(req: NextRequest) {
       "Content-Disposition": `attachment; filename="walklist-export-${date}.csv"`,
     },
   });
+  } catch {
+    return NextResponse.json({ error: "Export failed." }, { status: 500 });
+  }
 }

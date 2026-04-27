@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { CustomFieldsFormClient } from "./CustomFieldsFormClient";
+import { CustomFieldsFormClient } from "./custom-fields-form-client";
 import type { CustomField } from "./actions";
 import type { Role } from "@/types";
 

@@ -4,31 +4,11 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
+import { requireSuperUser, requirePlatformAdmin, isSuperUser, isSuperAdmin } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import type { CampaignOverride } from "@prisma/client";
 import { Role } from "@prisma/client";
-
-// ── Auth guards ───────────────────────────────────────────────────────────────
-
-async function requirePlatformAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: "Not authenticated." } as const;
-  if (!isSuperAdmin(session.user.platformRole)) {
-    return { error: "Platform admin access required." } as const;
-  }
-  return { session } as const;
-}
-
-async function requireSuperUser() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: "Not authenticated." } as const;
-  if (!isSuperUser(session.user.platformRole)) {
-    return { error: "Super user access required." } as const;
-  }
-  return { session } as const;
-}
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 

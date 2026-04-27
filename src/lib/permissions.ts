@@ -1,4 +1,6 @@
 import { Role } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // ── Role hierarchy ────────────────────────────────────────────────────────────
 //
@@ -222,4 +224,24 @@ export function isSuperUser(platformRole: string | null | undefined): boolean {
 // super_user inherits all super_admin capabilities
 export function isSuperAdmin(platformRole: string | null | undefined): boolean {
   return platformRole === "super_user" || platformRole === "super_admin";
+}
+
+// ── Async auth guards (shared across admin action files) ──────────────────────
+
+export async function requireSuperUser() {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." } as const;
+  if (!isSuperUser(session.user.platformRole)) {
+    return { error: "Super user access required." } as const;
+  }
+  return { session } as const;
+}
+
+export async function requirePlatformAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." } as const;
+  if (!isSuperAdmin(session.user.platformRole)) {
+    return { error: "Platform admin access required." } as const;
+  }
+  return { session } as const;
 }

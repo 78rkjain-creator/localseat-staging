@@ -1,5 +1,12 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import type { Prisma, SupportLevel, CanvassOutcome, ListSource } from "@prisma/client";
+import { canManageVoterList } from "@/lib/permissions";
+import { createAuditLog } from "@/lib/audit";
+import type { Prisma, SupportLevel, CanvassOutcome, ListSource, Role } from "@prisma/client";
 
 export interface PeopleListFilters {
   campaignId: string;
@@ -396,3 +403,96 @@ export type DuplicatePair = Awaited<ReturnType<typeof findDuplicatePairs>>[numbe
 
 export type PersonListItem = Awaited<ReturnType<typeof getPeopleList>>["people"][number];
 export type PersonDetail = NonNullable<Awaited<ReturnType<typeof getPersonDetail>>>;
+
+// ── Merge persons ─────────────────────────────────────────────────────────────
+
+export async function mergePersons(input: {
+  winnerId: string;
+  loserId: string;
+}): Promise<{ error?: string; ok?: boolean }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "You don't have permission to manage the voter list." };
+  }
+
+  const campaignId = activeCampaignId;
+
+  if (input.winnerId === input.loserId) {
+    return { error: "Cannot merge a record with itself." };
+  }
+
+  try {
+  const [winner, loser] = await Promise.all([
+    db.person.findFirst({
+      where: { id: input.winnerId, campaignId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true },
+    }),
+    db.person.findFirst({
+      where: { id: input.loserId, campaignId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true, tags: { select: { tagId: true } } },
+    }),
+  ]);
+
+  if (!winner) return { error: "Winning record not found." };
+  if (!loser) return { error: "Record to merge away not found." };
+
+  const outdatedTag = await db.tag.findFirst({
+    where: { campaignId, name: "record-outdated", deletedAt: null },
+    select: { id: true },
+  });
+
+  const loserTagIds = loser.tags.map((t) => t.tagId);
+  const winnerTags = await db.personTag.findMany({
+    where: { personId: input.winnerId, deletedAt: null },
+    select: { tagId: true },
+  });
+  const winnerTagIds = new Set(winnerTags.map((t) => t.tagId));
+
+  await db.$transaction(async (tx) => {
+    const tagsToTransfer = loserTagIds.filter((id) => !winnerTagIds.has(id));
+    if (tagsToTransfer.length > 0) {
+      await tx.personTag.createMany({
+        data: tagsToTransfer.map((tagId) => ({ personId: input.winnerId, tagId })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (outdatedTag) {
+      await tx.personTag.upsert({
+        where: { personId_tagId: { personId: input.loserId, tagId: outdatedTag.id } },
+        create: { personId: input.loserId, tagId: outdatedTag.id },
+        update: {},
+      });
+    }
+
+    await tx.person.update({ where: { id: input.loserId }, data: { deletedAt: new Date() } });
+
+    await tx.note.create({
+      data: {
+        personId: input.winnerId,
+        authorId: session.user.id,
+        body: `Record merged: duplicate entry for ${loser.firstName} ${loser.lastName} (ID: ${input.loserId}) was removed and this record was kept as the primary.`,
+      },
+    });
+  });
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "PERSON_MERGED",
+    entityType: "person",
+    entityId: input.winnerId,
+    details: { winnerId: input.winnerId, loserId: input.loserId },
+  });
+
+  revalidatePath("/people");
+  revalidatePath("/people/duplicates");
+  return { ok: true };
+  } catch {
+    return { error: "Failed to merge records." };
+  }
+}

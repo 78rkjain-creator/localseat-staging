@@ -29,6 +29,7 @@ export async function GET() {
 
   const campaignId = session.user.activeCampaignId;
 
+  try {
   const people = await db.person.findMany({
     where: { campaignId, deletedAt: null },
     include: {
@@ -92,4 +93,7 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="people-export-${date}.csv"`,
     },
   });
+  } catch {
+    return NextResponse.json({ error: "Export failed." }, { status: 500 });
+  }
 }

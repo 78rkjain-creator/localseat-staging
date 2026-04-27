@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canManageWalkLists } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { TurfMapClient } from "./TurfMapClient";
+import { TurfMapClient } from "./turf-map-client";
 import type { Role } from "@/types";
 
 export default async function TurfPage() {

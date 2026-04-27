@@ -22,26 +22,29 @@ export async function assignTask(
     return { error: "You don't have permission to assign tasks." };
   }
 
-  const task = await db.task.findFirst({
-    where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!task) return { error: "Task not found." };
+  try {
+    const task = await db.task.findFirst({
+      where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!task) return { error: "Task not found." };
 
-  // Verify the assignee is a member of this campaign
-  const membership = await db.campaignMembership.findFirst({
-    where: { campaignId: activeCampaignId, userId: assigneeId, deletedAt: null },
-    select: { userId: true },
-  });
-  if (!membership) return { error: "Assignee is not a member of this campaign." };
+    const membership = await db.campaignMembership.findFirst({
+      where: { campaignId: activeCampaignId, userId: assigneeId, deletedAt: null },
+      select: { userId: true },
+    });
+    if (!membership) return { error: "Assignee is not a member of this campaign." };
 
-  await db.task.update({
-    where: { id: taskId },
-    data: { assignedTo: assigneeId },
-  });
+    await db.task.update({
+      where: { id: taskId },
+      data: { assignedTo: assigneeId },
+    });
 
-  revalidatePath("/follow-ups");
-  return {};
+    revalidatePath("/follow-ups");
+    return {};
+  } catch {
+    return { error: "Failed to assign task." };
+  }
 }
 
 // ── Mark a task as complete ────────────────────────────────────────────────
@@ -55,26 +58,26 @@ export async function completeTask(
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
 
-  // Canvassers can only complete tasks assigned to them
   const whereClause =
     activeRole === "canvasser"
       ? { id: taskId, campaignId: activeCampaignId, assignedTo: session.user.id, deletedAt: null }
       : { id: taskId, campaignId: activeCampaignId, deletedAt: null };
 
-  const task = await db.task.findFirst({
-    where: whereClause,
-    select: { id: true },
-  });
-  if (!task) return { error: "Task not found." };
+  try {
+    const task = await db.task.findFirst({ where: whereClause, select: { id: true } });
+    if (!task) return { error: "Task not found." };
 
-  await db.task.update({
-    where: { id: taskId },
-    data: { completed: true, completedAt: new Date() },
-  });
+    await db.task.update({
+      where: { id: taskId },
+      data: { completed: true, completedAt: new Date() },
+    });
 
-  revalidatePath("/follow-ups");
-  revalidatePath("/dashboard");
-  return {};
+    revalidatePath("/follow-ups");
+    revalidatePath("/dashboard");
+    return {};
+  } catch {
+    return { error: "Failed to complete task." };
+  }
 }
 
 // ── Unassign a task (set back to unassigned) ──────────────────────────────
@@ -91,17 +94,18 @@ export async function unassignTask(
     return { error: "You don't have permission to unassign tasks." };
   }
 
-  const task = await db.task.findFirst({
-    where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!task) return { error: "Task not found." };
+  try {
+    const task = await db.task.findFirst({
+      where: { id: taskId, campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!task) return { error: "Task not found." };
 
-  await db.task.update({
-    where: { id: taskId },
-    data: { assignedTo: null },
-  });
+    await db.task.update({ where: { id: taskId }, data: { assignedTo: null } });
 
-  revalidatePath("/follow-ups");
-  return {};
+    revalidatePath("/follow-ups");
+    return {};
+  } catch {
+    return { error: "Failed to unassign task." };
+  }
 }

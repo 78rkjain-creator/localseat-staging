@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { mergePersons } from "../actions";
+import { mergePersons } from "@/lib/people";
 import type { DuplicatePair } from "@/lib/people";
 
 interface MergeUiProps {

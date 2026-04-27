@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canManageWalkLists } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { ListMapClient } from "../ListMapClient";
+import { ListMapClient } from "../list-map-client";
 import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {

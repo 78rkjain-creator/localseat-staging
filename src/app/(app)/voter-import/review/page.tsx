@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ReviewQueueClient } from "./ReviewQueueClient";
+import { ReviewQueueClient } from "./review-queue-client";
 
 export const metadata: Metadata = { title: "Review Queue" };
 

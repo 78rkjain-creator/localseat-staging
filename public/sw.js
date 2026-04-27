@@ -16,7 +16,7 @@
  * connection. The queue data itself is stored in IndexedDB by the app layer.
  */
 
-const CACHE_NAME = "localseat-v1";
+const CACHE_NAME = "localseat-1777291851872";
 
 const PRECACHE_URLS = [
   "/manifest.json",

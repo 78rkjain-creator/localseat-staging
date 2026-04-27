@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 25, 2026 — ward boundary unsaved guard, Represent API picker removal, save button state feedback._
+_Last updated: April 26, 2026 — People restructure (5-tab /people/*, team-as-people, district classification, FO approval flow), offline queue reliability._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -43,7 +43,7 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 ## Infrastructure
 - Hostinger VPS KVM2: IP 2.24.212.25, Ubuntu 24.04, 8GB RAM, 100GB NVMe
 - Production: /var/www/localseat, PM2 `localseat`, port 3000
-- Demo: /var/www/demo, PM2 `localseat-demo`, port 3001
+- Demo: /var/www/demo (second checkout of main repo, DEMO_MODE=true), PM2 `localseat-demo`, port 3001
 - nginx: app.localseat.io → 3000, demo.localseat.io → 3001
 - SSL: certbot, auto-renews
 - Firewall: ports 22, 80, 443 open — 5432 blocked
@@ -59,10 +59,11 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 4. `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
 5. **Always deploy app and demo together — never leave out of sync**
 
-Demo deploy:
+Demo deploy (same repo as prod, separate checkout at /var/www/demo with DEMO_MODE=true in .env):
 ```
 cd /var/www/demo
 git pull origin main
+npm install
 npm run build
 pm2 restart localseat-demo --update-env
 npx prisma migrate deploy
@@ -106,12 +107,13 @@ DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
 NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
-**Demo** (`/var/www/demo/.env`)
+**Demo** (`/var/www/demo/.env`) — second checkout of the main repo at /var/www/demo
 ```
 DATABASE_URL="postgresql://demo:LS_Demo_2026x@localhost:5432/localseat_demo"
 NEXTAUTH_SECRET="localseat-demo-secret-2026"
 NEXTAUTH_URL="https://demo.localseat.io"
 DEMO_MODE="true"
+SKIP_EMAIL_VERIFICATION="true"
 NEXT_PUBLIC_STRIPE_ENABLED="false"
 ```
 
@@ -177,6 +179,7 @@ Candidate
 - Superuser can change roles from /admin/users/[userId]
 - Transferring candidate role requires choosing former candidate's new role (modal)
 - Field organizer can add canvassers and sign installers only
+- Team Setup (/team) is under the Admin collapsible section in the sidebar (not a top-level nav item)
 
 ---
 
@@ -224,6 +227,9 @@ Candidate
 20260425120000_tag_tenancy_and_support_level_enum
 20260425130000_person_birth_date
 20260425140000_person_list_source
+20260425150000_people_restructure_foundation
+20260425160000_add_not_required_approval_status
+20260426000001_add_ood_request_fields
 ```
 
 ---
@@ -244,8 +250,9 @@ Candidate
 - PersonListMembershipStatus: matched, created, pending_review, accepted
 - SignStatus: to_be_installed, installed
 - TaskType: includes volunteer_follow_up
-- ListSource: voters_list, residents_list, manual, canvass
+- ListSource: voters_list, residents_list, manual, canvass, team
 - SupportLevel enum: strong_yes, soft_yes, undecided, soft_no, strong_no (on both Person and CanvassResponse)
+- OutOfDistrictApprovalStatus: not_required, pending, approved, rejected
 
 **Key Person fields:**
 - isConfirmedVoter (bool) — set true on OVL match
@@ -255,6 +262,11 @@ Candidate
 - birthDate (DateTime, nullable) — replaced birthYear (Int); CSV import accepts "Birth Date" (YYYY-MM-DD), legacy "Birth Year" still accepted with deprecation warning
 - listSource (ListSource, required) — set on creation; manual + out-of-ward records auto-excluded from walk lists
 - includeInWalkLists (Boolean, default false) — override: set true to include a manual or out-of-ward person on walk lists
+- userId (String?, FK→User) — links a team member's User to their Person record; @@unique([userId, campaignId]) partial index (WHERE userId IS NOT NULL)
+- needsDistrictClassification (Boolean, default false) — triggers classify banner/modal; cleared once classification decision is saved
+- isOutOfDistrict (Boolean, default false) — true only when approved OOD status
+- outOfDistrictApprovalStatus (OutOfDistrictApprovalStatus?) — pending | approved | rejected | not_required
+- outOfDistrictRequestedById, outOfDistrictRequestedAt, outOfDistrictRejectionReason — FO approval workflow fields
 
 **Key Campaign fields:**
 - customFields (Json) — defines up to 5 field labels
@@ -273,9 +285,9 @@ Candidate
 - ListImport + PersonListMembership track every import event per person
 
 ### Residents List vs Voter List
-- `/voter-list` — all residents (Residents List in sidebar)
-- `/voter-list/confirmed` — confirmed voters only (isConfirmedVoter === true)
-- `/voter-list/confirmed/[personId]` — read-only voter summary with "View full record" link
+- `/people/residents` — all residents (Residents List tab)
+- `/people/voters` — confirmed voters only (isConfirmedVoter === true)
+- Old `/voter-list/*` routes permanently redirect to `/people/*` equivalents via next.config.ts
 - Person detail shows Residents List section (all named list memberships) and Voter List section (OVL matches)
 
 ### Custom Fields
@@ -295,7 +307,7 @@ Candidate
 - TagPicker component (`src/components/ui/tag-picker.tsx`): click-to-open dropdown with search, no inline creation
 
 ### Add Resident
-- `/voter-list/new` — available to candidate, campaign_manager, field_organizer
+- `/people/new` — available to candidate, campaign_manager, field_organizer
 - Sets `listSource = manual`; these records are auto-excluded from walk lists unless `includeInWalkLists = true`
 - Address: search existing (combobox via `/api/addresses/search`) or enter manually
 
@@ -338,6 +350,32 @@ Candidate
 - Ward boundary: Polygon or MultiPolygon, GeoJSON/KML/KMZ upload (Represent API picker removed — unreliable)
 - All 555 Owen Sound addresses have pre-baked lat/lng in seed
 
+### People Section
+- 5 tabs: Master List (/people), Residents List (/people/residents), Voter List (/people/voters), Out of District (/people/out-of-district), Team (/people/team)
+- Permission gates: Master List, Out of District, Team = candidate, campaign_manager, field_organizer. Residents List adds canvasser, volunteer_coordinator. Voter List adds canvasser.
+- Old /voter-list/* routes permanently redirect to /people/* equivalents via next.config.ts
+- Person.userId links User to Person (team-as-people). @@unique([userId, campaignId]) with partial index (WHERE userId IS NOT NULL).
+- ListSource enum includes: voters_list, residents_list, manual, canvass, team
+- Team members auto-created as Person records when added to campaign via /team
+- District classification modal triggers on team add: Inside (address required), Outside, I don't know yet
+- Bulk classify modal accessible from Master List banner when needsDistrictClassification = true
+- Out-of-district marks: candidate/CM = auto-approved, field_organizer = pending approval
+- Approval queue at /people/out-of-district/pending (candidate/CM only)
+- Sidebar badge shows pending count for candidate/CM
+- OutOfDistrictApprovalStatus enum: not_required, pending, approved, rejected
+- Pending marks do NOT exclude from walk lists — exclusion only on approved
+- Team members skip the OOD approval flow entirely
+
+### Offline Queue
+- Retry state persisted in IndexedDB (survives page reload)
+- Dead-letter: parked after 3 lifetime attempts
+- No head-of-line blocking: flush loop continues past failing items
+- Failure classification: network = transient retry, permanent: true = park immediately, other errors = count toward cap
+- saveCanvassResponse returns permanent: true for assignment/person not found
+- UI: pending count pill, syncing indicator, parked count with "review" tap target
+- ParkedPanel: per-item error display, retry and discard buttons
+- IndexedDB schema v2: added retryCount, lastAttemptedAt, lastError, status fields
+
 ### Security
 - Security headers in next.config.ts: X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy
 - Session timeout: 8h all roles, 4h canvassers (checked in proxy.ts)
@@ -353,11 +391,17 @@ Candidate
 /prisma/schema.prisma, seed.ts
 /src/app/(auth)/login, register, verify-email, resend-verification, reset-password
 /src/app/(app)/
-  dashboard, voter-list, voter-import, canvassing, follow-ups
+  dashboard, people, voter-import, canvassing, follow-ups
   outreach, donors, volunteers, team, signs, campaigns, account, address-changes
   campaign-settings/ward, competitors, script, custom-fields
-  voter-list/confirmed, voter-list/confirmed/[personId]
   voter-import/review
+  people/[personId]/out-of-district-actions.ts, out-of-district-control.tsx
+  people/classify-actions.ts, classify-banner.tsx, classify-modal.tsx
+  people/out-of-district/pending/page.tsx, queue-row.tsx
+  people/residents/page.tsx, filters-client.tsx
+  people/team/page.tsx
+  people/voters/page.tsx
+  team/classify-actions.ts, classify-modal.tsx
 /src/app/admin/campaigns, users, audit-log, export, demo-leads, settings
 /src/app/onboarding/choose-plan, create-campaign
 /src/lib/
@@ -367,12 +411,12 @@ Candidate
   email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
   format-poll-number.ts
 /src/components/layout/sidebar.tsx, mobile-nav.tsx
-/src/components/ui/tag-picker.tsx
+/src/components/ui/tag-picker.tsx, address-picker.tsx
 /src/hooks/useOfflineSync.ts
 /public/sw.js
 /scripts/geocode-demo.ts, export-geocoded-coords.ts, stamp-sw.mjs
 /src/app/(app)/campaign-settings/tags/
-/src/app/(app)/voter-list/new/
+/src/app/(app)/people/new/
 /src/app/api/addresses/search/route.ts
 /NEXT_SESSION_PROMPTS.md
 /var/www/marketing/
@@ -410,21 +454,29 @@ Candidate
 - Staging Neon DB must have migrations applied manually (`prisma migrate deploy`) — Vercel does not auto-run migrations
 - EPERM on Windows during `prisma generate` = known DLL lock from running dev server, not a real error
 - Seed data: Downtown East Route has 38 entries but seed creates ~139 canvass responses (~3.6 per door). Not a bug — distinct-personId counting handles it correctly. Just an artifact of the seed data volume.
+- After `prisma migrate dev` reset, team Person backfill must be run manually — migration backfill runs before seed data exists. Use backfill.sql at repo root.
+- Duplicate migration names can occur if Prisma prompts for a new migration name after reset — delete the duplicate folder and resolve with `prisma migrate resolve --rolled-back`.
 
 ---
 
 ## Production Data Events
 **April 23, 2026** — Production DB manually cleaned. Seed data removed. Superuser preserved. Production is empty and ready for real campaign data.
 
+**April 26, 2026** — People restructure deployed. 3 migrations applied to prod (people_restructure_foundation, add_not_required_approval_status, add_ood_request_fields). No data loss. Staging, prod, demo all in sync.
+
 ---
 
 ## Remaining Work
 
+### Deployed
+| Item | Notes |
+|---|---|
+| People restructure — 5 tabs (/people/*), team-as-people, district classification, FO out-of-district approval flow | Deployed April 26, 2026 |
+| Offline queue persistence — retry state in IndexedDB, parked items, no head-of-line blocking | Deployed April 26, 2026 |
+
 ### High Priority
 | Item | Effort |
 |---|---|
-| People restructure — 5 tabs (Master List, Residents List, Voter List, Out of District, Team), URL move to /people/*, team-as-people, district modal, FO out-of-district approval flow (see NEXT_SESSION_PROMPTS.md) | Large |
-| Offline queue persistence — queued submissions survive page reload (see NEXT_SESSION_PROMPTS.md Prompt β) | Medium |
 | Activity timeline on person detail | Small |
 | PWA manifest and install prompt — SW cache busting shipped; manifest and install prompt still needed | Small |
 | Content Security Policy (CSP) — prompt written, test on staging first | Small |
@@ -469,7 +521,6 @@ Candidate
 ### Defined — Ready to Build
 | Item | Effort |
 |---|---|
-| People restructure — 5-tab people section (/people/*), team-as-people model, district modal, FO out-of-district approval flow. Full spec in NEXT_SESSION_PROMPTS.md | Large |
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, phone preservation, field-level merge, manual review, unmatched handling, audit trail, data quality scoring | Large |
 
 ### V2+ Out of Scope
@@ -488,3 +539,4 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 8. Production deploy: `git push origin main` → SSH → `cd /var/www/localseat && ./deploy.sh`
 9. If staging DB schema out of sync: `$env:DATABASE_URL='<neon-url>' ; npx prisma migrate deploy`
 10. Run `npx prisma generate` after any migration
+11. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)

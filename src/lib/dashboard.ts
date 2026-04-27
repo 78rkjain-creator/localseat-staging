@@ -119,7 +119,7 @@ export async function getCandidateDashboardData(campaignId: string) {
       },
       _count: { id: true },
     }),
-    (db as any).votingRecord.groupBy({
+    db.votingRecord.groupBy({
       by: ["personId"],
       where: { campaignId, deletedAt: null },
     }).then((rows: { personId: string }[]) => rows.length),
