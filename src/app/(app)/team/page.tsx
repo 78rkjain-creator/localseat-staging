@@ -29,7 +29,7 @@ interface TeamMember {
 interface RemovedMember {
   membershipId: string;
   role: Role;
-  removedAt: string;
+  removedAt: string | null;
   user: {
     id: string;
     firstName: string;
