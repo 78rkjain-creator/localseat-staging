@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Navigation, Phone, MessageSquare } from "lucide-react";
+import { Navigation, Home, Smartphone, MessageSquare } from "lucide-react";
 import { saveCanvassResponse } from "./actions";
 import type { CanvassingQueue } from "@/lib/canvassing";
 import type { SupportLevel, CanvassOutcome } from "@/types";
@@ -543,7 +543,7 @@ export function CanvassScreen({
           {/* ── Household hero ── */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
-            <p className="text-[20px] font-extrabold text-slate-900 leading-tight">{addressLine}</p>
+            <p className="text-xl font-extrabold text-slate-900 leading-tight">{addressLine}</p>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[12px] text-slate-500">
                 {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
@@ -561,28 +561,38 @@ export function CanvassScreen({
               )}
             </div>
             {(current.person.phoneHome || current.person.phoneMobile) && (
-              <div className="flex flex-wrap gap-3 mt-1">
+              <div className="flex flex-col gap-1 mt-1.5">
                 {current.person.phoneHome && (
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-slate-400" />
-                    <a href={`tel:${current.person.phoneHome}`} className="text-[11px] text-brand-600">
+                  <div className="flex items-center gap-2">
+                    <Home className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    <a href={`tel:${current.person.phoneHome}`} className="text-base font-medium text-brand-600 flex-1">
                       {current.person.phoneHome}
                     </a>
-                    <a href={`sms:${current.person.phoneHome}`} aria-label="SMS" className="text-slate-400 hover:text-slate-600 transition-colors">
-                      <MessageSquare className="h-3 w-3" />
-                    </a>
-                  </span>
+                    <button
+                      type="button"
+                      aria-label="SMS home number"
+                      onClick={() => {
+                        const ok = window.confirm(
+                          "This number is listed as a home phone and may not receive text messages. Send SMS anyway?"
+                        );
+                        if (ok) window.location.href = `sms:${current.person.phoneHome}`;
+                      }}
+                      className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
                 {current.person.phoneMobile && current.person.phoneMobile !== current.person.phoneHome && (
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-slate-400" />
-                    <a href={`tel:${current.person.phoneMobile}`} className="text-[11px] text-brand-600">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    <a href={`tel:${current.person.phoneMobile}`} className="text-base font-medium text-brand-600 flex-1">
                       {current.person.phoneMobile}
                     </a>
-                    <a href={`sms:${current.person.phoneMobile}`} aria-label="SMS" className="text-slate-400 hover:text-slate-600 transition-colors">
-                      <MessageSquare className="h-3 w-3" />
+                    <a href={`sms:${current.person.phoneMobile}`} aria-label="SMS mobile number" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                      <MessageSquare className="h-4 w-4" />
                     </a>
-                  </span>
+                  </div>
                 )}
               </div>
             )}
