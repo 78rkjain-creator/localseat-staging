@@ -5,11 +5,16 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitByKey } from "@/lib/rate-limit";
 import { sendContactNotificationEmail } from "@/lib/email";
+import { checkOrigin } from "@/lib/auth";
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_PER_IP_PER_HOUR = 10;
 
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   // ── IP-based rate limit ───────────────────────────────────────────────────
   const forwarded = req.headers.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";

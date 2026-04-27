@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { rateLimitByKey } from "@/lib/rate-limit";
+import { checkOrigin } from "@/lib/auth";
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_PER_IP_PER_HOUR = 10;
@@ -12,6 +13,10 @@ export async function POST(req: NextRequest) {
   // ── Shared secret check ───────────────────────────────────────────────────
   const secret = req.headers.get("x-webhook-secret");
   if (!process.env.DEMO_WEBHOOK_SECRET || secret !== process.env.DEMO_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!checkOrigin(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

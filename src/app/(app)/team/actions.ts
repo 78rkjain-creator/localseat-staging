@@ -363,6 +363,11 @@ export async function removeTeamMember(userId: string): Promise<{ error?: string
       data: { deletedAt: new Date() },
     });
 
+    await db.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+
     await createAuditLog({
       campaignId,
       userId: callerId,
@@ -405,6 +410,11 @@ export async function restoreTeamMember(userId: string): Promise<{ error?: strin
     const restored = await db.campaignMembership.update({
       where: { id: membership.id },
       data: { deletedAt: null },
+    });
+
+    await db.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
     });
 
     await createAuditLog({

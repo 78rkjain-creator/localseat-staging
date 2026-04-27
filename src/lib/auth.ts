@@ -1,4 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
+import type { NextRequest } from "next/server";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
@@ -28,6 +29,7 @@ declare module "next-auth" {
     platformRole?: string | null;
     emailVerified: boolean;
     verificationTokenExpiry: string | null;
+    sessionVersion: number;
   }
 }
 
@@ -43,6 +45,7 @@ declare module "next-auth/jwt" {
     emailVerified: boolean;
     verificationTokenExpiry: string | null;
     sessionExpiresAt?: number; // Unix seconds — enforced per-role in proxy.ts
+    sessionVersion?: number;   // bumped on role change / removal; mismatch forces re-auth
   }
 }
 
@@ -154,6 +157,7 @@ export const authOptions: NextAuthOptions = {
           platformRole: user.platformRole ?? null,
           emailVerified: !!user.emailVerified,
           verificationTokenExpiry: user.verificationTokenExpiry?.toISOString() ?? null,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -170,6 +174,7 @@ export const authOptions: NextAuthOptions = {
         token.platformRole = user.platformRole ?? null;
         token.emailVerified = !!user.emailVerified;
         token.verificationTokenExpiry = user.verificationTokenExpiry ?? null;
+        token.sessionVersion = user.sessionVersion;
 
         // Auto-select the first campaign if only one membership exists
         if (user.memberships.length === 1) {
@@ -247,6 +252,19 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
+      // On every refresh after initial sign-in, verify the DB session version.
+      // removeTeamMember and restoreTeamMember increment it, so a mismatch
+      // means the user's access changed — expire the session immediately.
+      if (token.id && !user) {
+        const fresh = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { sessionVersion: true },
+        });
+        if (fresh && fresh.sessionVersion !== token.sessionVersion) {
+          return { ...token, sessionExpiresAt: 0 };
+        }
+      }
+
       return token;
     },
 
@@ -262,3 +280,17 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+// Returns false only when Origin is present and doesn't match NEXTAUTH_URL.
+// Absent Origin is allowed so server-to-server and non-browser clients aren't rejected.
+export function checkOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+  const base = process.env.NEXTAUTH_URL;
+  if (!base) return true;
+  try {
+    return new URL(base).origin === origin;
+  } catch {
+    return false;
+  }
+}

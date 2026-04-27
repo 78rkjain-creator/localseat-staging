@@ -11,10 +11,9 @@ interface Competitor {
 
 interface Props {
   competitors: Competitor[];
-  campaignId: string;
 }
 
-export function CompetitorsClient({ competitors: initialCompetitors, campaignId }: Props) {
+export function CompetitorsClient({ competitors: initialCompetitors }: Props) {
   const [localCompetitors, setLocalCompetitors] = useState<Competitor[]>(initialCompetitors);
   const [addName, setAddName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -27,7 +26,7 @@ export function CompetitorsClient({ competitors: initialCompetitors, campaignId 
     if (!name) return;
     setIsAdding(true);
     setError(null);
-    const result = await addCompetitorAction(campaignId, name);
+    const result = await addCompetitorAction(name);
     setIsAdding(false);
     if ("error" in result) {
       setError(result.error ?? null);
@@ -43,7 +42,7 @@ export function CompetitorsClient({ competitors: initialCompetitors, campaignId 
   async function handleUpdate(id: string) {
     const name = editName.trim();
     if (!name) return;
-    const result = await updateCompetitorAction(id, campaignId, name);
+    const result = await updateCompetitorAction(id, name);
     if ("error" in result) {
       setError(result.error ?? null);
       return;
@@ -56,7 +55,7 @@ export function CompetitorsClient({ competitors: initialCompetitors, campaignId 
   }
 
   async function handleDelete(id: string) {
-    const result = await deleteCompetitorAction(id, campaignId);
+    const result = await deleteCompetitorAction(id);
     if ("error" in result) {
       setError(result.error ?? null);
       return;

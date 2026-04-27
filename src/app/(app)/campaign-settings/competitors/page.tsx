@@ -25,7 +25,7 @@ export default async function CompetitorsPage() {
           Other candidates in this race. Canvassers can identify supporters during door-knocking.
         </p>
       </div>
-      <CompetitorsClient competitors={competitors} campaignId={activeCampaignId} />
+      <CompetitorsClient competitors={competitors} />
     </div>
   );
 }

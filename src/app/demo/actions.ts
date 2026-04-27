@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { rateLimitByKey } from "@/lib/rate-limit";
 import { headers } from "next/headers";
 
 interface DemoFormData {
@@ -30,10 +31,14 @@ export async function registerDemo(data: DemoFormData): Promise<{ error?: string
     return { error: "Please check the consent box to continue." };
   }
 
-  // Resolve client IP for lead context
+  // Resolve client IP for rate limiting and lead context
   const headerList = await headers();
   const forwarded = headerList.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? headerList.get("x-real-ip") ?? "unknown";
+
+  if (!rateLimitByKey(`demo-register:${ip}`, 10, 60 * 60 * 1000)) {
+    return { error: "Too many requests — please try again later." };
+  }
 
   const source = "demo.localseat.io";
 
