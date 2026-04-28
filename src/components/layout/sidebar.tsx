@@ -13,7 +13,7 @@ import {
   canViewTeam,
   canManageVoterList,
 } from "@/lib/permissions";
-import { ClipboardList, ShieldCheck } from "lucide-react";
+import { ClipboardList, ShieldCheck, Settings } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 
 
@@ -90,6 +90,15 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
 
   // Admin sub-items — only shown to candidate, campaign_manager, and co_chair.
   const adminItems: NavItem[] = [
+    ...(role === "candidate" || role === "campaign_manager"
+      ? [
+          {
+            href: "/campaign-settings/general",
+            label: "General",
+            icon: <Settings size={16} />,
+          },
+        ]
+      : []),
     ...(role && canViewTeam(role)
       ? [
           {

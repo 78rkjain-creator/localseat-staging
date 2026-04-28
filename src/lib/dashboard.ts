@@ -536,6 +536,495 @@ export async function getRecentCanvassActivity(campaignId: string) {
 
 export type CanvassActivityEntry = Awaited<ReturnType<typeof getRecentCanvassActivity>>[number];
 
+// ── Dashboard hero data ────────────────────────────────────────────────────
+
+function buildDaySeries(now: Date): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().split("T")[0];
+  });
+}
+
+function dayKey(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+export async function getDashboardHeroData(campaignId: string) {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [
+    campaign,
+    totalPeople,
+    allResponses,
+    responseCountsByPerson,
+    signsOut,
+    signsInstalledLast7,
+    totalRaised,
+    donorsLast7,
+    competitorCount,
+  ] = await Promise.all([
+    db.campaign.findUnique({
+      where: { id: campaignId },
+      select: { fundraisingGoal: true, electionDate: true },
+    }),
+    db.person.count({ where: { campaignId, deletedAt: null } }),
+    db.canvassResponse.findMany({
+      where: { assignment: { canvassList: { campaignId } } },
+      select: { personId: true, supportLevel: true, respondedAt: true },
+      orderBy: { respondedAt: "desc" },
+    }),
+    db.canvassResponse.groupBy({
+      by: ["personId"],
+      where: { assignment: { canvassList: { campaignId } } },
+      _count: { id: true },
+    }),
+    db.sign.count({ where: { campaignId, status: "installed", deletedAt: null } }),
+    db.sign.findMany({
+      where: {
+        campaignId,
+        status: "installed",
+        deletedAt: null,
+        installedAt: { gte: sevenDaysAgo },
+      },
+      select: { installedAt: true },
+    }),
+    db.donor.count({ where: { campaignId, status: "received", deletedAt: null } }),
+    db.donor.findMany({
+      where: { campaignId, status: "received", deletedAt: null, updatedAt: { gte: sevenDaysAgo } },
+      select: { updatedAt: true },
+    }),
+    db.campaignCompetitor.count({ where: { campaignId, deletedAt: null } }),
+  ]);
+
+  // Latest response per person → support rate
+  const latestMap = new Map<string, { supportLevel: string | null }>();
+  for (const r of allResponses) {
+    if (!latestMap.has(r.personId)) {
+      latestMap.set(r.personId, { supportLevel: r.supportLevel as string | null });
+    }
+  }
+  const canvassedCount = latestMap.size;
+  let forUsCount = 0;
+  for (const { supportLevel } of latestMap.values()) {
+    if (supportLevel === "strong_yes" || supportLevel === "soft_yes") forUsCount++;
+  }
+  const supportRate = canvassedCount > 0 ? Math.round((forUsCount / canvassedCount) * 100) : 0;
+
+  // Contacted frequency buckets
+  let contactedOnce = 0, contactedTwice = 0, contactedThreePlus = 0;
+  for (const g of responseCountsByPerson) {
+    const c = g._count.id;
+    if (c === 1) contactedOnce++;
+    else if (c === 2) contactedTwice++;
+    else contactedThreePlus++;
+  }
+
+  // Doors total and today (distinct persons)
+  const allPersonIds = new Set(allResponses.map((r) => r.personId));
+  const todayPersonIds = new Set(
+    allResponses.filter((r) => r.respondedAt >= todayStart).map((r) => r.personId)
+  );
+  const doorsTotal = allPersonIds.size;
+  const doorsToday = todayPersonIds.size;
+
+  // 7-day series
+  const days = buildDaySeries(now);
+
+  // Doors per day (distinct persons)
+  const doorsByDay = new Map<string, Set<string>>(days.map((d) => [d, new Set()]));
+  for (const r of allResponses) {
+    const dk = dayKey(r.respondedAt);
+    doorsByDay.get(dk)?.add(r.personId);
+  }
+  const doorsSeries = days.map((d) => ({ date: d, count: doorsByDay.get(d)?.size ?? 0 }));
+  const doorsAvg7Day = Math.round(doorsSeries.reduce((s, p) => s + p.count, 0) / 7);
+
+  // Support rate per day (yes canvasses / total canvasses that day)
+  const yesByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  const totalByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const r of allResponses) {
+    const dk = dayKey(r.respondedAt);
+    if (!totalByDay.has(dk)) continue;
+    totalByDay.set(dk, (totalByDay.get(dk) ?? 0) + 1);
+    const sl = r.supportLevel as string | null;
+    if (sl === "strong_yes" || sl === "soft_yes") {
+      yesByDay.set(dk, (yesByDay.get(dk) ?? 0) + 1);
+    }
+  }
+  const supportRateSeries = days.map((d) => {
+    const total = totalByDay.get(d) ?? 0;
+    const yes = yesByDay.get(d) ?? 0;
+    return { date: d, count: total > 0 ? Math.round((yes / total) * 100) : 0 };
+  });
+
+  // Signs installed per day
+  const signsByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const s of signsInstalledLast7) {
+    if (s.installedAt) {
+      const dk = dayKey(s.installedAt);
+      if (signsByDay.has(dk)) signsByDay.set(dk, (signsByDay.get(dk) ?? 0) + 1);
+    }
+  }
+  const signsSeries = days.map((d) => ({ date: d, count: signsByDay.get(d) ?? 0 }));
+
+  // Donors received per day
+  const donorsByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const don of donorsLast7) {
+    const dk = dayKey(don.updatedAt);
+    if (donorsByDay.has(dk)) donorsByDay.set(dk, (donorsByDay.get(dk) ?? 0) + 1);
+  }
+  const donorsSeries = days.map((d) => ({ date: d, count: donorsByDay.get(d) ?? 0 }));
+
+  return {
+    supportRate,
+    totalPeople,
+    contactedOnce,
+    contactedTwice,
+    contactedThreePlus,
+    doorsToday,
+    doorsTotal,
+    signsOut,
+    totalRaised,
+    fundraisingGoal: campaign?.fundraisingGoal ?? null,
+    electionDate: campaign?.electionDate ?? null,
+    competitorCount,
+    doorsSeries,
+    supportRateSeries,
+    signsSeries,
+    donorsSeries,
+    doorsAvg7Day,
+  };
+}
+
+export type DashboardHeroData = Awaited<ReturnType<typeof getDashboardHeroData>>;
+
+// ── Field organizer dashboard data ────────────────────────────────────────
+
+export async function getFieldOrganizerDashData(campaignId: string, userId: string) {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const weekStart = new Date(now);
+  weekStart.setDate(weekStart.getDate() - 6);
+  weekStart.setHours(0, 0, 0, 0);
+  const prevWeekStart = new Date(weekStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+  const [
+    walkLists,
+    pendingApprovalCount,
+    openFollowUpCount,
+    weekResponses,
+    prevWeekResponses,
+    assignments,
+  ] = await Promise.all([
+    db.canvassList.findMany({
+      where: { campaignId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        _count: { select: { entries: true } },
+        assignments: {
+          where: { deletedAt: null },
+          select: {
+            canvasserId: true,
+            responses: { select: { personId: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.canvassList.count({
+      where: { campaignId, deletedAt: null, status: "pending_approval" },
+    }),
+    db.task.count({
+      where: { campaignId, completed: false, deletedAt: null, assignedTo: userId },
+    }),
+    db.canvassResponse.findMany({
+      where: {
+        assignment: { canvassList: { campaignId } },
+        respondedAt: { gte: weekStart },
+      },
+      select: { outcome: true },
+    }),
+    db.canvassResponse.findMany({
+      where: {
+        assignment: { canvassList: { campaignId } },
+        respondedAt: { gte: prevWeekStart, lt: weekStart },
+      },
+      select: { outcome: true },
+    }),
+    db.canvassAssignment.findMany({
+      where: { canvassList: { campaignId }, deletedAt: null },
+      select: {
+        canvasserId: true,
+        canvasser: { select: { id: true, firstName: true, lastName: true } },
+        responses: { select: { personId: true, respondedAt: true } },
+      },
+    }),
+  ]);
+
+  // Walk list progress
+  const lists = walkLists.map((l) => {
+    const respondedPersonIds = new Set(
+      l.assignments.flatMap((a) => a.responses.map((r) => r.personId))
+    );
+    const totalEntries = l._count.entries;
+    const responded = respondedPersonIds.size;
+    return {
+      id: l.id,
+      name: l.name,
+      status: l.status as string,
+      totalEntries,
+      responded,
+      completionPct:
+        totalEntries > 0 ? Math.min(100, Math.round((responded / totalEntries) * 100)) : 0,
+    };
+  });
+
+  // Canvasser stats: doors today + last active
+  type CanvasserAgg = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    doorsToday: Set<string>;
+    lastActive: Date | null;
+  };
+  const canvasserMap = new Map<string, CanvasserAgg>();
+  for (const a of assignments) {
+    if (!canvasserMap.has(a.canvasserId)) {
+      canvasserMap.set(a.canvasserId, {
+        id: a.canvasserId,
+        firstName: a.canvasser.firstName,
+        lastName: a.canvasser.lastName,
+        doorsToday: new Set(),
+        lastActive: null,
+      });
+    }
+    const agg = canvasserMap.get(a.canvasserId)!;
+    for (const r of a.responses) {
+      if (r.respondedAt >= todayStart) agg.doorsToday.add(r.personId);
+      if (!agg.lastActive || r.respondedAt > agg.lastActive) agg.lastActive = r.respondedAt;
+    }
+  }
+  const canvassers = Array.from(canvasserMap.values())
+    .map((c) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      doorsToday: c.doorsToday.size,
+      lastActive: c.lastActive?.toISOString() ?? null,
+    }))
+    .sort((a, b) => b.doorsToday - a.doorsToday);
+
+  // Not-home rate this week vs previous week
+  const notHomeRate = (responses: { outcome: string }[]) => {
+    if (responses.length === 0) return 0;
+    return Math.round(
+      (responses.filter((r) => r.outcome === "not_home").length / responses.length) * 100
+    );
+  };
+  const notHomeRateThisWeek = notHomeRate(weekResponses);
+  const notHomeRatePrevWeek = notHomeRate(prevWeekResponses);
+
+  return {
+    lists,
+    canvassers,
+    pendingApprovalCount,
+    openFollowUpCount,
+    notHomeRateThisWeek,
+    notHomeRatePrevWeek,
+    notHomeRateDelta: notHomeRateThisWeek - notHomeRatePrevWeek,
+  };
+}
+
+export type FieldOrganizerDashData = Awaited<ReturnType<typeof getFieldOrganizerDashData>>;
+
+// ── Finance lead dashboard data ────────────────────────────────────────────
+
+export async function getFinanceLeadDashData(campaignId: string) {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const [campaign, donorGroups, topDonorsNeedingAction, donorsLast7] = await Promise.all([
+    db.campaign.findUnique({
+      where: { id: campaignId },
+      select: { fundraisingGoal: true },
+    }),
+    db.donor.groupBy({
+      by: ["status"],
+      where: { campaignId, deletedAt: null },
+      _count: { id: true },
+    }),
+    db.donor.findMany({
+      where: {
+        campaignId,
+        deletedAt: null,
+        status: { in: ["interested", "pledged", "received"] },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: 5,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        status: true,
+        amount: true,
+        updatedAt: true,
+      },
+    }),
+    db.donor.findMany({
+      where: { campaignId, status: "received", deletedAt: null, updatedAt: { gte: sevenDaysAgo } },
+      select: { updatedAt: true },
+    }),
+  ]);
+
+  const countByStatus: Record<string, number> = {};
+  for (const g of donorGroups) countByStatus[g.status] = g._count.id;
+
+  const interested = countByStatus["interested"] ?? 0;
+  const pledged = countByStatus["pledged"] ?? 0;
+  const received = countByStatus["received"] ?? 0;
+
+  // 7-day donors received series
+  const days = buildDaySeries(now);
+  const donorsByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const don of donorsLast7) {
+    const dk = dayKey(don.updatedAt);
+    if (donorsByDay.has(dk)) donorsByDay.set(dk, (donorsByDay.get(dk) ?? 0) + 1);
+  }
+  const donorsSeries = days.map((d) => ({ date: d, count: donorsByDay.get(d) ?? 0 }));
+
+  return {
+    interested,
+    pledged,
+    received,
+    totalRaised: received,
+    fundraisingGoal: campaign?.fundraisingGoal ?? null,
+    pipelineCount: interested + pledged,
+    topDonorsNeedingAction: topDonorsNeedingAction.map((d) => ({
+      id: d.id,
+      name: `${d.firstName} ${d.lastName}`,
+      status: d.status as string,
+      amount: d.amount ? Number(d.amount) : null,
+      daysSinceUpdate: Math.floor((now.getTime() - d.updatedAt.getTime()) / 86400000),
+    })),
+    donorsSeries,
+  };
+}
+
+export type FinanceLeadDashData = Awaited<ReturnType<typeof getFinanceLeadDashData>>;
+
+// ── Volunteer coordinator dashboard data ──────────────────────────────────
+
+export async function getVolunteerCoordDashData(campaignId: string) {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(todayStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const [
+    volunteerCount,
+    newSignupsThisWeek,
+    upcomingShifts,
+    recentShiftAttendees,
+    volunteerFollowUps,
+    signupsLast7,
+  ] = await Promise.all([
+    db.volunteerRecord.count({ where: { campaignId, deletedAt: null } }),
+    db.canvassResponse.count({
+      where: {
+        person: { campaignId, deletedAt: null },
+        volunteerInterest: true,
+        respondedAt: { gte: sevenDaysAgo },
+      },
+    }),
+    db.volunteerShift.findMany({
+      where: { campaignId, deletedAt: null, date: { gte: todayStart, lt: weekEnd } },
+      select: {
+        id: true,
+        name: true,
+        date: true,
+        startTime: true,
+        endTime: true,
+        location: true,
+        maxVolunteers: true,
+        attendees: { where: { deletedAt: null }, select: { status: true } },
+      },
+      orderBy: { date: "asc" },
+    }),
+    db.volunteerShiftAttendee.findMany({
+      where: {
+        shift: { campaignId, deletedAt: null, date: { lt: todayStart } },
+        deletedAt: null,
+      },
+      select: { status: true },
+      take: 500,
+    }),
+    db.task.count({
+      where: { campaignId, completed: false, deletedAt: null, type: "volunteer_follow_up" },
+    }),
+    db.canvassResponse.findMany({
+      where: {
+        person: { campaignId, deletedAt: null },
+        volunteerInterest: true,
+        respondedAt: { gte: sevenDaysAgo },
+      },
+      select: { respondedAt: true },
+    }),
+  ]);
+
+  // Attendance rate across recent past shifts
+  const totalAttendees = recentShiftAttendees.length;
+  const attended = recentShiftAttendees.filter((a) => a.status === "attended").length;
+  const attendanceRate = totalAttendees > 0 ? Math.round((attended / totalAttendees) * 100) : 0;
+
+  // Upcoming shifts
+  const shifts = upcomingShifts.map((s) => ({
+    id: s.id,
+    name: s.name,
+    date: s.date.toISOString().split("T")[0],
+    startTime: s.startTime,
+    endTime: s.endTime,
+    location: s.location,
+    signupCount: s.attendees.length,
+    maxVolunteers: s.maxVolunteers,
+  }));
+
+  // 7-day volunteer sign-up series
+  const days = buildDaySeries(now);
+  const signupsByDay = new Map<string, number>(days.map((d) => [d, 0]));
+  for (const r of signupsLast7) {
+    const dk = dayKey(r.respondedAt);
+    if (signupsByDay.has(dk)) signupsByDay.set(dk, (signupsByDay.get(dk) ?? 0) + 1);
+  }
+  const signupsSeries = days.map((d) => ({ date: d, count: signupsByDay.get(d) ?? 0 }));
+
+  return {
+    volunteerCount,
+    newSignupsThisWeek,
+    shifts,
+    attendanceRate,
+    volunteerFollowUps,
+    signupsSeries,
+  };
+}
+
+export type VolunteerCoordDashData = Awaited<ReturnType<typeof getVolunteerCoordDashData>>;
+
 // ── Needs-you queue ────────────────────────────────────────────────────────
 
 type QueuePriority = "overdue" | "today" | "this-week" | "neutral";

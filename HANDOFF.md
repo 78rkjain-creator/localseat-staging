@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 27, 2026 — Code quality sweep, security hardening (CSP, CSRF, session versioning, IDOR fix), demo infra consolidation._
+_Last updated: April 27, 2026 — Batch 9: events, field messages, survey builder, digital signatures, privacy dashboard, data anonymization, analytics, walk list approval workflow, dynamic walk lists, turf cutting, route optimization, map, appointment scheduling, canvasser self-stats, leaderboard, printable walk lists, and more._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -48,6 +48,7 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 - SSL: certbot, auto-renews
 - Firewall: ports 22, 80, 443 open — 5432 blocked
 - Demo reset cron: 3am (`npx prisma db seed`)
+- Daily summary cron: 7am (`curl -s -X POST https://app.localseat.io/api/cron/daily-summary -H "x-cron-secret: $CRON_SECRET"`)
 - DBs: `localseat_prod` (prod), `localseat_demo` (demo), Neon (staging)
 
 ---
@@ -101,6 +102,7 @@ DATABASE_URL="postgresql://localseat:LS_Prod_2026x@localhost:5432/localseat_prod
 NEXTAUTH_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
 NEXT_PUBLIC_STRIPE_ENABLED="false"
+CRON_SECRET="localseat-cron-2026-secret"
 ```
 
 **Demo** (`/var/www/demo/.env`) — second checkout of the main repo at /var/www/demo
@@ -227,6 +229,17 @@ Candidate
 20260425160000_add_not_required_approval_status
 20260426000001_add_ood_request_fields
 20260427000001_add_session_version
+20260427000002_remove_canvass_response_unique
+20260427000003_add_sort_order_to_canvass_list_entry
+20260427000004_add_daily_summary_enabled
+20260427000005_add_daily_summary_email
+20260427000006_canvass_list_status_and_dynamic
+20260427000007_add_voter_id
+20260427000008_add_appointment_task_type
+20260427000009_add_events
+20260427000010_add_field_messages
+20260427000011_add_surveys_and_signatures
+20260427000012_add_privacy_fields
 ```
 
 ---
@@ -240,6 +253,10 @@ Candidate
 - ListImport, PersonListMembership (list import tracking)
 - Sign (SignStatus: to_be_installed/installed; SignLocationType: residential/non_residential)
 - CampaignCompetitor, AddressChangeRequest, ContactSubmission
+- Event, EventAttendee (EventType: canvass_event/phone_bank/meeting/fundraiser/other; EventStatus: scheduled/in_progress/completed/cancelled)
+- FieldMessage (FieldMessagePriority: normal/urgent)
+- Survey, SurveyQuestion (SurveyQuestionType: text/single_choice/multi_choice/rating/yes_no), SurveyResponse
+- SignatureRecord
 
 **Key enums:**
 - Role: candidate, campaign_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
@@ -247,7 +264,8 @@ Candidate
 - ListImportType: list, telephone_list, official_voters_list
 - PersonListMembershipStatus: matched, created, pending_review, accepted
 - SignStatus: to_be_installed, installed
-- TaskType: includes volunteer_follow_up
+- TaskType: includes volunteer_follow_up, appointment
+- CanvassListStatus: draft, pending_approval, active, archived
 - ListSource: voters_list, residents_list, manual, canvass, team
 - SupportLevel enum: strong_yes, soft_yes, undecided, soft_no, strong_no (on both Person and CanvassResponse)
 - OutOfDistrictApprovalStatus: not_required, pending, approved, rejected
@@ -265,11 +283,23 @@ Candidate
 - isOutOfDistrict (Boolean, default false) — true only when approved OOD status
 - outOfDistrictApprovalStatus (OutOfDistrictApprovalStatus?) — pending | approved | rejected | not_required
 - outOfDistrictRequestedById, outOfDistrictRequestedAt, outOfDistrictRejectionReason — FO approval workflow fields
+- voterId (String?, unique per campaign) — voter ID from OVL import; used for voter ID matching on reimport
+- anonymizedAt (DateTime?) — set when record is anonymized; locks editing and replaces PII with placeholders
+
+**Key CanvassList fields:**
+- status (CanvassListStatus) — draft, pending_approval, active, archived
+- dynamicFilters (Json?) — stored filter criteria for auto-updating lists
+- lastRefreshedAt (DateTime?) — last time dynamic list was rebuilt
+
+**Key CanvassListEntry fields:**
+- sortOrder (Int) — explicit display/route order; updated by route optimization
 
 **Key Campaign fields:**
 - customFields (Json) — defines up to 5 field labels
 - wardBoundary (Json) — Polygon or MultiPolygon
 - canvassScript (String)
+- dailySummaryEmail (Boolean, default false) — enables daily email report to candidate/CM
+- dataRetentionMonths (Int?) — policy setting (not enforced automatically)
 
 ---
 
@@ -400,6 +430,77 @@ Candidate
 - Input sanitization on canvassing and outreach actions
 - nodemailer v8 (SMTP injection CVEs patched)
 
+### Canvassing Screen Enhancements
+- Navigate button + phone/SMS links on canvassing screen (tel:/sms: links; home phone SMS shows warning that it may be a landline)
+- Back button on canvassing screen — navigates to previous entry without saving current responses
+- Walk time estimates (~X min walk to next address, last stop indicator) using Haversine distance
+- Next stop navigation (Google Maps walking directions from current address to next)
+- Appointment scheduling from canvassing screen (date/time picker, creates appointment Task, badge shown when appointment pending)
+- Survey panel on canvassing screen (collapsible, driven by active survey for the list; answers saved with canvass response)
+- Digital signature capture on canvassing screen (canvas-based pad, optional; thumbnails appear on person detail)
+- Building/apartment grouping on canvassing screen — multi-unit addresses shown as one stop, units sorted numerically
+
+### Walk Lists
+- Walk list approval workflow — field organizer-created lists enter pending_approval status; candidate/CM approve before activation
+- Walk list status lifecycle: draft → pending_approval → active → archived
+- Dynamic walk lists — auto-rebuild from stored filter criteria; live match count during creation, lastRefreshedAt tracked
+- Walk list archive (soft deactivate for lists with data) and delete (hard delete if no responses)
+- Walk list edit — rename and manage entries inline
+- Route optimization — nearest-neighbor Haversine heuristic reorders CanvassListEntry.sortOrder for efficient walking route
+- Printable walk lists — browser print-to-PDF with @media print CSS; roster format with address/resident rows
+- Building/apartment grouping on walk list page — multi-unit addresses grouped, units sorted numerically
+
+### Dashboards and Analytics
+- Canvasser self-stats dashboard (doors knocked total, doors today, signs requested, volunteer interests, follow-ups created)
+- Canvasser performance leaderboard on manager dashboard
+- Live activity feed on manager dashboard with 30-second auto-refresh (`/api/dashboard/canvass-activity`)
+- Analytics dashboard at `/analytics` — 4 Recharts charts: support trend over time, doors per day, canvasser performance comparison, support level distribution (candidate/CM only)
+- Scheduled daily email reports — toggle in campaign settings (`dailySummaryEmail`), `/api/cron/daily-summary` endpoint secured by `x-cron-secret` header, 7am cron on VPS
+
+### Map and Turf
+- Campaign contact map at `/people/map` — Mapbox GL JS, color-coded markers by support level, filters panel, ward boundary overlay, GeoJSON upload for boundary import
+- Pin drop contact creation on map — click map to place pin, reverse geocoding fills address, creates new Person record
+- Interactive turf cutting at `/canvassing/turf` — draw polygons, create walk lists from selection, existing turf overlays shown
+
+### Events
+- Campaign events system at `/events` — create events (canvass_event/phone_bank/meeting/fundraiser/other), link to walk lists, attendee management
+- Event check-in and check-out tracking per attendee
+- Event status lifecycle: scheduled → in_progress → completed / cancelled
+
+### Field Messages
+- Field messaging at `/field-messages` — managers push notes to canvassers, urgent/normal priority
+- Dismissible banners on canvassing screen for active messages
+- Message expiry — field messages auto-hide after expiry date
+- Urgent messages shown with distinct styling
+
+### Survey Builder
+- Survey builder at `/campaign-settings/surveys` — create/edit surveys with 5 question types: text, single_choice, multi_choice, rating, yes_no
+- Reorder questions via drag-handle, mark questions required, live preview
+- Surveys linked to canvass lists; active survey auto-loads on canvassing screen
+- Survey answers saved with CanvassResponse in SurveyResponse record
+
+### Digital Signatures
+- Canvas-based signature pad (Pointer Events API, touch-friendly)
+- Purpose selection: lawn_sign_consent, volunteer_consent, petition, other
+- Signature thumbnails displayed on person detail page with purpose/date/collector labels
+- Signature records visible in consent log on Privacy dashboard
+
+### Privacy and Data Management
+- Privacy dashboard at `/campaign-settings/privacy` — data inventory stats (total, with phone %, with email %, canvassed %, anonymized %), data retention policy setting, consent log of last 25 signatures
+- Data anonymization — one-click anonymize any person record (candidate/CM only): clears name, phone, email, DOB, custom fields; sets `anonymizedAt`; canvass history preserved for statistics
+- Anonymized records show "Anonymized" badge on person detail, editing locked, ContactDropdown hidden
+
+### Person Detail Enhancements
+- Contact dropdown — call/SMS/email options in one menu (phone home, phone mobile, email)
+- Last contacted indicator — most recent outreach log channel + date shown in contact card
+- Navigate button — opens Google Maps walking directions to person's address
+- Phone and SMS links with MessageSquare icon for quick access
+
+### Voter ID Matching
+- `voterId` field on Person (unique per campaign) — set on OVL import
+- Reimport matches by voterId first, then falls back to name+address matching; merges non-blank fields, preserves existing data
+- Import summary shows matched/created/updated/skipped counts
+
 ---
 
 ## Key Files
@@ -409,9 +510,15 @@ Candidate
 /src/app/(app)/
   dashboard, people, voter-import, canvassing, follow-ups
   outreach, donors, volunteers, team, signs, campaigns, account, address-changes
-  campaign-settings/ward, competitors, script, custom-fields
+  analytics/
+  events/, events/new/, events/[eventId]/
+  field-messages/
+  people/map/
+  campaign-settings/ward, competitors, script, custom-fields, tags, surveys/, privacy/, reports/, branding/
   voter-import/review
   people/[personId]/out-of-district-actions.ts, out-of-district-control.tsx
+  people/[personId]/signature-section.tsx, signature-actions.ts
+  people/[personId]/anonymize-button.tsx, anonymize-actions.ts
   people/classify-banner.tsx (thin re-export wrapper)
   people/out-of-district/pending/page.tsx, queue-row.tsx
   people/residents/page.tsx, filters-client.tsx
@@ -421,21 +528,25 @@ Candidate
   team/classify-actions.ts, team/classify-modal.tsx (thin re-exports)
 /src/app/admin/campaigns, users, audit-log, export, demo-leads, settings
 /src/app/onboarding/choose-plan, create-campaign
+/src/app/api/cron/daily-summary/route.ts
+/src/app/api/dashboard/canvass-activity/route.ts
+/src/app/api/addresses/search/route.ts
 /src/lib/
   auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
   people.ts, canvassing.ts, outreach.ts, activity.ts, dashboard.ts
   geocoding.ts, ward.ts, address-normalize.ts, competitors.ts
   email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
   format-poll-number.ts, classify-actions.ts
+  analytics.ts, events.ts, field-messages.ts, map.ts, reports.ts, surveys.ts
 /src/components/classify-modal.tsx (shared classify modal — used by people/ and team/ re-exports)
 /src/components/layout/sidebar.tsx, mobile-nav.tsx
 /src/components/ui/tag-picker.tsx, address-picker.tsx
+/src/components/field-messages-banner.tsx
+/src/components/dashboard/canvass-activity-feed.tsx
 /src/hooks/useOfflineSync.ts
 /public/sw.js
 /scripts/geocode-demo.ts, export-geocoded-coords.ts, stamp-sw.mjs
-/src/app/(app)/campaign-settings/tags/
 /src/app/(app)/people/new/
-/src/app/api/addresses/search/route.ts
 /NEXT_SESSION_PROMPTS.md
 /var/www/marketing/
 ```
@@ -484,6 +595,8 @@ Candidate
 
 **April 27, 2026** — Code quality sweep and security hardening. Migration `add_session_version` applied (adds `sessionVersion Int @default(0)` to users table). No data loss. CSP header live. Deploy scripts updated with sw.js checkout step. Demo directory deleted — demo now runs from main codebase. Both remotes (origin + staging) must be pushed on every deploy going forward.
 
+**April 27, 2026 (Batch 9)** — Major feature deployment. 11 new migrations applied (`20260427000002` through `20260427000012`): removed canvass response unique constraint, added sort_order to canvass list entries, added daily summary email toggle, added canvass list status + dynamic filter fields, added voter_id to persons, added appointment task type, added events and event attendees tables, added field messages table, added surveys + survey questions + survey responses + signature records tables, added anonymizedAt to persons and dataRetentionMonths to campaigns. No data loss. CRON_SECRET env var added to production. 7am daily summary cron configured on VPS.
+
 ---
 
 ## Remaining Work
@@ -496,20 +609,50 @@ Candidate
 | Code quality sweep — dead code deleted, N+1 queries fixed, try-catch on all DB server actions, `as any` removed, PascalCase files renamed, team management moved to server actions, debug logs removed | April 27, 2026 |
 | Security hardening — CSP header, CSRF origin check, competitor IDOR fix, session versioning, demo rate limiting | April 27, 2026 |
 | Demo infra consolidation — demo/ directory deleted, demo now runs from main codebase with DEMO_MODE=true | April 27, 2026 |
+| Activity timeline on person detail | April 27, 2026 |
+| Navigate buttons + phone/SMS links on canvassing screen and person detail | April 27, 2026 |
+| Canvasser self-stats dashboard (doors knocked, today, signs, volunteers, follow-ups) | April 27, 2026 |
+| Printable walk lists (browser print-to-PDF with @media print CSS) | April 27, 2026 |
+| Back button on canvassing screen | April 27, 2026 |
+| Canvasser performance leaderboard on manager dashboard | April 27, 2026 |
+| Live activity feed with 30-second auto-refresh | April 27, 2026 |
+| Campaign contact map at /people/map (Mapbox GL JS, color-coded by support level, filters, ward boundary overlay, GeoJSON import) | April 27, 2026 |
+| Pin drop contact creation with reverse geocoding | April 27, 2026 |
+| Multi-visit canvassing (removed unique constraint, 30-second dedup, visit history preserved) | April 27, 2026 |
+| Interactive turf cutting at /canvassing/turf (draw polygons, create walk lists from selection, existing turf overlays) | April 27, 2026 |
+| Route optimization (nearest-neighbor Haversine heuristic, reorders walk list entries) | April 27, 2026 |
+| Walk time estimates on canvassing screen (~X min walk to next, last stop indicator) | April 27, 2026 |
+| Next stop navigation (Google Maps walking directions) | April 27, 2026 |
+| Analytics dashboard at /analytics (4 Recharts charts: support trend, doors per day, canvasser performance, support distribution) | April 27, 2026 |
+| Scheduled daily email reports (campaign setting toggle, /api/cron/daily-summary, 7am cron on VPS) | April 27, 2026 |
+| Dynamic walk lists (auto-updating based on filter criteria, live match count during creation) | April 27, 2026 |
+| Walk list approval workflow (field organizer lists need manager approval, pending/active/draft/archived statuses) | April 27, 2026 |
+| Walk list archive/delete/edit (soft delete if no responses, archive for lists with data, edit name and entries) | April 27, 2026 |
+| Building/apartment grouping (multi-unit addresses grouped on walk list and canvassing screen, numeric unit sort) | April 27, 2026 |
+| Voter ID matching on import (match by voterId, merge non-blank fields, import summary) | April 27, 2026 |
+| Campaign events system at /events (create events, link to walk lists, attendee management, check-in/check-out) | April 27, 2026 |
+| Appointment scheduling from canvassing screen (date/time picker, creates appointment task, badge on canvassing screen) | April 27, 2026 |
+| Field messaging at /field-messages (managers push notes to canvassers, urgent/normal priority, dismissible banners, expiry) | April 27, 2026 |
+| Contact dropdown on person detail (call/SMS/email in one menu) | April 27, 2026 |
+| Last contacted indicator on person detail | April 27, 2026 |
+| Survey builder at /campaign-settings/surveys (5 question types, reorder, required fields, preview) | April 27, 2026 |
+| Survey integration on canvassing screen (collapsible, answers saved with canvass response) | April 27, 2026 |
+| Digital signature capture (canvas-based pad, purpose selection, thumbnails on person detail) | April 27, 2026 |
+| Privacy dashboard at /campaign-settings/privacy (data counts, retention settings, consent log) | April 27, 2026 |
+| Data anonymization (one-click anonymize person, clears PII, preserves canvass data, badge + edit lock) | April 27, 2026 |
 
 ### High Priority
 | Item | Effort |
 |---|---|
-| Activity timeline on person detail | Small |
 | PWA manifest and install prompt — SW cache busting shipped; manifest and install prompt still needed | Small |
 
 ### Medium Priority
 | Item | Effort |
 |---|---|
-| Codex cleanup prompts 3–8 (auth centralization, import contracts, person detail split, custom field lifecycle, naming, maintainability audit) | Medium |
-| Role-specific dashboard hero cards (field_org, canvasser, finance, volunteer_coord) | Medium |
-| Donor tracking polish | Small |
-| Address changes end-to-end testing | Small |
+| Stripe payment integration | Medium — dev tier selector done, Stripe wiring remaining |
+| Two-factor authentication (2FA) | Medium |
+| UI/layout polish pass | Medium |
+| Official voter list reconciliation engine — address normalization, fuzzy name matching, field-level merge, manual review, audit trail | Large |
 
 ### Low Priority
 | Item | Effort |
@@ -521,24 +664,18 @@ Candidate
 ### Active / In Progress
 | Item | Status |
 |---|---|
-| Stripe payment integration | Dev tier selector done, Stripe wiring remaining |
-| Telnyx SMS (+ Stripe + CRTC approval) | Decided, not built |
 | Demo instance isolation (unique DB per visitor) | Large, deferred |
-| Operations guide document | Small |
 | Update HANDOFF.md each session | Ongoing |
 
 ---
 
 ## Roadmap
 1. Stripe payment integration
-2. Telnyx SMS broadcast
-3. Two-factor authentication (2FA)
-4. Events + public RSVP → feeds volunteer roster
-5. Custom canvass survey fields
-6. Simple automation rules (soft yes → auto follow-up)
-7. Public volunteer signup / petition pages → feeds CRM
-8. Automated PostgreSQL backups
-9. Demo instance isolation
+2. Two-factor authentication (2FA)
+3. Simple automation rules (soft yes → auto follow-up)
+4. Public volunteer signup / petition pages → feeds CRM
+5. Automated PostgreSQL backups
+6. Demo instance isolation
 
 ### Defined — Ready to Build
 | Item | Effort |

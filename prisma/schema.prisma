@@ -176,7 +176,8 @@ model Campaign {
   city         String
   province     String   @default("ON")
   year         Int
-  electionDate DateTime?
+  electionDate         DateTime?
+  fundraisingGoal      Int?
   wardBoundary      Json?
   wardBoundarySetAt DateTime?
   canvassScript        String?
