@@ -13,6 +13,7 @@ import {
   canViewTeam,
   canManageVoterList,
 } from "@/lib/permissions";
+import { ClipboardList } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 
 
@@ -66,6 +67,14 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   useEffect(() => {
     if (isPeoplePath) setPeopleOpen(true);
   }, [isPeoplePath]);
+
+  const isAdminPath =
+    pathname.startsWith("/campaign-settings") ||
+    pathname.startsWith("/data-corrections") ||
+    pathname.startsWith("/team");
+  useEffect(() => {
+    if (isAdminPath) setAdminOpen(true);
+  }, [isAdminPath]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -171,11 +180,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           {
             href: "/campaign-settings/surveys",
             label: "Surveys",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            ),
+            icon: <ClipboardList size={16} />,
           },
         ]
       : []),
@@ -548,7 +553,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 Admin
               </span>
               <svg
-                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", adminOpen ? "rotate-180" : ""].join(" ")}
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (adminOpen || isAdminPath) ? "rotate-180" : ""].join(" ")}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -557,7 +562,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            {adminOpen && (
+            {(adminOpen || isAdminPath) && (
               <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
                 {adminItems.map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");

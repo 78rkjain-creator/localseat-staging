@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Settings,
   User,
+  ClipboardList,
 } from "lucide-react";
 type Role = "candidate" | "campaign_manager" | "co_chair" | "field_organizer" | "canvasser" | "volunteer_coordinator" | "finance_lead";
 
@@ -87,6 +88,7 @@ const MANAGER_MORE_LINKS: Tab[] = [
   tab("Volunteers", "/volunteers", <UserCheck size={ICON_SIZE} />),
   tab("Outreach", "/outreach", <Megaphone size={ICON_SIZE} />),
   tab("Team", "/team", <Users size={ICON_SIZE} />),
+  tab("Surveys", "/campaign-settings/surveys", <ClipboardList size={ICON_SIZE} />),
   tab("Settings", "/campaign-settings/ward", <Settings size={ICON_SIZE} />),
 ];
 
