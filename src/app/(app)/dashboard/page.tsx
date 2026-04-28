@@ -30,7 +30,7 @@ export default async function DashboardPage() {
       return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} />;
 
     case "field_organizer":
-      return <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} />;
+      return <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} userId={userId} />;
 
     case "canvasser":
       return <CanvasserHome userId={userId} campaignId={activeCampaignId} firstName={firstName} />;

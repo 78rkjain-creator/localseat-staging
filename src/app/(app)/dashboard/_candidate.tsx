@@ -1,11 +1,16 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { getCandidateDashboardData, getNeedsYouQueue, getCanvasserStats, getRecentCanvassActivity } from "@/lib/dashboard";
-import { getRecentActivity } from "@/lib/activity";
-import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
+import { db } from "@/lib/db";
+import {
+  getDashboardHeroData,
+  getCandidateDashboardData,
+  getNeedsYouQueue,
+  getCanvasserStats,
+  getRecentCanvassActivity,
+} from "@/lib/dashboard";
 import { CanvassActivityFeed } from "@/components/dashboard/canvass-activity-feed";
-import type { DonorStatus, OutreachChannel, Role } from "@/types";
-import { ROLE_LABELS, OUTREACH_CHANNEL_LABELS, DONOR_STATUS_LABELS } from "@/types";
+import { BarSparkline, LineSparkline } from "@/components/dashboard/sparkline-charts";
+import type { DonorStatus, Role } from "@/types";
+import { DONOR_STATUS_LABELS } from "@/types";
 
 interface Props {
   campaignId: string;
@@ -13,163 +18,247 @@ interface Props {
   role: Role;
 }
 
+const EVENT_TYPE_COLORS: Record<string, string> = {
+  canvassing_session: "#f97316",
+  fundraiser: "#22c55e",
+  community_event: "#3b82f6",
+  rally: "#f59e0b",
+  training: "#8b5cf6",
+  town_hall: "#06b6d4",
+  other: "#94a3b8",
+};
+
 export async function CandidateDashboard({ campaignId }: Props) {
-  const [data, activityEntries, needsYouQueue, canvasserStats, canvassActivity] = await Promise.all([
+  const now = new Date();
+  const next72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+
+  const [hero, data, needsYou, canvassers, liveActivity, upcomingEvents] = await Promise.all([
+    getDashboardHeroData(campaignId),
     getCandidateDashboardData(campaignId),
-    getRecentActivity(campaignId, 20),
     getNeedsYouQueue(campaignId),
     getCanvasserStats(campaignId),
     getRecentCanvassActivity(campaignId),
+    db.event.findMany({
+      where: {
+        campaignId,
+        deletedAt: null,
+        status: "upcoming",
+        date: { gte: now, lt: next72h },
+      },
+      orderBy: { date: "asc" },
+      take: 4,
+      select: {
+        id: true,
+        name: true,
+        date: true,
+        startTime: true,
+        eventType: true,
+        _count: { select: { attendees: true } },
+      },
+    }),
   ]);
+
   const {
-    total, forUs, againstUs, undecided, notHome, uncontacted,
-    doorsTotal, doorsToday, walkListProgress,
-    followUpSummary, donorCountByStatus, recentOutreach, teamMembers,
-    canvassersOutToday, competitorBreakdown, votersWithHistory,
+    supportRate, totalPeople, contactedOnce, contactedTwice, contactedThreePlus,
+    doorsToday, signsOut, totalRaised, fundraisingGoal, electionDate, campaignName,
+    doorsSeries, supportRateSeries, signsSeries, donorsSeries, doorsAvg7Day,
+  } = hero;
+
+  const {
+    forUs, againstUs, undecided, notHome, uncontacted,
+    walkListProgress, donorCountByStatus,
   } = data;
 
-  const idd = forUs + againstUs + undecided;
-  const supportRate = idd > 0 ? Math.round((forUs / idd) * 100) : null;
+  const totalContacted = contactedOnce + contactedTwice + contactedThreePlus;
+  const reachedPct = totalPeople > 0 ? Math.round((totalContacted / totalPeople) * 100) : 0;
 
-  function pct(n: number) {
-    return total === 0 ? "—" : `${Math.round((n / total) * 100)}%`;
-  }
+  const daysToElection = electionDate
+    ? Math.max(0, Math.ceil((electionDate.getTime() - Date.now()) / 86400000))
+    : null;
 
-  // Group team by role
-  const teamByRole = new Map<string, string[]>();
-  for (const m of teamMembers) {
-    const label = ROLE_LABELS[m.role as Role] ?? m.role;
-    if (!teamByRole.has(label)) teamByRole.set(label, []);
-    teamByRole.get(label)!.push(`${m.user.firstName} ${m.user.lastName}`);
-  }
+  const doorsDelta = doorsToday - doorsAvg7Day;
+  const doorsBadge = doorsDelta >= 0 ? `+${doorsDelta} vs 7d avg` : `${doorsDelta} vs 7d avg`;
+  const signsWeek = signsSeries.reduce((s, p) => s + p.count, 0);
+  const raisedWeek = donorsSeries.reduce((s, p) => s + p.count, 0);
+
+  const idTotal = forUs + againstUs + undecided;
+  const leaderboard = canvassers.slice(0, 5);
+  const lists = walkListProgress.slice(0, 5);
 
   return (
-    <div className="px-6 py-8 max-w-5xl mx-auto">
-      {/* ── Hero card ── */}
-      <div className="bg-slate-900 rounded-3xl px-6 py-5 mb-8 relative overflow-hidden">
-        {/* Soft orange glow in bottom-right corner */}
-        <div className="absolute bottom-0 right-0 w-40 h-40 rounded-full bg-brand-500 opacity-20 translate-x-12 translate-y-12 pointer-events-none" />
+    <div className="px-4 py-4 space-y-3 min-h-0">
 
-        {/* Eyebrow */}
-        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
-          Campaign summary
-        </p>
-
-        {/* Status headline — derived from support rate */}
-        <p className="text-[28px] font-extrabold text-white leading-tight mb-4 display">
-          {supportRate !== null
-            ? supportRate >= 55 ? `Ahead · ${supportRate}% support rate`
-            : supportRate >= 45 ? `On pace · ${supportRate}% support rate`
-            : `Behind pace · ${supportRate}% support rate`
-            : "No voter ID data yet"}
-        </p>
-
-        {/* Three stats */}
-        <div className="flex items-end gap-8">
+      {/* ── Hero band ── */}
+      <div
+        className="rounded-2xl px-5 py-4 relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+      >
+        <div className="absolute bottom-0 right-0 w-32 h-32 rounded-full bg-orange-500/10 translate-x-12 translate-y-8 pointer-events-none" />
+        <div className="flex items-start justify-between gap-6">
+          {/* Left */}
           <div>
-            <p className="text-2xl font-bold text-white tabular">{doorsToday}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">doors today</p>
+            <p className="text-[11px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
+              Campaign summary
+            </p>
+            <p className="text-[30px] font-extrabold text-white leading-none mb-2">
+              {supportRate}% support rate
+            </p>
+            {campaignName && (
+              <p className="text-sm text-white/60 mb-0.5">{campaignName}</p>
+            )}
+            {daysToElection !== null && (
+              <p className="text-sm text-white/40">
+                {daysToElection > 0 ? `${daysToElection} days to election` : "Election day!"}
+              </p>
+            )}
           </div>
-          <div>
-            <p className="text-2xl font-bold text-white tabular">{doorsTotal.toLocaleString()}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">total doors</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white tabular">{canvassersOutToday}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">canvassers out today</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white tabular">{votersWithHistory.toLocaleString()}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">voters with history</p>
+          {/* Right — canvass coverage */}
+          <div className="flex-shrink-0 text-right">
+            <p className="text-[11px] text-white/40 uppercase tracking-widest mb-2">Coverage</p>
+            <div className="flex items-end gap-5 mb-2">
+              <div className="text-center">
+                <p className="text-xl font-bold text-white/40 tabular">{totalPeople.toLocaleString()}</p>
+                <p className="text-[10px] text-white/30 mt-0.5">total</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-bold tabular" style={{ color: "#93c5fd" }}>{contactedOnce.toLocaleString()}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: "#93c5fd" }}>once</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-bold tabular" style={{ color: "#60a5fa" }}>{contactedTwice.toLocaleString()}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: "#60a5fa" }}>twice</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-bold tabular" style={{ color: "#3b82f6" }}>{contactedThreePlus.toLocaleString()}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: "#3b82f6" }}>3+</p>
+              </div>
+            </div>
+            {/* Stacked progress bar */}
+            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden flex w-56 ml-auto">
+              {totalPeople > 0 && (
+                <>
+                  <div style={{ width: `${(contactedThreePlus / totalPeople) * 100}%`, background: "#3b82f6" }} className="h-full" />
+                  <div style={{ width: `${(contactedTwice / totalPeople) * 100}%`, background: "#60a5fa" }} className="h-full" />
+                  <div style={{ width: `${(contactedOnce / totalPeople) * 100}%`, background: "#93c5fd" }} className="h-full" />
+                </>
+              )}
+            </div>
+            <p className="text-[10px] text-white/30 mt-1">{reachedPct}% reached</p>
           </div>
         </div>
       </div>
 
-      {/* ── Voter ID mix + Needs-you queue ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+      {/* ── KPI strip ── */}
+      <div className="grid grid-cols-4 gap-3">
+        <KpiCard
+          label="Doors today"
+          value={doorsToday}
+          badge={doorsBadge}
+          badgeColor={doorsDelta >= 0 ? "green" : "amber"}
+        >
+          <BarSparkline data={doorsSeries} />
+        </KpiCard>
+        <KpiCard
+          label="Support %"
+          value={`${supportRate}%`}
+          badge={`${supportRate}% of ID'd voters`}
+          badgeColor="green"
+        >
+          <LineSparkline data={supportRateSeries} />
+        </KpiCard>
+        <KpiCard
+          label="Signs out"
+          value={signsOut}
+          badge={`+${signsWeek} this week`}
+          badgeColor={signsWeek > 0 ? "green" : "amber"}
+        >
+          <BarSparkline data={signsSeries} />
+        </KpiCard>
+        <KpiCard
+          label="Raised"
+          value={totalRaised}
+          badge={`+${raisedWeek} this week`}
+          badgeColor={raisedWeek > 0 ? "green" : "amber"}
+        >
+          <LineSparkline data={donorsSeries} />
+        </KpiCard>
+      </div>
 
-        {/* Donut ring — voter ID mix */}
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Voter ID mix</h2>
-            <Link href="/people/residents" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">details →</Link>
+      {/* ── Panel grid ── */}
+      <div className="grid grid-cols-12 gap-3">
+
+        {/* Voter ID mix — col-span-4 */}
+        <div className="col-span-4 bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Voter ID mix</p>
+            <Link href="/people/residents" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">details →</Link>
           </div>
-          <div className="flex items-center gap-6">
-            {/* SVG donut — hand-rolled, no chart library */}
-            <svg width="80" height="80" viewBox="0 0 80 80" className="flex-shrink-0">
-              {(() => {
-                const total = forUs + undecided + againstUs;
-                if (total === 0) {
-                  return <circle cx="40" cy="40" r="30" fill="none" stroke="#e2e8f0" strokeWidth="12" />;
-                }
-                const segments = [
-                  { value: forUs, color: "#10b981" },
-                  { value: undecided, color: "#f59e0b" },
-                  { value: againstUs, color: "#ef4444" },
-                ];
-                let offset = 0;
-                const circumference = 2 * Math.PI * 30;
-                return segments.map((seg, i) => {
-                  const pctSeg = seg.value / total;
-                  const dash = pctSeg * circumference;
-                  const gap = circumference - dash;
-                  const rotation = offset * 360 - 90;
-                  offset += pctSeg;
-                  return (
-                    <circle
-                      key={i}
-                      cx="40" cy="40" r="30"
-                      fill="none"
-                      stroke={seg.color}
-                      strokeWidth="12"
-                      strokeDasharray={`${dash} ${gap}`}
-                      strokeDashoffset="0"
-                      transform={`rotate(${rotation} 40 40)`}
+          {idTotal > 0 ? (
+            <div className="space-y-2 mb-3">
+              {[
+                { label: "For us", value: forUs, color: "#10b981" },
+                { label: "Undecided", value: undecided, color: "#f59e0b" },
+                { label: "Against", value: againstUs, color: "#ef4444" },
+                { label: "Not home", value: notHome, color: "#cbd5e1" },
+                { label: "Not contacted", value: uncontacted, color: "#f1f5f9" },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[11px] text-slate-500">{label}</span>
+                    <span className="text-[11px] font-semibold text-slate-700 tabular">{value.toLocaleString()}</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${totalPeople > 0 ? (value / totalPeople) * 100 : 0}%`,
+                        background: color,
+                      }}
                     />
-                  );
-                });
-              })()}
-              {supportRate !== null && (
-                <>
-                  <text x="40" y="37" textAnchor="middle" className="tabular" style={{ fontSize: 14, fontWeight: 700, fill: "#0f172a" }}>{supportRate}%</text>
-                  <text x="40" y="50" textAnchor="middle" style={{ fontSize: 9, fill: "#94a3b8" }}>for us</text>
-                </>
-              )}
-            </svg>
-            {/* Legend */}
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0" /><span className="text-slate-600">For us</span><span className="ml-auto font-semibold text-slate-900 tabular pl-4">{forUs.toLocaleString()}</span></div>
-              <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-400 flex-shrink-0" /><span className="text-slate-600">Undecided</span><span className="ml-auto font-semibold text-slate-900 tabular pl-4">{undecided.toLocaleString()}</span></div>
-              <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-400 flex-shrink-0" /><span className="text-slate-600">Against</span><span className="ml-auto font-semibold text-slate-900 tabular pl-4">{againstUs.toLocaleString()}</span></div>
-              <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-slate-200 flex-shrink-0" /><span className="text-slate-400">Not home</span><span className="ml-auto font-semibold text-slate-400 tabular pl-4">{notHome.toLocaleString()}</span></div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        </Card>
-
-        {/* Needs-you queue */}
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Needs you</h2>
-            <Link href="/follow-ups" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">queue →</Link>
-          </div>
-          {needsYouQueue.length === 0 ? (
-            <p className="text-sm text-slate-400">All clear — nothing needs you right now.</p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {needsYouQueue.slice(0, 5).map((item) => (
-                <Link key={item.id} href={item.href} className="flex items-center justify-between gap-3 py-1.5 hover:opacity-80 transition-opacity">
-                  <div className="flex items-center gap-2.5 min-w-0">
+            <p className="text-xs text-slate-400 mb-3">No voter ID data yet.</p>
+          )}
+          <div className="mt-auto">
+            <p className="text-[10px] text-slate-400 mb-1">Support % · 7-day trend</p>
+            <LineSparkline data={supportRateSeries} height={36} />
+          </div>
+        </div>
+
+        {/* Action queue — col-span-4 */}
+        <div className="col-span-4 bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">For you</p>
+            <Link href="/follow-ups" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">queue →</Link>
+          </div>
+          {needsYou.length === 0 ? (
+            <p className="text-sm text-slate-400 mt-1">All clear — nothing urgent.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {needsYou.slice(0, 5).map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className={[
-                      "h-2 w-2 rounded-full flex-shrink-0",
+                      "h-1.5 w-1.5 rounded-full flex-shrink-0",
                       item.priority === "overdue" ? "bg-red-500" :
                       item.priority === "today" ? "bg-amber-400" : "bg-slate-300",
                     ].join(" ")} />
-                    <span className="text-sm text-slate-700 truncate">{item.count} {item.label}</span>
+                    <span className="text-sm text-slate-700 truncate">
+                      <span className="font-semibold">{item.count}</span> {item.label}
+                    </span>
                   </div>
                   <span className={[
-                    "text-[11px] font-semibold border rounded-full px-2 py-0.5 flex-shrink-0",
-                    item.priority === "overdue" ? "bg-red-50 text-red-600 border-red-200" :
-                    "bg-amber-50 text-amber-700 border-amber-200",
+                    "text-[10px] font-semibold border rounded-full px-1.5 py-0.5 flex-shrink-0",
+                    item.priority === "overdue"
+                      ? "bg-red-50 text-red-600 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200",
                   ].join(" ")}>
                     {item.priority === "overdue" ? "overdue" : "today"}
                   </span>
@@ -177,275 +266,175 @@ export async function CandidateDashboard({ campaignId }: Props) {
               ))}
             </div>
           )}
-        </Card>
-      </div>
-
-      {/* Top metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard label="Doors knocked" value={doorsTotal} />
-        <MetricCard label="Today" value={doorsToday} highlight={doorsToday > 0} />
-        <MetricCard label="Voters on file" value={total} />
-        {supportRate !== null ? (
-          <Card padding="md">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Support rate</p>
-            <p className="text-xs text-slate-400 mb-2">Of ID&apos;d voters</p>
-            <p className={`text-3xl font-bold ${supportRate >= 50 ? "text-emerald-600" : supportRate >= 30 ? "text-amber-600" : "text-red-600"}`}>{supportRate}%</p>
-          </Card>
-        ) : (
-          <MetricCard label="Support rate" value={0} />
-        )}
-      </div>
-
-      {/* ID breakdown */}
-      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-        Voter ID breakdown
-      </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-        <IdCard label="For us" sublabel="Strong + Soft Yes" value={forUs} pct={pct(forUs)} color="emerald" />
-        <IdCard label="Undecided" sublabel="Persuadable" value={undecided} pct={pct(undecided)} color="amber" />
-        <IdCard label="Against us" sublabel="Strong + Soft No" value={againstUs} pct={pct(againstUs)} color="red" />
-        <IdCard label="Not home" sublabel="No level captured" value={notHome} pct={pct(notHome)} color="slate" />
-        <IdCard label="Not contacted" sublabel="No canvass record" value={uncontacted} pct={pct(uncontacted)} color="slate" />
-      </div>
-
-      {/* Progress bar */}
-      {idd > 0 && (
-        <div className="mb-8">
-          <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden flex">
-            <div className="h-full bg-emerald-500" style={{ width: `${(forUs / idd) * 100}%` }} />
-            <div className="h-full bg-amber-400" style={{ width: `${(undecided / idd) * 100}%` }} />
-            <div className="h-full bg-red-400" style={{ width: `${(againstUs / idd) * 100}%` }} />
-          </div>
-          <p className="text-xs text-slate-400 mt-1.5 text-center">
-            Based on {idd.toLocaleString()} ID&apos;d voter{idd !== 1 ? "s" : ""} (excludes not home and uncontacted)
-          </p>
         </div>
-      )}
 
-      {/* Competitor breakdown */}
-      {competitorBreakdown.length > 0 && (
-        <Card padding="sm" className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Supporting other candidates
-          </h2>
-          <div className="flex flex-col gap-2">
-            {competitorBreakdown.slice(0, 5).map((c) => (
-              <div key={c.name} className="flex items-center justify-between">
-                <span className="text-sm text-slate-700">{c.name}</span>
-                <span className="text-sm font-semibold text-slate-900 tabular">{c.count}</span>
+        {/* Field ops — col-span-4 */}
+        <div className="col-span-4 bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Field ops</p>
+            <Link href="/canvassing" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">all lists →</Link>
+          </div>
+          {lists.length === 0 ? (
+            <p className="text-xs text-slate-400 mb-3">No walk lists created.</p>
+          ) : (
+            <div className="flex flex-col gap-2 mb-3">
+              {lists.map((l) => {
+                const pct = l.totalEntries > 0
+                  ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100))
+                  : 0;
+                return (
+                  <div key={l.id}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <Link
+                        href={`/canvassing/${l.id}`}
+                        className="text-sm font-medium text-slate-800 hover:text-slate-600 truncate"
+                      >
+                        {l.name}
+                      </Link>
+                      <span className="text-[11px] text-slate-500 flex-shrink-0 ml-2">
+                        {l.totalResponses}/{l.totalEntries}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          pct >= 60 ? "bg-emerald-400" : pct >= 30 ? "bg-amber-400" : "bg-red-400"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-auto">
+            <p className="text-[10px] text-slate-400 mb-1">Doors · 7-day trend</p>
+            <BarSparkline data={doorsSeries} height={36} />
+          </div>
+        </div>
+
+        {/* Live activity — col-span-4 */}
+        <div className="col-span-4 bg-white border border-slate-200 rounded-xl p-3 overflow-hidden">
+          <CanvassActivityFeed initialEntries={liveActivity.slice(0, 5)} />
+        </div>
+
+        {/* Donor pipeline — col-span-5 */}
+        <div className="col-span-5 bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Donor pipeline</p>
+            <Link href="/donors" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">all donors →</Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {(["interested", "pledged", "received"] as DonorStatus[]).map((s) => {
+              const count = donorCountByStatus[s] ?? 0;
+              const styles: Record<DonorStatus, string> = {
+                interested: "bg-amber-50 border-amber-200 text-amber-700",
+                pledged: "bg-blue-50 border-blue-200 text-blue-700",
+                received: "bg-emerald-50 border-emerald-200 text-emerald-700",
+              };
+              return (
+                <div key={s} className={`rounded-lg border p-2.5 ${styles[s]}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70 mb-1">
+                    {DONOR_STATUS_LABELS[s]}
+                  </p>
+                  <p className="text-xl font-bold tabular">{count}</p>
+                </div>
+              );
+            })}
+          </div>
+          {fundraisingGoal && fundraisingGoal > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                <span>Goal</span>
+                <span>${fundraisingGoal.toLocaleString()}</span>
               </div>
-            ))}
-            {competitorBreakdown.length > 5 && (
-              <p className="text-xs text-slate-400 pt-1">+{competitorBreakdown.length - 5} more</p>
+              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, (totalRaised / fundraisingGoal) * 100)}%`,
+                    background: "linear-gradient(90deg, #f97316, #ea580c)",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          <div className="mt-auto">
+            <p className="text-[10px] text-slate-400 mb-1">Raised · 7-day trend</p>
+            <LineSparkline data={donorsSeries} height={40} />
+          </div>
+        </div>
+
+        {/* Leaderboard + Up next — col-span-3 */}
+        <div className="col-span-3 flex flex-col gap-3">
+          {/* Leaderboard */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 flex-1">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Top canvassers</p>
+            {leaderboard.length === 0 ? (
+              <p className="text-xs text-slate-400">No canvass data yet.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {leaderboard.map((c, i) => (
+                  <div
+                    key={c.canvasserId}
+                    className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
+                      i === 0 ? "bg-amber-50/80" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-[11px] font-bold text-slate-400 w-3 text-center flex-shrink-0">
+                      {i + 1}
+                    </span>
+                    <div
+                      className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                      style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
+                    >
+                      {c.firstName[0]}{c.lastName[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-slate-800 truncate">
+                        {c.firstName} {c.lastName}
+                      </p>
+                      {c.lastActive && (
+                        <p className="text-[10px] text-slate-400">{relativeTime(c.lastActive)}</p>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 tabular flex-shrink-0">
+                      {c.totalDoors}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </Card>
-      )}
 
-      {/* Walk list progress */}
-      {walkListProgress.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Walk lists</h2>
-            <Link href="/canvassing" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View all →</Link>
-          </div>
-          <Card className="!p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">List</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Canvassers</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Progress</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {walkListProgress.map((l) => {
-                  const capped = Math.min(l.totalResponses, l.totalEntries);
-                  const pctDone = l.totalEntries > 0 ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100)) : 0;
+          {/* Up next */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Up next</p>
+            {upcomingEvents.length === 0 ? (
+              <p className="text-xs text-slate-400">No events in the next 72 hours.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {upcomingEvents.map((ev) => {
+                  const borderColor = EVENT_TYPE_COLORS[ev.eventType as string] ?? "#94a3b8";
+                  const dateStr = new Date(ev.date).toLocaleDateString("en-CA", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  });
                   return (
-                    <tr key={l.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3">
-                        <Link href={`/canvassing/${l.id}`} className="font-medium text-slate-900 hover:text-slate-600">
-                          {l.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
-                        {l.canvasserNames.length > 0 ? l.canvasserNames.join(", ") : (
-                          <span className="text-slate-300">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-sm text-slate-700">{capped}/{l.totalEntries}</span>
-                        <span className="text-xs text-slate-400 ml-1.5">{pctDone}%</span>
-                      </td>
-                    </tr>
+                    <div key={ev.id} className="pl-2.5 border-l-2" style={{ borderColor }}>
+                      <p className="text-xs font-medium text-slate-800 truncate">{ev.name}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {dateStr} · {ev.startTime} · {ev._count.attendees} attending
+                      </p>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </Card>
-        </div>
-      )}
-
-      {/* Canvasser performance */}
-      {canvasserStats.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Canvasser performance</h2>
-          <Card className="!p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Canvasser</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Doors</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Today</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Signs</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">Volunteers</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Last active</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Complete</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {canvasserStats.map((c) => (
-                    <tr key={c.canvasserId} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-medium text-slate-900">{c.firstName} {c.lastName}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 tabular">{c.totalDoors.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right hidden sm:table-cell tabular">
-                        <span className={c.doorsToday > 0 ? "text-emerald-600 font-medium" : "text-slate-400"}>
-                          {c.doorsToday > 0 ? c.doorsToday : "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-600 hidden sm:table-cell tabular">{c.signs}</td>
-                      <td className="px-4 py-3 text-right text-slate-600 hidden sm:table-cell tabular">{c.volunteers}</td>
-                      <td className="px-4 py-3 text-right text-slate-400 text-xs hidden md:table-cell">
-                        {c.lastActive ? relativeTime(c.lastActive) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={[
-                          "text-xs font-semibold tabular",
-                          c.completionPct >= 75 ? "text-emerald-600" :
-                          c.completionPct >= 50 ? "text-amber-600" : "text-red-500",
-                        ].join(" ")}>
-                          {c.completionPct}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Live canvass activity feed */}
-      <Card padding="md" className="mb-8">
-        <CanvassActivityFeed initialEntries={canvassActivity} />
-      </Card>
-
-      {/* Follow-ups + Donor pipeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-900">Follow-up queue</h2>
-            <Link href="/follow-ups" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View all →</Link>
-          </div>
-          {followUpSummary.overdue.length === 0 && followUpSummary.dueToday.length === 0 ? (
-            <p className="text-sm text-slate-400">No tasks due today or overdue.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {followUpSummary.overdue.map((task) => (
-                <FollowUpRow key={task.id} task={task} badge="Overdue" badgeStyle="bg-red-50 text-red-600 border-red-200" />
-              ))}
-              {followUpSummary.dueToday.map((task) => (
-                <FollowUpRow key={task.id} task={task} badge="Today" badgeStyle="bg-amber-50 text-amber-700 border-amber-200" />
-              ))}
-              {followUpSummary.upcomingCount > 0 && (
-                <p className="text-xs text-slate-400 pt-1">+{followUpSummary.upcomingCount} upcoming</p>
-              )}
-            </div>
-          )}
-        </Card>
-
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-900">Donor pipeline</h2>
-            <Link href="/donors" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View all →</Link>
-          </div>
-          {Object.keys(donorCountByStatus).length === 0 ? (
-            <p className="text-sm text-slate-400">No donors recorded yet.</p>
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {(["interested", "pledged", "received"] as DonorStatus[]).map((s) => (
-                <div key={s} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">{DONOR_STATUS_LABELS[s]}</span>
-                  <span className="text-sm font-semibold text-slate-900">{donorCountByStatus[s] ?? 0}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Recent activity feed */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent activity</h2>
-        <Card padding="md">
-          <RecentActivityFeed entries={activityEntries} />
-        </Card>
-      </div>
-
-      {/* Recent outreach + Team */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-900">Recent outreach</h2>
-            <Link href="/outreach" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View all →</Link>
-          </div>
-          {recentOutreach.length === 0 ? (
-            <p className="text-sm text-slate-400">No outreach recorded yet.</p>
-          ) : (
-            <ol className="flex flex-col gap-3">
-              {recentOutreach.map((log) => (
-                <li key={log.id} className="flex items-start gap-3">
-                  <div className="h-7 w-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <ChannelDot channel={log.channel as OutreachChannel} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-800">
-                      {log.person ? `${log.person.firstName} ${log.person.lastName}` : "Unknown"}
-                      {log.outcome && <span className="text-slate-400"> — {log.outcome}</span>}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {OUTREACH_CHANNEL_LABELS[log.channel as OutreachChannel] ?? log.channel}
-                      {log.user ? ` · ${log.user.firstName} ${log.user.lastName}` : ""}
-                      {" · "}{new Date(log.date).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-
-        <Card padding="md">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-900">Team</h2>
-            <Link href="/team" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View →</Link>
-          </div>
-          <div className="flex flex-col gap-3">
-            {Array.from(teamByRole.entries()).map(([roleLabel, names]) => (
-              <div key={roleLabel}>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{roleLabel}</p>
-                <div className="flex flex-col gap-0.5">
-                  {names.map((name) => (
-                    <p key={name} className="text-sm text-slate-700">{name}</p>
-                  ))}
-                </div>
               </div>
-            ))}
+            )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -460,69 +449,44 @@ function relativeTime(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
-  return (
-    <Card padding="md">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-3xl font-bold text-slate-900">
-        {value.toLocaleString()}
-      </p>
-    </Card>
-  );
-}
-
-function IdCard({ label, sublabel, value, pct, color }: {
-  label: string; sublabel?: string; value: number; pct?: string;
-  color: "emerald" | "red" | "amber" | "slate";
-}) {
-  const accent = { emerald: "text-emerald-600", red: "text-red-600", amber: "text-amber-600", slate: "text-slate-700" };
-  return (
-    <Card padding="md" className="flex flex-col justify-between">
-      <div>
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-0.5">{label}</p>
-        {sublabel && <p className="text-[11px] text-slate-400 mb-2">{sublabel}</p>}
-      </div>
-      <div className="flex items-end justify-between gap-1">
-        <p className={["text-2xl font-bold", accent[color]].join(" ")}>{value.toLocaleString()}</p>
-        {pct && <p className="text-xs font-medium text-slate-400 mb-0.5">{pct}</p>}
-      </div>
-    </Card>
-  );
-}
-
-function FollowUpRow({ task, badge, badgeStyle }: {
-  task: { id: string; title: string; person?: { firstName: string; lastName: string } | null; assignee?: { firstName: string; lastName: string } | null };
-  badge: string; badgeStyle: string;
+function KpiCard({
+  label,
+  value,
+  badge,
+  badgeColor = "green",
+  children,
+}: {
+  label: string;
+  value: string | number;
+  badge?: string;
+  badgeColor?: "green" | "amber";
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-800 truncate">
-          {task.person ? `${task.person.firstName} ${task.person.lastName}` : task.title}
-        </p>
-        {task.assignee && (
-          <p className="text-xs text-slate-400 truncate">→ {task.assignee.firstName} {task.assignee.lastName}</p>
+    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+      <div className="flex items-start justify-between mb-1">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+        {badge && (
+          <span
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-1 flex-shrink-0 ${
+              badgeColor === "green"
+                ? "bg-[#dcfce7] text-[#16a34a]"
+                : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            {badge}
+          </span>
         )}
       </div>
-      <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 flex-shrink-0 ${badgeStyle}`}>{badge}</span>
+      <p className="text-[22px] font-bold text-slate-900 tabular leading-none mb-2">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
+      {children}
     </div>
   );
-}
-
-function ChannelDot({ channel }: { channel: OutreachChannel }) {
-  const colors: Record<OutreachChannel, string> = {
-    door_knock: "bg-brand-100",
-    phone_call: "bg-emerald-100",
-    email: "bg-blue-100",
-    text_message: "bg-violet-100",
-    in_person: "bg-amber-100",
-    other: "bg-slate-100",
-  };
-  return <span className={`h-2 w-2 rounded-full ${colors[channel] ?? "bg-slate-200"}`} />;
 }

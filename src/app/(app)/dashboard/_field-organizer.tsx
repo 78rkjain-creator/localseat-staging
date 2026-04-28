@@ -1,213 +1,247 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { getFieldOrganizerDashboardData } from "@/lib/dashboard";
-import { getRecentActivity } from "@/lib/activity";
-import { RecentActivityFeed } from "@/components/dashboard/recent-activity-feed";
-import { ROLE_LABELS } from "@/types";
+import { getFieldOrganizerDashData } from "@/lib/dashboard";
 
 interface Props {
   campaignId: string;
   firstName: string;
+  userId: string;
 }
 
-export async function FieldOrganizerDashboard({ campaignId, firstName }: Props) {
-  const [data, activityEntries] = await Promise.all([
-    getFieldOrganizerDashboardData(campaignId),
-    getRecentActivity(campaignId, 20),
-  ]);
-  const { walkListProgress, doorsToday, unassignedFollowUpCount, activityToday, pendingAddressChangeCount } = data;
+export async function FieldOrganizerDashboard({ campaignId, userId }: Props) {
+  const {
+    lists,
+    canvassers,
+    pendingApprovalCount,
+    openFollowUpCount,
+    notHomeRateThisWeek,
+    notHomeRatePrevWeek,
+    notHomeRateDelta,
+  } = await getFieldOrganizerDashData(campaignId, userId);
 
-  const totalEntries = walkListProgress.reduce((s, l) => s + l.totalEntries, 0);
-  const totalResponses = walkListProgress.reduce((s, l) => s + l.totalResponses, 0);
-  const overallPct = totalEntries > 0 ? Math.min(100, Math.round((totalResponses / totalEntries) * 100)) : 0;
+  const doorsToday = canvassers.reduce((s, c) => s + c.doorsToday, 0);
+  const totalEntries = lists.reduce((s, l) => s + l.totalEntries, 0);
+  const totalResponded = lists.reduce((s, l) => s + l.responded, 0);
+  const canvassersActiveToday = canvassers.filter((c) => c.doorsToday > 0).length;
+  const overallPct = totalEntries > 0 ? Math.min(100, Math.round((totalResponded / totalEntries) * 100)) : 0;
 
   return (
-    <div className="px-6 py-8 max-w-5xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Good to see you, {firstName}</h1>
-        <p className="text-slate-500 mt-1">{ROLE_LABELS["field_organizer"]}</p>
-      </div>
+    <div className="px-4 py-4 space-y-3">
 
-      {/* Pending address changes alert */}
-      {pendingAddressChangeCount > 0 && (
-        <Link
-          href="/address-changes"
-          className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 hover:bg-amber-100 transition-colors"
-        >
-          <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-            <svg className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-800">
-              {pendingAddressChangeCount} pending address change{pendingAddressChangeCount !== 1 ? "s" : ""}
+      {/* ── Hero band ── */}
+      <div
+        className="rounded-2xl px-5 py-4 relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
+      >
+        <div className="absolute bottom-0 right-0 w-28 h-28 rounded-full bg-orange-500/10 translate-x-10 translate-y-8 pointer-events-none" />
+        <div className="flex items-start justify-between gap-6">
+          {/* Left */}
+          <div>
+            <p className="text-[11px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
+              My field operations
             </p>
-            <p className="text-xs text-amber-600">Review and approve or reject →</p>
+            <p className="text-[28px] font-extrabold text-white leading-none mb-2">
+              {lists.length} active list{lists.length !== 1 ? "s" : ""} · {totalEntries.toLocaleString()} entries
+            </p>
+            <p className="text-sm text-white/50">
+              {canvassersActiveToday} canvasser{canvassersActiveToday !== 1 ? "s" : ""} in the field today
+            </p>
           </div>
-        </Link>
-      )}
-
-      {/* Top metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard label="Doors today" value={doorsToday} highlight={doorsToday > 0} />
-        <MetricCard label="Total doors" value={totalResponses} />
-        <MetricCard label="Lists active" value={walkListProgress.length} />
-        <Card padding="md">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Unassigned follow-ups</p>
-          {unassignedFollowUpCount > 0 ? (
-            <>
-              <p className="text-3xl font-bold text-amber-500">{unassignedFollowUpCount}</p>
-              <Link href="/follow-ups" className="text-xs text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900 mt-1 block">
-                Assign now →
-              </Link>
-            </>
-          ) : (
-            <p className="text-3xl font-bold text-slate-900">0</p>
-          )}
-        </Card>
-      </div>
-
-      {/* Overall progress bar */}
-      {totalEntries > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-1.5 text-xs text-slate-500">
-            <span>Campaign progress</span>
-            <span>{totalResponses.toLocaleString()} / {totalEntries.toLocaleString()} doors ({overallPct}%)</span>
-          </div>
-          <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full bg-slate-800 rounded-full transition-all"
-              style={{ width: `${overallPct}%` }}
-            />
+          {/* Right — overall completion */}
+          <div className="flex-shrink-0 text-right">
+            <p className="text-[11px] text-white/40 uppercase tracking-widest mb-1">Overall completion</p>
+            <p className="text-4xl font-extrabold leading-none mb-2" style={{ color: "#86efac" }}>
+              {overallPct}%
+            </p>
+            <div className="w-40 h-1.5 rounded-full bg-white/10 overflow-hidden ml-auto">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${overallPct}%`, background: "#86efac" }}
+              />
+            </div>
+            <p className="text-[10px] text-white/30 mt-1">
+              {totalResponded.toLocaleString()} / {totalEntries.toLocaleString()} doors
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Walk list table */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Walk lists</h2>
-          <Link href="/canvassing" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">Manage →</Link>
+      {/* ── KPI strip ── */}
+      <div className="grid grid-cols-4 gap-3">
+        <KpiCard label="Doors today" value={doorsToday} highlight={doorsToday > 0} />
+        <KpiCard
+          label="Pending approval"
+          value={pendingApprovalCount}
+          highlight={pendingApprovalCount > 0}
+          highlightColor="amber"
+          action={pendingApprovalCount > 0 ? { href: "/canvassing", label: "Review now →" } : undefined}
+        />
+        <KpiCard
+          label="My follow-ups"
+          value={openFollowUpCount}
+          highlight={openFollowUpCount > 0}
+          highlightColor="amber"
+          action={openFollowUpCount > 0 ? { href: "/follow-ups", label: "View queue →" } : undefined}
+        />
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Not-home rate</p>
+          <p className="text-[22px] font-bold text-slate-900 tabular leading-none mb-1">
+            {notHomeRateThisWeek}%
+          </p>
+          <p className={`text-[11px] font-semibold ${
+            notHomeRateDelta > 0 ? "text-red-500" : notHomeRateDelta < 0 ? "text-emerald-600" : "text-slate-400"
+          }`}>
+            {notHomeRateDelta > 0 ? `+${notHomeRateDelta}%` : notHomeRateDelta < 0 ? `${notHomeRateDelta}%` : "—"} vs last week
+          </p>
         </div>
-
-        {walkListProgress.length === 0 ? (
-          <Card padding="md">
-            <p className="text-sm text-slate-400">No walk lists created yet.</p>
-          </Card>
-        ) : (
-          <Card className="!p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">List</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Canvassers</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Progress</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {walkListProgress.map((l) => {
-                  const capped = Math.min(l.totalResponses, l.totalEntries);
-                  const pct = l.totalEntries > 0 ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100)) : 0;
-                  const complete = l.totalEntries > 0 && l.totalResponses >= l.totalEntries;
-                  return (
-                    <tr key={l.id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Link href={`/canvassing/${l.id}`} className="font-medium text-slate-900 hover:text-slate-600">
-                            {l.name}
-                          </Link>
-                          {complete && (
-                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5">Done</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 hidden md:table-cell">
-                        {l.canvassers.length > 0
-                          ? l.canvassers.map((c) => `${c.firstName} ${c.lastName}`).join(", ")
-                          : <span className="text-slate-300">Unassigned</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-3">
-                          <div className="hidden sm:block w-20">
-                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${complete ? "bg-emerald-500" : "bg-slate-800"}`}
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                          </div>
-                          <span className="text-xs text-slate-500 whitespace-nowrap">
-                            {capped}/{l.totalEntries}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </Card>
-        )}
       </div>
 
-      {/* Recent activity feed */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent activity</h2>
-        <Card padding="md">
-          <RecentActivityFeed entries={activityEntries} />
-        </Card>
-      </div>
+      {/* ── Two panels ── */}
+      <div className="grid grid-cols-12 gap-3">
 
-      {/* Canvasser activity today */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card padding="md">
-          <h2 className="text-base font-semibold text-slate-900 mb-3">Canvasser activity today</h2>
-          {activityToday.length === 0 ? (
-            <p className="text-sm text-slate-400">No door knocks recorded today yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-2.5">
-              {activityToday.map((a, i) => (
-                <li key={i} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">{a.canvasser.firstName} {a.canvasser.lastName}</span>
-                  <span className="text-sm font-semibold text-slate-900">{a.doorsKnocked} door{a.doorsKnocked !== 1 ? "s" : ""}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card padding="md">
+        {/* My walk lists — col-span-7 */}
+        <div className="col-span-7 bg-white border border-slate-200 rounded-xl p-3">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-900">Follow-ups</h2>
-            <Link href="/follow-ups" className="text-xs font-medium text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">View queue →</Link>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">My walk lists</p>
+            <Link href="/canvassing" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">manage →</Link>
           </div>
-          {unassignedFollowUpCount === 0 ? (
-            <p className="text-sm text-slate-400">No unassigned follow-up tasks.</p>
+          {lists.length === 0 ? (
+            <p className="text-sm text-slate-400">No walk lists created yet.</p>
           ) : (
-            <div className="flex items-center gap-3 py-2">
-              <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-                <span className="text-lg font-bold text-amber-600">{unassignedFollowUpCount}</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-800">Unassigned task{unassignedFollowUpCount !== 1 ? "s" : ""}</p>
-                <p className="text-xs text-slate-400">Need to be assigned to a team member</p>
-              </div>
+            <div className="flex flex-col gap-3">
+              {lists.map((l) => {
+                const pct = l.completionPct;
+                return (
+                  <div key={l.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <Link
+                        href={`/canvassing/${l.id}`}
+                        className="text-sm font-medium text-slate-800 hover:text-slate-600 truncate"
+                      >
+                        {l.name}
+                      </Link>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <span className="text-[11px] text-slate-500">
+                          {l.responded}/{l.totalEntries}
+                        </span>
+                        <span className={`text-[11px] font-semibold ${
+                          pct >= 60 ? "text-emerald-600" : pct >= 30 ? "text-amber-600" : "text-red-500"
+                        }`}>
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          pct >= 60 ? "bg-emerald-400" : pct >= 30 ? "bg-amber-400" : "bg-red-400"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
-        </Card>
+        </div>
+
+        {/* My canvassers today — col-span-5 */}
+        <div className="col-span-5 bg-white border border-slate-200 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">My canvassers today</p>
+          </div>
+          {canvassers.length === 0 ? (
+            <p className="text-sm text-slate-400">No canvassers assigned yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {canvassers.slice(0, 8).map((c) => {
+                const isActive = c.doorsToday > 0;
+                const lastActiveText = c.lastActive ? relativeTime(c.lastActive) : null;
+                return (
+                  <div key={c.id} className="flex items-center gap-2.5">
+                    <div
+                      className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                      style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
+                    >
+                      {c.firstName[0]}{c.lastName[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800 truncate">
+                        {c.firstName} {c.lastName}
+                      </p>
+                      {lastActiveText && (
+                        <p className="text-[10px] text-slate-400">Last seen {lastActiveText}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {c.doorsToday > 0 && (
+                        <span className="text-sm font-bold text-slate-700 tabular">
+                          {c.doorsToday}
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200"
+                      }`}>
+                        {isActive ? "Active" : lastActiveText ? `${lastActiveText}` : "Idle"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function KpiCard({
+  label,
+  value,
+  highlight = false,
+  highlightColor = "orange",
+  action,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+  highlightColor?: "orange" | "amber";
+  action?: { href: string; label: string };
+}) {
+  const valueColor = !highlight
+    ? "text-slate-900"
+    : highlightColor === "amber"
+    ? "text-amber-500"
+    : "text-brand-500";
+
   return (
-    <Card padding="md">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-3xl font-bold text-slate-900">
+    <div className="bg-white border border-slate-200 rounded-xl p-3">
+      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className={`text-[22px] font-bold tabular leading-none mb-1 ${valueColor}`}>
         {value.toLocaleString()}
       </p>
-    </Card>
+      {action && (
+        <Link href={action.href} className="text-[11px] text-slate-900 underline underline-offset-2 decoration-slate-300 hover:decoration-slate-900">
+          {action.label}
+        </Link>
+      )}
+    </div>
   );
 }

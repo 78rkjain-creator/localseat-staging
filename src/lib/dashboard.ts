@@ -571,7 +571,7 @@ export async function getDashboardHeroData(campaignId: string) {
   ] = await Promise.all([
     db.campaign.findUnique({
       where: { id: campaignId },
-      select: { fundraisingGoal: true, electionDate: true },
+      select: { fundraisingGoal: true, electionDate: true, name: true },
     }),
     db.person.count({ where: { campaignId, deletedAt: null } }),
     db.canvassResponse.findMany({
@@ -691,6 +691,7 @@ export async function getDashboardHeroData(campaignId: string) {
     doorsTotal,
     signsOut,
     totalRaised,
+    campaignName: campaign?.name ?? "",
     fundraisingGoal: campaign?.fundraisingGoal ?? null,
     electionDate: campaign?.electionDate ?? null,
     competitorCount,
