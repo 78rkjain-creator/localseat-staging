@@ -42,8 +42,9 @@ export function TagPicker({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const trimmedQuery = query.trim().toLowerCase();
   const unapplied = campaignTags.filter(
-    (t) => !appliedTagIds.has(t.id) && t.name.toLowerCase().includes(query.toLowerCase())
+    (t) => !appliedTagIds.has(t.id) && t.name.toLowerCase().includes(trimmedQuery)
   );
 
   function handleSelect(tag: TagData) {
@@ -112,7 +113,11 @@ export function TagPicker({
 
             {unapplied.length === 0 && (
               <p className="px-3 py-2 text-xs text-slate-400">
-                {query.trim() ? "No match." : "All tags applied."}
+                {trimmedQuery
+                  ? "No match."
+                  : campaignTags.length === 0
+                  ? "No tags configured for this campaign."
+                  : "All tags applied."}
               </p>
             )}
           </div>

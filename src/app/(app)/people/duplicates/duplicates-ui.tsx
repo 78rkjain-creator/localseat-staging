@@ -67,6 +67,8 @@ function defaultChoice(
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const INITIAL_LIMIT = 20;
+
 export function DuplicatesUi() {
   const [selectedFields, setSelectedFields] = useState<Set<MatchField>>(
     new Set(["firstName", "lastName", "address"])
@@ -75,6 +77,7 @@ export function DuplicatesUi() {
   const [groups, setGroups] = useState<DuplicateGroup[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [dismissedIndices, setDismissedIndices] = useState<Set<number>>(new Set());
+  const [visibleLimit, setVisibleLimit] = useState(INITIAL_LIMIT);
   const [mergeTarget, setMergeTarget] = useState<{
     group: DuplicateGroup;
     groupIndex: number;
@@ -93,6 +96,7 @@ export function DuplicatesUi() {
     setSearchError(null);
     setGroups(null);
     setDismissedIndices(new Set());
+    setVisibleLimit(INITIAL_LIMIT);
 
     const fields = [...selectedFields] as MatchField[];
     if (fields.length < 2) {
@@ -163,7 +167,7 @@ export function DuplicatesUi() {
           </p>
 
           <div className="flex flex-col gap-5">
-            {groups.map((group, idx) => {
+            {groups.slice(0, visibleLimit).map((group, idx) => {
               if (dismissedIndices.has(idx)) return null;
               return (
                 <GroupCard
@@ -175,6 +179,21 @@ export function DuplicatesUi() {
               );
             })}
           </div>
+
+          {/* Show more button */}
+          {visibleLimit < groups.length && (() => {
+            const remaining = groups.slice(visibleLimit).filter((_, i) => !dismissedIndices.has(visibleLimit + i)).length;
+            return remaining > 0 ? (
+              <div className="mt-5 text-center">
+                <button
+                  onClick={() => setVisibleLimit((c) => c + INITIAL_LIMIT)}
+                  className="h-10 px-6 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Show {Math.min(INITIAL_LIMIT, remaining)} more group{remaining !== 1 ? "s" : ""}
+                </button>
+              </div>
+            ) : null;
+          })()}
 
           {visibleCount === 0 && groups.length > 0 && (
             <div className="py-8 text-center">
@@ -428,12 +447,11 @@ function MergeModal({
     initChoices(winner, loser)
   );
 
-  // Re-init choices when winner changes
-  function handleSwap() {
-    const newWinnerId = loser.id;
+  // Move primary to the clicked record; re-derive choices from new winner/loser
+  function handleMakePrimary(newWinnerId: string) {
     setWinnerId(newWinnerId);
-    const newWinner = group.records.find((r) => r.id === newWinnerId) ?? loser;
-    const newLoser = group.records.find((r) => r.id !== newWinnerId) ?? winner;
+    const newWinner = group.records.find((r) => r.id === newWinnerId) ?? sorted[0];
+    const newLoser = sorted.find((r) => r.id !== newWinnerId) ?? sorted[1];
     setChoices(initChoices(newWinner, newLoser));
   }
 
@@ -478,44 +496,45 @@ function MergeModal({
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 py-5">
-          {/* Primary record selector */}
+          {/* Primary record selector — records stay in fixed positions; border moves */}
           <div className="grid grid-cols-2 gap-4 mb-5">
-            <div className={[
-              "rounded-2xl border-2 p-4 transition-colors",
-              "border-brand-400 bg-brand-50",
-            ].join(" ")}>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide">Primary (kept)</p>
-              </div>
-              <p className="font-semibold text-slate-900">{winner.firstName} {winner.lastName}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{addressLine(winner) || "No address"}</p>
-              <p className="text-xs text-slate-400 mt-1">{winner.canvassCount} canvass responses</p>
-              {winner.userId && (
-                <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 text-violet-700">
-                  Team
-                </span>
-              )}
-            </div>
-            <div className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Secondary (absorbed)</p>
-                <button
-                  onClick={handleSwap}
-                  disabled={isMerging}
-                  className="text-xs text-brand-600 hover:text-brand-800 font-medium transition-colors"
+            {sorted.slice(0, 2).map((record) => {
+              const isPrimary = record.id === winnerId;
+              return (
+                <div
+                  key={record.id}
+                  className={[
+                    "rounded-2xl border-2 p-4 transition-colors",
+                    isPrimary ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-slate-50",
+                  ].join(" ")}
                 >
-                  Make primary
-                </button>
-              </div>
-              <p className="font-semibold text-slate-700">{loser.firstName} {loser.lastName}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{addressLine(loser) || "No address"}</p>
-              <p className="text-xs text-slate-400 mt-1">{loser.canvassCount} canvass responses</p>
-              {loser.userId && (
-                <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 text-violet-700">
-                  Team
-                </span>
-              )}
-            </div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${isPrimary ? "text-brand-700" : "text-slate-500"}`}>
+                      {isPrimary ? "Primary (kept)" : "Secondary (absorbed)"}
+                    </p>
+                    {!isPrimary && (
+                      <button
+                        onClick={() => handleMakePrimary(record.id)}
+                        disabled={isMerging}
+                        className="text-xs text-brand-600 hover:text-brand-800 font-medium transition-colors"
+                      >
+                        Make primary
+                      </button>
+                    )}
+                  </div>
+                  <p className={`font-semibold ${isPrimary ? "text-slate-900" : "text-slate-700"}`}>
+                    {record.firstName} {record.lastName}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{addressLine(record) || "No address"}</p>
+                  <p className="text-xs text-slate-400 mt-1">{record.canvassCount} canvass responses</p>
+                  {record.userId && (
+                    <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 text-violet-700">
+                      Team
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Canvass summary */}
