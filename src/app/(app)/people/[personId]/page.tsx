@@ -23,6 +23,7 @@ import { PersonTagEditor } from "./person-tag-editor";
 import { OutOfDistrictControl } from "./out-of-district-control";
 import { SignatureSection } from "./signature-section";
 import { saveSignature } from "./signature-actions";
+import { AnonymizeButton } from "./anonymize-button";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -42,7 +43,8 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole as import("@/types").Role)) redirect("/dashboard");
-  const readOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
+  const baseReadOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
+  const canAnonymize = activeRole === "candidate" || activeRole === "campaign_manager";
   const canToggleWalkList = activeRole
     ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
     : false;
@@ -136,7 +138,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
     outOfDistrictRequestedAt: Date | null;
     outOfDistrictRejectionReason: string | null;
     outOfDistrictRequester: { firstName: string; lastName: string } | null;
+    anonymizedAt: Date | null;
   };
+
+  const isAnonymized = !!p.anonymizedAt;
+  const readOnly = baseReadOnly || isAnonymized;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto">
@@ -173,6 +179,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 Team member
               </span>
             )}
+            {isAnonymized && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                Anonymized
+              </span>
+            )}
             <ListSourceBadge source={person.listSource as ListSource} />
           </div>
           {address && (
@@ -205,6 +216,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
               ))}
             </div>
           )}
+          {canAnonymize && !isAnonymized && (
+            <div className="mt-3">
+              <AnonymizeButton
+                personId={person.id}
+                personName={`${person.firstName} ${person.lastName}`}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -215,7 +234,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
           <Card padding="md">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Contact</h2>
-              {(person.phoneHome || person.phoneMobile || person.email) && (
+              {(person.phoneHome || person.phoneMobile || person.email) && !isAnonymized && (
                 <ContactDropdown
                   phoneHome={person.phoneHome}
                   phoneMobile={person.phoneMobile}

@@ -183,6 +183,7 @@ model Campaign {
   customFields         Json?
   dailySummaryEnabled  Boolean   @default(false)
   dailySummaryEmail    String?
+  dataRetentionMonths  Int?
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(starter)
   planActivated  Boolean   @default(true)
@@ -368,6 +369,7 @@ model Person {
   needsDistrictClassification  Boolean                      @default(false)
   customFieldValues   Json?
   voterId             String?
+  anonymizedAt        DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

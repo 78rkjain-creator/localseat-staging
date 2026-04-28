@@ -13,7 +13,7 @@ import {
   canViewTeam,
   canManageVoterList,
 } from "@/lib/permissions";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ShieldCheck } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 
 
@@ -181,6 +181,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             href: "/campaign-settings/surveys",
             label: "Surveys",
             icon: <ClipboardList size={16} />,
+          },
+          {
+            href: "/campaign-settings/privacy",
+            label: "Privacy & Data",
+            icon: <ShieldCheck size={16} />,
           },
         ]
       : []),
