@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 27, 2026 — Batch 9: events, field messages, survey builder, digital signatures, privacy dashboard, data anonymization, analytics, walk list approval workflow, dynamic walk lists, turf cutting, route optimization, map, appointment scheduling, canvasser self-stats, leaderboard, printable walk lists, and more._
+_Last updated: April 28, 2026 — Batch 10: configurable duplicate finder, person–team-member linking, team badge using userId+role, General Settings save feedback, duplicate team member fix on addTeamMember, fundraising goal campaign field._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -240,6 +240,7 @@ Candidate
 20260427000010_add_field_messages
 20260427000011_add_surveys_and_signatures
 20260427000012_add_privacy_fields
+20260428000001_add_fundraising_goal
 ```
 
 ---
@@ -300,6 +301,8 @@ Candidate
 - canvassScript (String)
 - dailySummaryEmail (Boolean, default false) — enables daily email report to candidate/CM
 - dataRetentionMonths (Int?) — policy setting (not enforced automatically)
+- electionDate (DateTime?) — stored on Campaign, shown/edited in General Settings
+- fundraisingGoal (Int?) — dollar goal shown in General Settings; added in migration 20260428000001
 
 ---
 
@@ -490,6 +493,37 @@ Candidate
 - Data anonymization — one-click anonymize any person record (candidate/CM only): clears name, phone, email, DOB, custom fields; sets `anonymizedAt`; canvass history preserved for statistics
 - Anonymized records show "Anonymized" badge on person detail, editing locked, ContactDropdown hidden
 
+### Duplicate Finder (Configurable)
+- `/people/duplicates` — user selects match fields (first name, last name, birth date, phone home, phone mobile, email, address) then fetches groups
+- Server action `findDuplicates(matchFields)` in `src/app/(app)/people/duplicates/actions.ts` — loads up to 5000 persons, builds composite key from selected fields (null fields excluded so null≠null), groups by key, returns groups of 2+ sorted by size desc, capped at 100
+- UI in `src/app/(app)/people/duplicates/duplicates-ui.tsx` — field selector checkboxes, group cards showing all records in a match group, "Not duplicates" dismiss per group
+- Merge modal: auto-selects record with most canvass responses as winner; swap button to change primary; per-field radio where values differ (auto-selects non-blank side); address kept as-is with info note; calls `mergeDuplicateRecords` on confirm
+- `mergeDuplicateRecords({ winnerId, loserId, fieldChoices })` in same actions.ts — applies field choices to winner, transfers tags (createMany skipDuplicates), transfers canvassResponses / outreachLogs / tasks / notes / surveyResponses / signatureRecords (updateMany), handles personListMemberships with conflict check (loop), preserves loser's userId if winner has none, soft-deletes loser, adds merge note, audit log — all in `$transaction`
+
+### Team Member Linking
+- `Person.userId` (String?, FK→User) links a team member's User account to their Person record
+- `linkPersonToUser(personId, userId)` server action in `src/app/(app)/people/[personId]/actions.ts` — candidate/CM only; verifies userId is an active campaign member; checks no other person already linked to that userId in this campaign; sets `person.userId`
+- `unlinkPersonFromUser(personId)` — candidate/CM only; sets `person.userId = null`
+- `TeamLinkButton` client component in `src/app/(app)/people/[personId]/team-link-button.tsx`: shows violet "Team · [Role]" badge + Unlink button when linked; shows dashed "Link to team member" button that opens inline dropdown of available (unlinked) team members when not linked; uses `useTransition` + `router.refresh()`
+- Available members query uses two-step pattern to avoid Prisma back-relation filter limitation: first fetch `db.person.findMany` for `linkedUserIds`, then `db.campaignMembership.findMany` with `userId: { notIn: linkedUserIds }`
+- `TeamLinkButton` rendered in person detail Contact card for candidate/CM when person is not anonymized
+
+### All People List — Team Badge
+- Team badge in `/people` list now uses `person.userId !== null` instead of `person.listSource === "team"` — more accurate
+- Shows `Team · [role label]` using `ROLE_LABELS` from `@/types` when membership role is available
+- `getPeopleList` select in `src/lib/people.ts` includes `userId: true` and nested `user.memberships` join filtered by `campaignId`
+
+### General Settings Save Feedback
+- `saveGeneralSettings` action in `src/app/(app)/campaign-settings/general/actions.ts` converted from `void` to `(prev, formData) => GeneralSettingsState` signature for use with `useActionState`
+- Returns `{ success: true }` or `{ error: "..." }`; wrapped in try/catch
+- `GeneralSettingsForm` client component in `src/app/(app)/campaign-settings/general/general-settings-form.tsx` — uses `useActionState`, shows green "Settings saved." banner on success, red error on failure, button shows "Saving…" and is disabled while pending
+- `/campaign-settings/general/page.tsx` replaced inline form with `<GeneralSettingsForm>`
+
+### Duplicate Team Member Fix
+- `addTeamMember` in `src/app/(app)/team/actions.ts` previously always created a new Person record if no existing Person had `userId = user.id`
+- Fix: before creating, check for an existing Person by email (`userId: null, email: normalizedEmail`) and update it (set userId, listSource=team) instead of creating a duplicate
+- Lookup order: by userId first (covers re-add after remove), then by email (covers imported voter matching a new team member)
+
 ### Person Detail Enhancements
 - Contact dropdown — call/SMS/email options in one menu (phone home, phone mobile, email)
 - Last contacted indicator — most recent outreach log channel + date shown in contact card
@@ -519,6 +553,11 @@ Candidate
   people/[personId]/out-of-district-actions.ts, out-of-district-control.tsx
   people/[personId]/signature-section.tsx, signature-actions.ts
   people/[personId]/anonymize-button.tsx, anonymize-actions.ts
+  people/[personId]/team-link-button.tsx (link/unlink person ↔ team member)
+  people/duplicates/actions.ts (configurable dedup + merge)
+  people/duplicates/duplicates-ui.tsx (field selector, group cards, merge modal)
+  people/duplicates/page.tsx
+  campaign-settings/general/general-settings-form.tsx (useActionState form wrapper)
   people/classify-banner.tsx (thin re-export wrapper)
   people/out-of-district/pending/page.tsx, queue-row.tsx
   people/residents/page.tsx, filters-client.tsx
@@ -597,6 +636,8 @@ Candidate
 
 **April 27, 2026 (Batch 9)** — Major feature deployment. 11 new migrations applied (`20260427000002` through `20260427000012`): removed canvass response unique constraint, added sort_order to canvass list entries, added daily summary email toggle, added canvass list status + dynamic filter fields, added voter_id to persons, added appointment task type, added events and event attendees tables, added field messages table, added surveys + survey questions + survey responses + signature records tables, added anonymizedAt to persons and dataRetentionMonths to campaigns. No data loss. CRON_SECRET env var added to production. 7am daily summary cron configured on VPS.
 
+**April 28, 2026 (Batch 10)** — 1 migration applied (`20260428000001_add_fundraising_goal`): added fundraisingGoal (Int?) to Campaign. Configurable duplicate finder, person–team-member linking, team badge using userId+role, General Settings save feedback, and duplicate team member fix deployed.
+
 ---
 
 ## Remaining Work
@@ -640,6 +681,12 @@ Candidate
 | Digital signature capture (canvas-based pad, purpose selection, thumbnails on person detail) | April 27, 2026 |
 | Privacy dashboard at /campaign-settings/privacy (data counts, retention settings, consent log) | April 27, 2026 |
 | Data anonymization (one-click anonymize person, clears PII, preserves canvass data, badge + edit lock) | April 27, 2026 |
+| Configurable duplicate finder at /people/duplicates — user-selected match fields, group cards, merge modal with per-field selection, full record transfer | April 28, 2026 |
+| Person–team-member linking — link/unlink any Person to a User via userId, TeamLinkButton on person detail (candidate/CM only) | April 28, 2026 |
+| Team badge in All People list uses userId+role (not listSource) — shows "Team · [Role]" | April 28, 2026 |
+| General Settings save feedback — useActionState, green success banner, red error, Saving… button state | April 28, 2026 |
+| Duplicate team member fix — addTeamMember now checks for existing Person by email before creating a new record | April 28, 2026 |
+| Fundraising goal campaign field — fundraisingGoal (Int?) added to Campaign model, shown/edited in General Settings | April 28, 2026 |
 
 ### High Priority
 | Item | Effort |
@@ -657,7 +704,6 @@ Candidate
 ### Low Priority
 | Item | Effort |
 |---|---|
-| Deduplication UI review | Small |
 | jszip to package.json (KMZ upload prod support) | Small |
 | Automated PostgreSQL backups (Backblaze B2 + rclone) | Small |
 

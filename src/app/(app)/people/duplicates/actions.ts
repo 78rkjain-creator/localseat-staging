@@ -292,9 +292,7 @@ export async function mergeDuplicateRecords(input: {
     }
 
     const winnerTagIds = new Set(winner.tags.map((t) => t.tagId));
-    const tagsToTransfer = loser.tags
-      .map((t) => t.tagId)
-      .filter((id) => !winnerTagIds.has(id));
+    const loserTagIds = loser.tags.map((t) => t.tagId).filter((id) => !winnerTagIds.has(id));
 
     const outdatedTag = await db.tag.findFirst({
       where: { campaignId, name: "record-outdated", deletedAt: null },
@@ -305,11 +303,12 @@ export async function mergeDuplicateRecords(input: {
       // Apply field choices + userId transfer to winner
       await tx.person.update({ where: { id: winner.id }, data: updateData });
 
-      // Transfer tags from loser → winner
-      if (tagsToTransfer.length > 0) {
-        await tx.personTag.createMany({
-          data: tagsToTransfer.map((tagId) => ({ personId: winner.id, tagId })),
-          skipDuplicates: true,
+      // Transfer tags from loser → winner (upsert to handle soft-deleted existing rows)
+      for (const tagId of loserTagIds) {
+        await tx.personTag.upsert({
+          where: { personId_tagId: { personId: winner.id, tagId } },
+          create: { personId: winner.id, tagId },
+          update: { deletedAt: null },
         });
       }
 
@@ -358,7 +357,71 @@ export async function mergeDuplicateRecords(input: {
         data: { personId: winner.id },
       });
 
-      // Transfer list memberships (skip where winner already has the same import)
+      // Transfer voting records
+      await tx.votingRecord.updateMany({
+        where: { personId: loser.id },
+        data: { personId: winner.id },
+      });
+
+      // Transfer linked donors (nullable FK, no unique constraint)
+      await tx.donor.updateMany({
+        where: { linkedPersonId: loser.id },
+        data: { linkedPersonId: winner.id },
+      });
+
+      // Transfer voter change requests (nullable FK)
+      await tx.voterChangeRequest.updateMany({
+        where: { personId: loser.id },
+        data: { personId: winner.id },
+      });
+
+      // Transfer canvass list entries — unique([canvassListId, personId]) requires conflict check
+      const [winnerEntries, loserEntries] = await Promise.all([
+        tx.canvassListEntry.findMany({
+          where: { personId: winner.id, deletedAt: null },
+          select: { canvassListId: true },
+        }),
+        tx.canvassListEntry.findMany({
+          where: { personId: loser.id, deletedAt: null },
+          select: { id: true, canvassListId: true },
+        }),
+      ]);
+      const winnerListIds = new Set(winnerEntries.map((e) => e.canvassListId));
+      for (const entry of loserEntries) {
+        if (winnerListIds.has(entry.canvassListId)) {
+          // Winner already on this list — soft-delete the duplicate entry
+          await tx.canvassListEntry.update({
+            where: { id: entry.id },
+            data: { deletedAt: new Date() },
+          });
+        } else {
+          await tx.canvassListEntry.update({
+            where: { id: entry.id },
+            data: { personId: winner.id },
+          });
+          winnerListIds.add(entry.canvassListId);
+        }
+      }
+
+      // Transfer volunteer record — unique([campaignId, personId]) requires conflict check
+      const winnerVolRecord = await tx.volunteerRecord.findFirst({
+        where: { personId: winner.id, campaignId },
+        select: { id: true },
+      });
+      if (winnerVolRecord) {
+        // Winner already has a volunteer record — soft-delete loser's
+        await tx.volunteerRecord.updateMany({
+          where: { personId: loser.id },
+          data: { deletedAt: new Date() },
+        });
+      } else {
+        await tx.volunteerRecord.updateMany({
+          where: { personId: loser.id },
+          data: { personId: winner.id },
+        });
+      }
+
+      // Transfer list memberships — unique([personId, listImportId]) requires conflict check
       const loserMemberships = await tx.personListMembership.findMany({
         where: { personId: loser.id },
         select: { id: true, listImportId: true },
@@ -406,6 +469,7 @@ export async function mergeDuplicateRecords(input: {
     return { ok: true };
   } catch (e) {
     console.error("mergeDuplicateRecords error:", e);
-    return { error: "Failed to merge records. Please try again." };
+    const detail = e instanceof Error ? e.message : String(e);
+    return { error: `Merge failed: ${detail.slice(0, 300)}` };
   }
 }
