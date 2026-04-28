@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { updateSurveyMeta, saveSurveyQuestions } from "../actions";
-import type { SurveyQuestionType, QuestionInput } from "../actions";
+import type { QuestionInput } from "../actions";
+import type { SurveyQuestionType } from "@/lib/surveys";
 
 interface ExistingQuestion {
   id: string;

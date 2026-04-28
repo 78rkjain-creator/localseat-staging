@@ -7,7 +7,6 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import type { SurveyQuestionType } from "@prisma/client";
-export type { SurveyQuestionType };
 
 const ALLOWED_ROLES = ["candidate", "campaign_manager"] as const;
 
