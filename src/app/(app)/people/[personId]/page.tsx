@@ -21,6 +21,8 @@ import type { CustomField } from "./custom-fields-editor";
 import { ListSourceToggle } from "./list-source-toggle";
 import { PersonTagEditor } from "./person-tag-editor";
 import { OutOfDistrictControl } from "./out-of-district-control";
+import { SignatureSection } from "./signature-section";
+import { saveSignature } from "./signature-actions";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -53,7 +55,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const canApproveOod =
     activeRole === "candidate" || activeRole === "campaign_manager";
 
-  const [person, campaign, listMemberships, campaignTags] = await Promise.all([
+  const [person, campaign, listMemberships, campaignTags, signatures] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
     db.campaign.findUnique({
       where: { id: activeCampaignId },
@@ -71,6 +73,17 @@ export default async function PersonDetailPage({ params }: PageProps) {
       orderBy: { createdAt: "desc" },
     }),
     getCampaignTags(activeCampaignId),
+    db.signatureRecord.findMany({
+      where: { personId, campaignId: activeCampaignId },
+      select: {
+        id: true,
+        purpose: true,
+        signatureData: true,
+        collectedAt: true,
+        collectedBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { collectedAt: "desc" },
+    }),
   ]);
   if (!person) notFound();
 
@@ -512,6 +525,18 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 ))}
               </ul>
             )}
+          </Card>
+
+          {/* Signatures */}
+          <Card padding="md">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+              Signatures
+            </h2>
+            <SignatureSection
+              personId={person.id}
+              signatures={signatures}
+              onSave={saveSignature}
+            />
           </Card>
 
           {/* Activity timeline */}

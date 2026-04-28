@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
-import { WardStatus, ListSource } from "@prisma/client";
+import { WardStatus, ListSource, Prisma } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import { CANVASS_OUTCOME_VALUES, SUPPORT_LEVEL_VALUES } from "@/types";
 import type { CanvassOutcome, SupportLevel } from "@/types";
@@ -33,6 +33,8 @@ export interface SaveResponseInput {
    *  48 hours, used as respondedAt so door-knock times reflect when the canvasser
    *  was at the door, not when the sync ran. */
   queuedAt?: number;
+  surveyId?: string | null;
+  surveyAnswers?: Record<string, unknown> | null;
 }
 
 export async function saveCanvassResponse(
@@ -101,6 +103,23 @@ export async function saveCanvassResponse(
     },
     select: { id: true },
   });
+
+  // Save survey answers when provided
+  if (input.surveyId && input.surveyAnswers && Object.keys(input.surveyAnswers).length > 0) {
+    try {
+      await db.surveyResponse.create({
+        data: {
+          surveyId: input.surveyId,
+          personId: input.personId,
+          canvassResponseId: response.id,
+          respondedById: session.user.id,
+          answers: input.surveyAnswers as unknown as Prisma.InputJsonValue,
+        },
+      });
+    } catch (err) {
+      console.error("[saveCanvassResponse] Failed to create survey response:", err);
+    }
+  }
 
   // Auto-log to outreach log — door_knock entry for every canvass save
   try {

@@ -12,6 +12,10 @@ import { enqueue } from "@/lib/offline-queue";
 import type { QueuedResponse } from "@/lib/offline-queue";
 import type { FieldMessageItem } from "@/lib/field-messages";
 import { FieldMessagesBanner } from "@/components/field-messages-banner";
+import { SurveyPanel } from "@/components/survey-panel";
+import type { ActiveSurvey } from "@/lib/surveys";
+import { SignatureModal } from "@/components/signature-modal";
+import { saveSignature } from "@/app/(app)/people/[personId]/signature-actions";
 
 function formatVisitDate(iso: string | Date): string {
   const d = new Date(iso);
@@ -174,6 +178,7 @@ interface CanvassScreenProps {
   /** personId → ISO datetime string of upcoming appointment */
   appointmentsByPersonId?: Record<string, string>;
   fieldMessages?: FieldMessageItem[];
+  activeSurvey?: ActiveSurvey | null;
 }
 
 export function CanvassScreen({
@@ -187,6 +192,7 @@ export function CanvassScreen({
   competitors,
   appointmentsByPersonId = {},
   fieldMessages = [],
+  activeSurvey = null,
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -242,6 +248,8 @@ export function CanvassScreen({
     discardParked,
   } = useOfflineSync(saveCanvassResponse);
 
+  const [surveyAnswers, setSurveyAnswers] = useState<Record<string, unknown>>({});
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
 
   const [swFailure, setSwFailure] = useState(false);
@@ -276,6 +284,7 @@ export function CanvassScreen({
       if (!newSaved.has(currentEntries[i].person.id)) {
         setCurrentIndex(i);
         setDraft(emptyDraft());
+        setSurveyAnswers({});
         setError(null);
         setSelectedPersonId(currentEntries[i].person.id);
         return;
@@ -455,6 +464,8 @@ export function CanvassScreen({
         competitorId,
         appointmentDate: draft.scheduleAppointment ? draft.appointmentDate : null,
         appointmentTime: draft.scheduleAppointment ? draft.appointmentTime : null,
+        surveyId: activeSurvey?.id ?? null,
+        surveyAnswers: Object.keys(surveyAnswers).length > 0 ? surveyAnswers : null,
       });
       if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
@@ -633,9 +644,9 @@ export function CanvassScreen({
         </span>
       </header>
 
-      {/* ── Zone 2: Controls — flex-1, no scroll ── */}
-      <main className="flex-1 min-h-0 overflow-hidden">
-        <div className="px-4 pt-1.5 pb-0 max-w-lg mx-auto">
+      {/* ── Zone 2: Controls — flex-1, scrollable for survey ── */}
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 pt-1.5 pb-4 max-w-lg mx-auto">
 
           {/* ── Household hero ── */}
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
@@ -951,6 +962,15 @@ export function CanvassScreen({
             </div>
           )}
 
+          {/* ── Survey panel ── */}
+          {activeSurvey && (
+            <SurveyPanel
+              survey={activeSurvey}
+              answers={surveyAnswers}
+              onChange={setSurveyAnswers}
+            />
+          )}
+
         </div>
       </main>
 
@@ -1050,6 +1070,17 @@ export function CanvassScreen({
             >
               Add Resident
             </button>
+            <button
+              type="button"
+              onClick={() => setShowSignatureModal(true)}
+              disabled={isPending}
+              aria-label="Collect signature"
+              className="h-12 w-12 flex-shrink-0 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
           </div>
           {/* Row 2 — primary actions: back | skip | save and next */}
           <div className="flex gap-2">
@@ -1122,6 +1153,14 @@ export function CanvassScreen({
           campaignId={campaignId}
           campaignCity={campaignCity}
           onClose={() => setShowAddResidentModal(false)}
+        />
+      )}
+
+      {showSignatureModal && (
+        <SignatureModal
+          personId={selectedPersonId}
+          onClose={() => setShowSignatureModal(false)}
+          onSave={saveSignature}
         />
       )}
     </div>

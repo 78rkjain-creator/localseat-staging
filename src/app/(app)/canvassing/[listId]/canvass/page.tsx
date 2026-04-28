@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { getCanvassingQueue } from "@/lib/canvassing";
 import { db } from "@/lib/db";
 import { getActiveFieldMessages } from "@/lib/field-messages";
+import { getActiveSurveyForCanvass } from "@/lib/surveys";
 import { CanvassScreen } from "./canvass-screen";
 
 interface PageProps {
@@ -25,10 +26,11 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign, fieldMessages] = await Promise.all([
+  const [queue, campaign, fieldMessages, activeSurvey] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
     getActiveFieldMessages(activeCampaignId),
+    getActiveSurveyForCanvass(activeCampaignId),
   ]);
   if (!queue) notFound();
 
@@ -69,6 +71,7 @@ export default async function CanvassPage({ params }: PageProps) {
       competitors={queue.competitors}
       appointmentsByPersonId={appointmentsByPersonId}
       fieldMessages={fieldMessages}
+      activeSurvey={activeSurvey}
     />
   );
 }

@@ -98,6 +98,14 @@ enum FieldMessagePriority {
   urgent
 }
 
+enum SurveyQuestionType {
+  text
+  single_choice
+  multi_choice
+  rating
+  yes_no
+}
+
 enum EventType {
   campaign_event
   fundraiser
@@ -206,6 +214,8 @@ model Campaign {
   tags                  Tag[]
   events                Event[]
   fieldMessages         FieldMessage[]
+  surveys               Survey[]
+  signatureRecords      SignatureRecord[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -255,7 +265,10 @@ model User {
   outOfDistrictRequests     Person[] @relation("OodRequester")
   eventsCreated             Event[]  @relation("EventCreator")
   eventAttendances          EventAttendee[]
-  fieldMessagesCreated      FieldMessage[] @relation("FieldMessageAuthor")
+  fieldMessagesCreated      FieldMessage[]   @relation("FieldMessageAuthor")
+  surveysCreated            Survey[]         @relation("SurveyCreator")
+  surveyResponses           SurveyResponse[] @relation("SurveyResponder")
+  signaturesCollected       SignatureRecord[] @relation("SignatureCollector")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -375,6 +388,8 @@ model Person {
   votingRecords         VotingRecord[]
   voterChangeRequests   VoterChangeRequest[]
   listMemberships       PersonListMembership[]
+  surveyResponses       SurveyResponse[]
+  signatureRecords      SignatureRecord[]
 
   @@unique([userId, campaignId])
   @@unique([campaignId, voterId])
@@ -546,9 +561,10 @@ model CanvassResponse {
   createdAt         DateTime       @default(now())
   competitorId      String?
 
-  assignment CanvassAssignment  @relation(fields: [assignmentId], references: [id])
-  person     Person             @relation(fields: [personId], references: [id])
-  competitor CampaignCompetitor? @relation(fields: [competitorId], references: [id])
+  assignment      CanvassAssignment   @relation(fields: [assignmentId], references: [id])
+  person          Person              @relation(fields: [personId], references: [id])
+  competitor      CampaignCompetitor? @relation(fields: [competitorId], references: [id])
+  surveyResponse  SurveyResponse?
 
   @@index([assignmentId])
   @@index([personId])
@@ -1044,4 +1060,84 @@ model FieldMessage {
   @@index([campaignId])
   @@index([deletedAt])
   @@map("field_messages")
+}
+
+// ─── Surveys ──────────────────────────────────────────────────────────────────
+
+model Survey {
+  id          String    @id @default(cuid())
+  campaignId  String
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  campaign   Campaign         @relation(fields: [campaignId], references: [id])
+  createdBy  User             @relation("SurveyCreator", fields: [createdById], references: [id])
+  questions  SurveyQuestion[]
+  responses  SurveyResponse[]
+
+  @@index([campaignId])
+  @@index([deletedAt])
+  @@map("surveys")
+}
+
+model SurveyQuestion {
+  id           String             @id @default(cuid())
+  surveyId     String
+  label        String
+  questionType SurveyQuestionType
+  options      Json?
+  sortOrder    Int                @default(0)
+  required     Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+
+  survey Survey @relation(fields: [surveyId], references: [id])
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+model SurveyResponse {
+  id                String    @id @default(cuid())
+  surveyId          String
+  personId          String
+  canvassResponseId String?   @unique
+  respondedById     String
+  answers           Json
+  respondedAt       DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+
+  survey          Survey           @relation(fields: [surveyId], references: [id])
+  person          Person           @relation(fields: [personId], references: [id])
+  canvassResponse CanvassResponse? @relation(fields: [canvassResponseId], references: [id])
+  respondedBy     User             @relation("SurveyResponder", fields: [respondedById], references: [id])
+
+  @@index([surveyId])
+  @@index([personId])
+  @@map("survey_responses")
+}
+
+// ─── Signature Records ────────────────────────────────────────────────────────
+
+model SignatureRecord {
+  id            String   @id @default(cuid())
+  personId      String
+  campaignId    String
+  purpose       String
+  signatureData String   @db.Text
+  collectedById String
+  collectedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  person      Person   @relation(fields: [personId], references: [id])
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  collectedBy User     @relation("SignatureCollector", fields: [collectedById], references: [id])
+
+  @@index([personId])
+  @@index([campaignId])
+  @@map("signature_records")
 }
