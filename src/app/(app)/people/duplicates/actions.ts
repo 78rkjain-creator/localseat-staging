@@ -272,7 +272,7 @@ export async function mergeDuplicateRecords(input: {
     if (!winner) return { error: "Primary record not found." };
     if (!loser) return { error: "Secondary record not found." };
 
-    // Build winner update data from field choices
+    // Build winner update data from field choices; secondary fills blanks on primary
     type MergeKey = keyof MergeFieldChoices;
     const mergeableFields: MergeKey[] = [
       "firstName", "lastName", "email", "phoneHome", "phoneMobile", "birthDate", "supportLevel",
@@ -283,13 +283,17 @@ export async function mergeDuplicateRecords(input: {
       if (choice) {
         const src = choice === "loser" ? loser : winner;
         updateData[field] = (src as Record<string, unknown>)[field];
+      } else {
+        // No explicit choice: fill from loser only when winner's value is blank
+        const winnerVal = (winner as Record<string, unknown>)[field];
+        const loserVal = (loser as Record<string, unknown>)[field];
+        if ((winnerVal === null || winnerVal === undefined || winnerVal === "") && loserVal != null && loserVal !== "") {
+          updateData[field] = loserVal;
+        }
       }
     }
 
-    // Transfer userId from loser if winner doesn't have one
-    if (loser.userId && !winner.userId) {
-      updateData.userId = loser.userId;
-    }
+    // userId is handled inside the transaction to avoid @@unique([campaignId, userId]) violation
 
     const winnerTagIds = new Set(winner.tags.map((t) => t.tagId));
     const loserTagIds = loser.tags.map((t) => t.tagId).filter((id) => !winnerTagIds.has(id));
@@ -300,6 +304,13 @@ export async function mergeDuplicateRecords(input: {
     });
 
     await db.$transaction(async (tx) => {
+      // Clear loser's userId first to avoid @@unique([campaignId, userId]) violation.
+      // Only after clearing can we safely transfer it to winner (if winner has none).
+      if (loser.userId) {
+        await tx.person.update({ where: { id: loser.id }, data: { userId: null } });
+        if (!winner.userId) updateData.userId = loser.userId;
+      }
+
       // Apply field choices + userId transfer to winner
       await tx.person.update({ where: { id: winner.id }, data: updateData });
 
