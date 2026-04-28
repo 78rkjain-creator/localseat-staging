@@ -61,6 +61,7 @@ export async function getCandidateDashboardData(campaignId: string) {
         id: true,
         name: true,
         _count: { select: { entries: true } },
+        entries: { select: { personId: true } },
         assignments: {
           select: {
             responses: { select: { personId: true } },
@@ -159,13 +160,21 @@ export async function getCandidateDashboardData(campaignId: string) {
     else if (level === "undecided") undecided++;
     else notHome++;
   }
-  const walkListProgress = walkLists.map((l) => ({
-    id: l.id,
-    name: l.name,
-    totalEntries: l._count.entries,
-    totalResponses: new Set(l.assignments.flatMap((a) => a.responses.map((r) => r.personId))).size,
-    canvasserNames: l.assignments.map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`),
-  }));
+  const walkListProgress = walkLists.map((l) => {
+    const entryPersonIds = new Set(l.entries.map((e) => e.personId));
+    const respondedEntryIds = new Set(
+      l.assignments
+        .flatMap((a) => a.responses.map((r) => r.personId))
+        .filter((id) => entryPersonIds.has(id))
+    );
+    return {
+      id: l.id,
+      name: l.name,
+      totalEntries: l._count.entries,
+      totalResponses: respondedEntryIds.size,
+      canvasserNames: l.assignments.map((a) => `${a.canvasser.firstName} ${a.canvasser.lastName}`),
+    };
+  });
 
   const donorCountByStatus: Record<string, number> = {};
   for (const g of donorGroups) {

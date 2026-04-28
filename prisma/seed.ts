@@ -1199,6 +1199,51 @@ async function main() {
   });
   console.log("  ✓ Signs: 10 (6 to_be_installed, 4 installed)");
 
+  // ── Upcoming events (next 72 hours) ───────────────────────────────────────
+  // Seeded relative to now so the "Up next · 72h" panel always shows content.
+  const H12 = 12 * 60 * 60 * 1000;
+  const H30 = 30 * 60 * 60 * 1000;
+  const H54 = 54 * 60 * 60 * 1000;
+
+  await db.event.createMany({
+    data: [
+      {
+        campaignId:  campaign.id,
+        name:        "Door-to-door canvass kickoff — Glenwood Ave",
+        eventType:   "canvass_kickoff",
+        status:      "upcoming",
+        date:        new Date(nowMs + H12),
+        startTime:   "10:00",
+        endTime:     "13:00",
+        location:    "Glenwood Ave, Owen Sound",
+        createdById: mariaSantos.id,
+      },
+      {
+        campaignId:  campaign.id,
+        name:        "Volunteer canvassing training",
+        eventType:   "volunteer_training",
+        status:      "upcoming",
+        date:        new Date(nowMs + H30),
+        startTime:   "18:30",
+        endTime:     "20:00",
+        location:    "Owen Sound Community Centre",
+        createdById: mariaSantos.id,
+      },
+      {
+        campaignId:  campaign.id,
+        name:        "Ward 4 supporter fundraiser",
+        eventType:   "fundraiser",
+        status:      "upcoming",
+        date:        new Date(nowMs + H54),
+        startTime:   "19:00",
+        endTime:     "21:30",
+        location:    "Heritage Place, Owen Sound",
+        createdById: alexChen.id,
+      },
+    ],
+  });
+  console.log("  ✓ Upcoming events: 3 (within 72h)");
+
   // ── Volunteer follow-up tasks ─────────────────────────────────────────────
   // 3 open volunteer_follow_up tasks assigned to the field organizer, linked
   // to distinct persons who haven't been used in the general follow-up queue.
