@@ -24,6 +24,9 @@ import { OutOfDistrictControl } from "./out-of-district-control";
 import { SignatureSection } from "./signature-section";
 import { saveSignature } from "./signature-actions";
 import { AnonymizeButton } from "./anonymize-button";
+import { TeamLinkButton } from "./team-link-button";
+import type { AvailableMember } from "./team-link-button";
+import { ROLE_LABELS } from "@/types";
 
 interface PageProps {
   params: Promise<{ personId: string }>;
@@ -57,6 +60,8 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const canApproveOod =
     activeRole === "candidate" || activeRole === "campaign_manager";
 
+  const canLinkTeamMember = canAnonymize; // candidate + campaign_manager only
+
   const [person, campaign, listMemberships, campaignTags, signatures] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
     db.campaign.findUnique({
@@ -88,6 +93,36 @@ export default async function PersonDetailPage({ params }: PageProps) {
     }),
   ]);
   if (!person) notFound();
+
+  // Fetch available team members for the link dropdown (two-step to avoid unsupported nested filter)
+  let availableMembers: AvailableMember[] = [];
+  if (canLinkTeamMember) {
+    const alreadyLinked = await db.person.findMany({
+      where: { campaignId: activeCampaignId, deletedAt: null, userId: { not: null } },
+      select: { userId: true },
+    });
+    const linkedUserIds = alreadyLinked.map((p) => p.userId as string);
+
+    const rawMembers = await db.campaignMembership.findMany({
+      where: {
+        campaignId: activeCampaignId,
+        deletedAt: null,
+        userId: { notIn: linkedUserIds },
+      },
+      select: {
+        role: true,
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+      orderBy: [{ user: { lastName: "asc" } }],
+    });
+    availableMembers = rawMembers.map((m) => ({
+      userId: m.user.id,
+      firstName: m.user.firstName,
+      lastName: m.user.lastName,
+      email: m.user.email,
+      role: m.role,
+    }));
+  }
 
   const canSeeCustomFields =
     activeRole === "candidate" ||
@@ -130,7 +165,8 @@ export default async function PersonDetailPage({ params }: PageProps) {
       (m.status === "matched" || m.status === "created" || m.status === "accepted")
   );
 
-  const isTeamMember = person.listSource === "team";
+  const isTeamMember = !!person.userId;
+  const linkedRole = person.user?.memberships?.[0]?.role ?? null;
 
   // New OOD fields are present at runtime but not yet in the generated Prisma types.
   // These casts can be removed after running `prisma generate`.
@@ -176,7 +212,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
             )}
             {isTeamMember && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                Team member
+                Team{linkedRole ? ` · ${ROLE_LABELS[linkedRole as import("@/types").Role] ?? linkedRole}` : ""}
               </span>
             )}
             {isAnonymized && (
@@ -223,6 +259,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 personName={`${person.firstName} ${person.lastName}`}
               />
             </div>
+          )}
+          {canLinkTeamMember && !isAnonymized && (
+            <TeamLinkButton
+              personId={person.id}
+              linkedUserId={person.userId ?? null}
+              linkedRole={linkedRole}
+              availableMembers={availableMembers}
+            />
           )}
         </div>
       </div>

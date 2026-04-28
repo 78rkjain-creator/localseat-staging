@@ -205,6 +205,77 @@ export async function toggleIncludeInWalkLists(
   return { includeInWalkLists: next };
 }
 
+// ── Link / unlink person ↔ team member ───────────────────────────────────────
+
+export async function linkPersonToUser(
+  personId: string,
+  userId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+    return { error: "Permission denied." };
+  }
+
+  const [person, membership] = await Promise.all([
+    db.person.findFirst({
+      where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true, userId: true },
+    }),
+    db.campaignMembership.findFirst({
+      where: { userId, campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!person) return { error: "Person not found." };
+  if (!membership) return { error: "User is not a team member of this campaign." };
+  if (person.userId) return { error: "This person is already linked to a team member." };
+
+  // Check no other person is already linked to this userId in this campaign
+  const existing = await db.person.findFirst({
+    where: { userId, campaignId: activeCampaignId, deletedAt: null, id: { not: personId } },
+    select: { id: true },
+  });
+  if (existing) return { error: "That team member is already linked to another person record." };
+
+  await db.person.update({
+    where: { id: personId },
+    data: { userId },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
+}
+
+export async function unlinkPersonFromUser(
+  personId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+    return { error: "Permission denied." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  await db.person.update({
+    where: { id: personId },
+    data: { userId: null },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
+}
+
 // ── Tag management ────────────────────────────────────────────────────────────
 
 function canEditTags(role: Role): boolean {

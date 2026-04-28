@@ -97,6 +97,16 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
         phoneHome: true,
         phoneMobile: true,
         listSource: true,
+        userId: true,
+        user: {
+          select: {
+            memberships: {
+              where: { campaignId, deletedAt: null },
+              select: { role: true },
+              take: 1,
+            },
+          },
+        },
         household: {
           select: {
             address: {
@@ -154,6 +164,16 @@ export async function getPersonDetail(personId: string, campaignId: string) {
     where: { id: personId, campaignId, deletedAt: null },
     include: {
       tags: { where: { deletedAt: null }, include: { tag: true } },
+      user: {
+        select: {
+          id: true,
+          memberships: {
+            where: { campaignId, deletedAt: null },
+            select: { role: true },
+            take: 1,
+          },
+        },
+      },
       household: {
         include: {
           address: true,

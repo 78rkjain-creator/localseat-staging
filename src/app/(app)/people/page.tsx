@@ -13,6 +13,7 @@ import { PeopleSearchBar } from "./search-bar";
 import { DistrictClassifyBanner } from "./classify-banner";
 import type { UnclassifiedPerson } from "./classify-modal";
 import type { Role, SupportLevel } from "@/types";
+import { ROLE_LABELS } from "@/types";
 
 export const metadata: Metadata = { title: "People" };
 
@@ -302,9 +303,11 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                         <p className="font-semibold text-slate-900 truncate">
                           {person.firstName} {person.lastName}
                         </p>
-                        {person.listSource === "team" && (
+                        {person.userId && (
                           <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 text-violet-700">
-                            Team
+                            {person.user?.memberships[0]?.role
+                              ? `Team · ${ROLE_LABELS[person.user.memberships[0].role as Role] ?? person.user.memberships[0].role}`
+                              : "Team"}
                           </span>
                         )}
                       </div>
