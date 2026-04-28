@@ -293,16 +293,27 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
 
     // Create or update the Person record linked to this user.
     // Cannot use upsert — the userId+campaignId unique index is partial (WHERE userId IS NOT NULL).
-    const existingPerson = await db.person.findFirst({
+    // Check by userId first, then fall back to email to avoid creating duplicate records for
+    // imported voters who are also added as team members.
+    const existingByUserId = await db.person.findFirst({
       where: { userId: user.id, campaignId },
       select: { id: true },
     });
+
+    const existingByEmail = !existingByUserId
+      ? await db.person.findFirst({
+          where: { campaignId, email: normalizedEmail, userId: null, deletedAt: null },
+          select: { id: true },
+        })
+      : null;
+
+    const existingPerson = existingByUserId ?? existingByEmail;
 
     let person: { id: string };
     if (existingPerson) {
       person = await db.person.update({
         where: { id: existingPerson.id },
-        data: { listSource: ListSource.team, needsDistrictClassification: true, deletedAt: null },
+        data: { userId: user.id, listSource: ListSource.team, needsDistrictClassification: true, deletedAt: null },
         select: { id: true },
       });
     } else {

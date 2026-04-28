@@ -96,6 +96,7 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
         email: true,
         phoneHome: true,
         phoneMobile: true,
+        listSource: true,
         household: {
           select: {
             address: {
@@ -152,7 +153,7 @@ export async function getPersonDetail(personId: string, campaignId: string) {
   const person = await db.person.findFirst({
     where: { id: personId, campaignId, deletedAt: null },
     include: {
-      tags: { include: { tag: true } },
+      tags: { where: { deletedAt: null }, include: { tag: true } },
       household: {
         include: {
           address: true,

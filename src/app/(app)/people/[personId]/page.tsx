@@ -254,6 +254,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
               pollNumber={person.pollNumber ?? null}
               wardStatus={person.wardStatus}
               readOnly={readOnly}
+              address={address ? {
+                streetNumber: address.streetNumber,
+                streetName: address.streetName,
+                unitNumber: address.unitNumber,
+                city: address.city,
+                province: address.province,
+                postalCode: address.postalCode,
+              } : undefined}
             />
             {(person.phoneHome || person.phoneMobile) && (
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">

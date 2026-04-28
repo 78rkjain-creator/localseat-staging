@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from "react";
 import { addResident } from "./actions";
 import { TagPicker } from "@/components/ui/tag-picker";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 
 interface Tag {
   id: string;
@@ -268,6 +269,18 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
           </div>
         ) : (
           <div className="space-y-3">
+            <AddressAutocomplete
+              onSelect={(parsed) => {
+                setStreetNumber(parsed.streetNumber);
+                setStreetName(parsed.streetName);
+                setCity(parsed.city);
+                setProvince(parsed.province);
+                setPostalCode(parsed.postalCode);
+              }}
+              placeholder="Search for an address…"
+              inputClassName={inputClass}
+              disabled={isPending}
+            />
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelClass}>Street #</label>

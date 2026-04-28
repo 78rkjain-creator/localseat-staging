@@ -298,9 +298,16 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 truncate">
-                        {person.firstName} {person.lastName}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900 truncate">
+                          {person.firstName} {person.lastName}
+                        </p>
+                        {person.listSource === "team" && (
+                          <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-100 text-violet-700">
+                            Team
+                          </span>
+                        )}
+                      </div>
                       {addressLine && (
                         <p className="text-sm text-slate-500 truncate">{addressLine}</p>
                       )}

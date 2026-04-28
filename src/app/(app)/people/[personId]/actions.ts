@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { canManageVoterList, hasMinimumRole } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeBirthDate, sanitizeEnum } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
+import { geocodeAddress } from "@/lib/geocoding";
 import type { SupportLevel } from "@/types";
 import { Role } from "@prisma/client";
 
@@ -68,6 +69,65 @@ export async function updatePerson(
       pollNumber: input.pollNumber?.trim() || null,
     },
   });
+
+  revalidatePath(`/people/${input.personId}`);
+  return { success: true };
+}
+
+// ── Update person address ─────────────────────────────────────────────────────
+
+interface UpdatePersonAddressInput {
+  personId: string;
+  streetNumber: string;
+  streetName: string;
+  unitNumber?: string | null;
+  city: string;
+  province: string;
+  postalCode: string;
+}
+
+export async function updatePersonAddress(
+  input: UpdatePersonAddressInput
+): Promise<{ error?: string; success?: boolean }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "Permission denied." };
+  }
+
+  const streetNumber = input.streetNumber.trim();
+  const streetName = input.streetName.trim();
+  const city = input.city.trim();
+  if (!streetNumber || !streetName || !city) {
+    return { error: "Street number, street name, and city are required." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: input.personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { household: { select: { addressId: true } } },
+  });
+  if (!person) return { error: "Person not found." };
+
+  const addressId = person.household?.addressId;
+  if (!addressId) return { error: "No address on file for this person." };
+
+  await db.address.update({
+    where: { id: addressId },
+    data: {
+      streetNumber,
+      streetName,
+      unitNumber: input.unitNumber?.trim() || null,
+      city,
+      province: input.province.trim() || "ON",
+      postalCode: input.postalCode.trim(),
+      lat: null,
+      lng: null,
+    },
+  });
+
+  void geocodeAddress(addressId);
 
   revalidatePath(`/people/${input.personId}`);
   return { success: true };

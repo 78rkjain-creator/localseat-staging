@@ -2,6 +2,7 @@
 
 import { useTransition, useState } from "react";
 import { createPinDropContact } from "./actions";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 
 export interface PinAddress {
   streetNumber: string;
@@ -146,6 +147,19 @@ export function PinDropPanel({ lat, lng, initialAddress, geocoding, onSuccess, o
               className={inputClass}
             />
           </div>
+
+          {/* Address autocomplete */}
+          <AddressAutocomplete
+            onSelect={(parsed) => {
+              setStreetNumber(parsed.streetNumber);
+              setStreetName(parsed.streetName);
+              setCity(parsed.city);
+              setProvince(parsed.province);
+              setPostalCode(parsed.postalCode);
+            }}
+            placeholder="Search for an address…"
+            inputClassName={inputClass}
+          />
 
           {/* Street address row */}
           <div className="flex gap-2">

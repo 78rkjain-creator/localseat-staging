@@ -2,9 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updatePerson } from "./actions";
+import { updatePerson, updatePersonAddress } from "./actions";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { SupportLevel } from "@/types";
+
+interface PersonAddress {
+  streetNumber: string;
+  streetName: string;
+  unitNumber: string | null;
+  city: string;
+  province: string;
+  postalCode: string;
+}
 
 interface PersonEditFormProps {
   personId: string;
@@ -18,6 +28,7 @@ interface PersonEditFormProps {
   pollNumber: string | null;
   wardStatus?: string;
   readOnly?: boolean;
+  address?: PersonAddress;
 }
 
 export function PersonEditForm({
@@ -32,11 +43,20 @@ export function PersonEditForm({
   pollNumber,
   wardStatus: _wardStatus,
   readOnly = false,
+  address,
 }: PersonEditFormProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Address controlled state (only relevant when address prop is provided)
+  const [addrStreetNumber, setAddrStreetNumber] = useState(address?.streetNumber ?? "");
+  const [addrStreetName, setAddrStreetName] = useState(address?.streetName ?? "");
+  const [addrUnitNumber, setAddrUnitNumber] = useState(address?.unitNumber ?? "");
+  const [addrCity, setAddrCity] = useState(address?.city ?? "");
+  const [addrProvince, setAddrProvince] = useState(address?.province ?? "ON");
+  const [addrPostalCode, setAddrPostalCode] = useState(address?.postalCode ?? "");
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,7 +65,7 @@ export function PersonEditForm({
     const fd = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const result = await updatePerson({
+      const personResult = await updatePerson({
         personId,
         firstName: fd.get("firstName") as string,
         lastName: fd.get("lastName") as string,
@@ -57,18 +77,41 @@ export function PersonEditForm({
         pollNumber: (fd.get("pollNumber") as string) || null,
       });
 
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setEditing(false);
-        router.refresh();
+      if (personResult.error) {
+        setError(personResult.error);
+        return;
       }
+
+      if (address) {
+        const addrResult = await updatePersonAddress({
+          personId,
+          streetNumber: addrStreetNumber,
+          streetName: addrStreetName,
+          unitNumber: addrUnitNumber,
+          city: addrCity,
+          province: addrProvince,
+          postalCode: addrPostalCode,
+        });
+        if (addrResult.error) {
+          setError(addrResult.error);
+          return;
+        }
+      }
+
+      setEditing(false);
+      router.refresh();
     });
   }
 
   function handleCancel() {
     setError(null);
     setEditing(false);
+    setAddrStreetNumber(address?.streetNumber ?? "");
+    setAddrStreetName(address?.streetName ?? "");
+    setAddrUnitNumber(address?.unitNumber ?? "");
+    setAddrCity(address?.city ?? "");
+    setAddrProvince(address?.province ?? "ON");
+    setAddrPostalCode(address?.postalCode ?? "");
   }
 
   // ── Read-only view ──────────────────────────────────────────────────────────
@@ -187,6 +230,68 @@ export function PersonEditForm({
             />
           </Field>
         </div>
+
+        {address && (
+          <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Address</p>
+            <AddressAutocomplete
+              onSelect={(parsed) => {
+                setAddrStreetNumber(parsed.streetNumber);
+                setAddrStreetName(parsed.streetName);
+                setAddrCity(parsed.city);
+                setAddrProvince(parsed.province);
+                setAddrPostalCode(parsed.postalCode);
+              }}
+              placeholder="Search for a new address…"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                value={addrStreetNumber}
+                onChange={(e) => setAddrStreetNumber(e.target.value)}
+                placeholder="No."
+                className={inputCls}
+              />
+              <div className="col-span-2">
+                <input
+                  value={addrStreetName}
+                  onChange={(e) => setAddrStreetName(e.target.value)}
+                  placeholder="Street name"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                value={addrUnitNumber}
+                onChange={(e) => setAddrUnitNumber(e.target.value)}
+                placeholder="Unit"
+                className={inputCls}
+              />
+              <div className="col-span-2">
+                <input
+                  value={addrCity}
+                  onChange={(e) => setAddrCity(e.target.value)}
+                  placeholder="City"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={addrProvince}
+                onChange={(e) => setAddrProvince(e.target.value)}
+                placeholder="Province"
+                className={inputCls}
+              />
+              <input
+                value={addrPostalCode}
+                onChange={(e) => setAddrPostalCode(e.target.value)}
+                placeholder="Postal code"
+                className={inputCls}
+              />
+            </div>
+          </div>
+        )}
 
         <Field label="Birth date">
           <input
