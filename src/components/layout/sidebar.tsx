@@ -12,6 +12,7 @@ import {
   canViewSigns,
   canViewTeam,
   canManageVoterList,
+  canAccessImportHub,
 } from "@/lib/permissions";
 import { ClipboardList, ShieldCheck, Settings } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
@@ -313,10 +314,10 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     ],
     // Group 2 — Field Operations (People section rendered separately)
     [
-      ...(role && canManageVoterList(role)
+      ...(role && canAccessImportHub(role)
         ? [
             {
-              href: "/voter-import",
+              href: "/import",
               label: "Import & Data Management",
               icon: (
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

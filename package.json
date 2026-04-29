@@ -19,6 +19,7 @@
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.8.0",
     "mapbox-gl": "^3.22.0",

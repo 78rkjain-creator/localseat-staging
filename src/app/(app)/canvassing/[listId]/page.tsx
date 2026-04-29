@@ -11,6 +11,7 @@ import {
 } from "@/lib/canvassing";
 import type { DynamicFilters } from "@/lib/canvassing";
 import { getCampaignTags } from "@/lib/people";
+import { deriveSupportBadge } from "@/lib/support-badge";
 import { _doRefresh } from "../actions";
 import { Card } from "@/components/ui/card";
 import { OutcomeBadge, SupportLevelBadge } from "@/components/ui/badge";
@@ -537,11 +538,15 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              {latestResponse?.supportLevel && (
-                                <SupportLevelBadge
-                                  level={latestResponse.supportLevel as SupportLevel}
-                                />
-                              )}
+                              {(() => {
+                                const badge = deriveSupportBadge({
+                                  latestCanvassSupport: latestResponse?.supportLevel as SupportLevel ?? null,
+                                  importedSupport: entry.person.supportLevel as SupportLevel ?? null,
+                                });
+                                return badge ? (
+                                  <SupportLevelBadge level={badge.level} source={badge.source} />
+                                ) : null;
+                              })()}
                               {isCanvassed && latestResponse && !latestResponse.supportLevel && (
                                 <OutcomeBadge outcome={latestResponse.outcome as CanvassOutcome} />
                               )}

@@ -57,6 +57,19 @@ export async function createCampaign(
     },
   });
 
+  await db.tag.createMany({
+    data: [
+      { campaignId: campaign.id, name: "Volunteer",      color: "#22c55e" },
+      { campaignId: campaign.id, name: "Donor",          color: "#f97316" },
+      { campaignId: campaign.id, name: "Endorser",       color: null      },
+      { campaignId: campaign.id, name: "Sign location",  color: "#eab308" },
+      { campaignId: campaign.id, name: "Do not contact", color: "#ef4444" },
+      { campaignId: campaign.id, name: "Media",          color: null      },
+      { campaignId: campaign.id, name: "VIP",            color: "#f97316" },
+      { campaignId: campaign.id, name: "Influencer",     color: null      },
+    ],
+  });
+
   await createAuditLog({
     campaignId: campaign.id,
     userId: session.user.id,

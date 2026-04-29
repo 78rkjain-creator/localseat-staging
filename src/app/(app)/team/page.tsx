@@ -308,6 +308,12 @@ function AddMemberForm({
         phoneMobile: (fd.get("phoneMobile") as string).trim() || null,
         role: fd.get("role") as string,
         skipVerification: fd.get("skipVerification") === "on",
+        streetNumber: (fd.get("streetNumber") as string | null)?.trim() || null,
+        streetName: (fd.get("streetName") as string | null)?.trim() || null,
+        unitNumber: (fd.get("unitNumber") as string | null)?.trim() || null,
+        city: (fd.get("city") as string | null)?.trim() || null,
+        province: (fd.get("province") as string | null)?.trim() || null,
+        postalCode: (fd.get("postalCode") as string | null)?.trim() || null,
       });
       if (result.error) {
         setError(result.error);
@@ -379,6 +385,42 @@ function AddMemberForm({
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-500">Mobile phone</label>
             <input name="phoneMobile" type="tel" className={inputCls + " w-full"} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-500">Address <span className="text-slate-400 font-normal">(optional)</span></label>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="col-span-1">
+              <input name="streetNumber" placeholder="Street #" className={inputCls + " w-full"} />
+            </div>
+            <div className="col-span-2">
+              <input name="streetName" placeholder="Street name" className={inputCls + " w-full"} />
+            </div>
+            <div className="col-span-1">
+              <input name="unitNumber" placeholder="Unit" className={inputCls + " w-full"} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-1">
+              <input name="city" placeholder="City" className={inputCls + " w-full"} />
+            </div>
+            <div className="col-span-1">
+              <input
+                name="province"
+                placeholder="ON"
+                defaultValue="ON"
+                maxLength={2}
+                className={inputCls + " w-full uppercase"}
+              />
+            </div>
+            <div className="col-span-1">
+              <input
+                name="postalCode"
+                placeholder="A1A 1A1"
+                className={inputCls + " w-full uppercase"}
+              />
+            </div>
           </div>
         </div>
 

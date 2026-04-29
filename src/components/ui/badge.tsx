@@ -20,13 +20,22 @@ const outcomeStyles: Record<CanvassOutcome, string> = {
   other_candidate: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
-export function SupportLevelBadge({ level }: { level: SupportLevel }) {
+export function SupportLevelBadge({
+  level,
+  source,
+}: {
+  level: SupportLevel;
+  source?: "canvass" | "imported";
+}) {
+  const isImported = source === "imported";
   return (
     <span
       className={[
         "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
+        isImported ? "border-dashed" : "",
         supportLevelStyles[level],
       ].join(" ")}
+      title={isImported ? "Support level imported from list" : undefined}
     >
       {SUPPORT_LEVEL_LABELS[level]}
     </span>

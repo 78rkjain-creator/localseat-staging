@@ -91,6 +91,7 @@ export async function getCanvassListDetail(listId: string, campaignId: string) {
               phoneHome: true,
               phoneMobile: true,
               pollNumber: true,
+              supportLevel: true,
               household: {
                 select: {
                   address: {

@@ -15,12 +15,12 @@ export default async function DuplicatesPage() {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (!activeRole || !canManageVoterList(activeRole as Role)) redirect("/people/residents");
+  if (!activeRole || !canManageVoterList(activeRole as Role)) redirect("/import");
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
       <Link
-        href="/people/residents"
+        href="/import"
         className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

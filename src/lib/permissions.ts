@@ -147,6 +147,20 @@ export function canManageVoterList(role: Role): boolean {
   return FULL_ACCESS.includes(role);
 }
 
+// Permission for the team-import page. Mirrors the rules in
+// src/app/(app)/import/team/page.tsx.
+export function canImportTeam(role: Role): boolean {
+  return (
+    [Role.candidate, Role.campaign_manager, Role.co_chair, Role.field_organizer] as Role[]
+  ).includes(role);
+}
+
+// Visible if the user has access to ANY import type. The hub itself then
+// shows different cards per that user's specific permissions.
+export function canAccessImportHub(role: Role): boolean {
+  return canManageVoterList(role) || canImportTeam(role);
+}
+
 // field_organizer and above may manually add residents.
 export function canAddResident(role: Role): boolean {
   return FIELD_AND_ABOVE.includes(role);

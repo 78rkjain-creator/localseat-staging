@@ -11,6 +11,7 @@ import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
 import { isPointInWard, campaignHasWard } from "@/lib/ward";
 import { normalizeFullAddress } from "@/lib/address-normalize";
+import { normaliseSupportLevel, parseImportBoolean, parseTagList } from "@/lib/csv-import";
 import { Prisma, WardStatus, ListSource } from "@prisma/client";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
@@ -37,16 +38,21 @@ export interface VoterCsvRow {
   lastName: string;
   streetNumber: string;
   streetName: string;
-  unitNumber: string;   // empty string when absent
+  unitNumber: string;       // empty string when absent
   city: string;
   province: string;
   postalCode: string;
-  phoneHome: string;    // empty string when absent
-  phoneMobile: string;  // empty string when absent
-  email: string;        // empty string when absent
-  birthDate: string;    // empty string when absent; accepts YYYY-MM-DD
-  pollNumber: string;   // empty string when absent
-  voterId: string;      // empty string when absent
+  phoneHome: string;        // empty string when absent
+  phoneMobile: string;      // empty string when absent
+  email: string;            // empty string when absent
+  birthDate: string;        // empty string when absent; accepts YYYY-MM-DD
+  pollNumber: string;       // empty string when absent
+  voterId: string;          // empty string when absent
+  supportLevel?: string;
+  tags?: string;            // raw semicolon/pipe-separated value
+  notes?: string;
+  gender?: string;
+  isConfirmedVoter?: string; // raw "true"/"yes"/"1"/etc.
   customFieldValues?: Record<string, string>;
 }
 
@@ -87,6 +93,37 @@ function sanitizeCustomFields(
     if (validIds.has(k) && v.trim()) safe[k] = v.trim();
   }
   return Object.keys(safe).length > 0 ? safe : null;
+}
+
+// ── getCampaignTagsForImport ──────────────────────────────────────────────
+
+export async function getCampaignTagsForImport(): Promise<{
+  tags: { id: string; name: string }[];
+}> {
+  const auth = await requireVoterListManager();
+  if ("error" in auth) return { tags: [] };
+  const { campaignId } = auth;
+
+  const tags = await db.tag.findMany({
+    where: { campaignId, deletedAt: null },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  return { tags };
+}
+
+// ── Tag plan types ────────────────────────────────────────────────────────
+
+export interface TagPlanResolution {
+  originalLower: string;
+  action: "use" | "create" | "skip";
+  tagId?: string;
+  createName?: string;
+}
+
+export interface TagPlan {
+  resolutions: TagPlanResolution[];
 }
 
 // ── checkDuplicatesForImport ──────────────────────────────────────────────
@@ -176,7 +213,8 @@ export async function checkDuplicatesForImport(
 export async function importVoterRows(
   rows: VoterCsvRow[],
   listImportType: "list" | "official_voters_list" | "telephone_list",
-  listName: string
+  listName: string,
+  tagPlan?: TagPlan
 ): Promise<VoterImportResult> {
   const importSource =
     listImportType === "official_voters_list"
@@ -184,13 +222,13 @@ export async function importVoterRows(
       : listName.trim() || "voter-list-import";
   const auth = await requireVoterListManager();
   if ("error" in auth) return auth;
-  const { campaignId } = auth;
+  const { campaignId, session: authSession } = auth;
 
   if (!Array.isArray(rows) || rows.length === 0) {
     return { error: "No rows to import." };
   }
-  if (rows.length > 2000) {
-    return { error: "Maximum 2,000 rows per import." };
+  if (rows.length > 10000) {
+    return { error: "Maximum 10,000 rows per import." };
   }
 
   // Plan limit check: count current constituents + batch size
@@ -234,7 +272,7 @@ export async function importVoterRows(
           campaignId,
           name: listImportType === "official_voters_list" ? "Official Voters List" : listName.trim(),
           type: listImportType,
-          importedById: auth.session.user.id,
+          importedById: authSession.user.id,
           totalRows: rows.length,
         },
         select: { id: true },
@@ -255,6 +293,9 @@ export async function importVoterRows(
             email: true,
             birthDate: true,
             voterId: true,
+            supportLevel: true,
+            gender: true,
+            isConfirmedVoter: true,
             household: {
               select: {
                 id: true,
@@ -401,6 +442,37 @@ export async function importVoterRows(
         }
       }
 
+      // ── Per-person current field values (for conditional update logic) ───
+
+      type PersonCurrentFields = { supportLevel: string | null; gender: string | null; isConfirmedVoter: boolean };
+      const personCurrentFieldsMap = new Map<string, PersonCurrentFields>();
+      for (const p of existingPeople) {
+        personCurrentFieldsMap.set(p.id, {
+          supportLevel: p.supportLevel,
+          gender: p.gender,
+          isConfirmedVoter: p.isConfirmedVoter,
+        });
+      }
+
+      // ── Tag plan resolution ───────────────────────────────────────────────
+      // Maps lowercased original tag name → tagId to apply (null = skip)
+      const tagIdByLower = new Map<string, string | null>();
+      if (tagPlan) {
+        for (const res of tagPlan.resolutions) {
+          if (res.action === "skip") {
+            tagIdByLower.set(res.originalLower, null);
+          } else if (res.action === "use" && res.tagId) {
+            tagIdByLower.set(res.originalLower, res.tagId);
+          } else if (res.action === "create" && res.createName) {
+            const newTag = await tx.tag.create({
+              data: { campaignId, name: res.createName, color: "#94a3b8" },
+              select: { id: true },
+            });
+            tagIdByLower.set(res.originalLower, newTag.id);
+          }
+        }
+      }
+
       // ── Write accumulators ──────────────────────────────────────────────
 
       type AddrRow = {
@@ -415,6 +487,9 @@ export async function importVoterRows(
       const newPersonRows:     Prisma.PersonCreateManyInput[]             = [];
       const newMembershipRows: Prisma.PersonListMembershipCreateManyInput[] = [];
       const personUpdateOps:   Array<{ id: string; isConfirmedVoter: true; pollNumber?: string }> = [];
+      const newNoteRows:       Array<{ personId: string; authorId: string; body: string }> = [];
+      const newPersonTagRows:  Array<{ personId: string; tagId: string }> = [];
+      const importFieldUpdateOps: Array<{ id: string; data: Prisma.PersonUpdateInput }> = [];
 
       // ── Address / household helpers ─────────────────────────────────────
 
@@ -440,6 +515,31 @@ export async function importVoterRows(
         newHouseholdRows.push({ id, campaignId, addressId });
         householdMap.set(addressId, id);
         return id;
+      }
+
+      function stageNotesAndTags(personId: string, row: VoterCsvRow) {
+        if (row.notes?.trim()) {
+          newNoteRows.push({ personId, authorId: authSession.user.id, body: row.notes.trim() });
+        }
+        if (row.tags && tagIdByLower.size > 0) {
+          for (const rawName of parseTagList(row.tags)) {
+            const tagId = tagIdByLower.get(rawName.toLowerCase());
+            if (tagId) newPersonTagRows.push({ personId, tagId });
+          }
+        }
+      }
+
+      function stageImportFieldUpdate(personId: string, row: VoterCsvRow) {
+        const current = personCurrentFieldsMap.get(personId);
+        const data: Prisma.PersonUpdateInput = {};
+        const sl = normaliseSupportLevel(row.supportLevel ?? "");
+        if (sl && (!current || current.supportLevel === null)) data.supportLevel = sl;
+        const gender = row.gender?.trim() || null;
+        if (gender && (!current || current.gender === null)) data.gender = gender;
+        if (parseImportBoolean(row.isConfirmedVoter ?? "") && (!current || !current.isConfirmedVoter)) {
+          data.isConfirmedVoter = true;
+        }
+        if (Object.keys(data).length > 0) importFieldUpdateOps.push({ id: personId, data });
       }
 
       // ── Main loop ───────────────────────────────────────────────────────
@@ -515,6 +615,8 @@ export async function importVoterRows(
               ...(pollNumber ? { pollNumber } : {}),
             });
             newMembershipRows.push({ personId: bestCandidateId, listImportId, campaignId, status: "matched" });
+            stageNotesAndTags(bestCandidateId, row);
+            stageImportFieldUpdate(bestCandidateId, row);
 
           } else if (bestKind !== null && bestCandidateId) {
             reviewCount++;
@@ -531,6 +633,7 @@ export async function importVoterRows(
             const personId     = crypto.randomUUID();
             const cfv          = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
 
+            const ovlSl = normaliseSupportLevel(row.supportLevel ?? "");
             newPersonRows.push({
               id: personId,
               campaignId,
@@ -545,9 +648,12 @@ export async function importVoterRows(
               isConfirmedVoter: true,
               listSource:       ListSource.voters_list,
               pollNumber:       pollNumber ?? undefined,
+              ...(ovlSl ? { supportLevel: ovlSl } : {}),
+              ...(row.gender?.trim() ? { gender: row.gender.trim() } : {}),
               ...(cfv ? { customFieldValues: cfv as Prisma.InputJsonValue } : {}),
             });
             newMembershipRows.push({ personId, listImportId, campaignId, status: "created" });
+            stageNotesAndTags(personId, row);
 
             // Index the new person so a second OVL row for the same person gets matched
             const newNormAddr = normalizeFullAddress(`${streetNumber} ${streetName}`, city);
@@ -599,6 +705,8 @@ export async function importVoterRows(
               voterIdUnchanged++;
             }
             newMembershipRows.push({ personId: existingByVid.id, listImportId, campaignId, status: "matched" });
+            stageNotesAndTags(existingByVid.id, row);
+            stageImportFieldUpdate(existingByVid.id, row);
             continue;
           }
 
@@ -616,6 +724,8 @@ export async function importVoterRows(
           const vidHouseholdId = getOrStageHousehold(vidAddrEntry.id);
           const vidPersonId    = crypto.randomUUID();
           const vidCfv         = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
+          const vidSl          = normaliseSupportLevel(row.supportLevel ?? "");
+          const vidConfirmed   = parseImportBoolean(row.isConfirmedVoter ?? "");
           newPersonRows.push({
             id:           vidPersonId,
             campaignId,
@@ -630,9 +740,13 @@ export async function importVoterRows(
             listSource:   ListSource.residents_list,
             pollNumber:   pollNumber ?? undefined,
             voterId:      incomingVoterId,
+            ...(vidSl ? { supportLevel: vidSl } : {}),
+            ...(row.gender?.trim() ? { gender: row.gender.trim() } : {}),
+            ...(vidConfirmed ? { isConfirmedVoter: true } : {}),
             ...(vidCfv ? { customFieldValues: vidCfv as Prisma.InputJsonValue } : {}),
           });
           newMembershipRows.push({ personId: vidPersonId, listImportId, campaignId, status: "created" });
+          stageNotesAndTags(vidPersonId, row);
           personByNameAddr.set(makePersonKey(firstName, lastName, streetNumber, streetName, unitNumber, postalCode), vidPersonId);
           voterIdMap.set(incomingVoterId, { id: vidPersonId, firstName, lastName, phoneHome, phoneMobile, email, birthDate });
           created++;
@@ -646,6 +760,8 @@ export async function importVoterRows(
         if (existingPersonId) {
           matched++;
           newMembershipRows.push({ personId: existingPersonId, listImportId, campaignId, status: "matched" });
+          stageNotesAndTags(existingPersonId, row);
+          stageImportFieldUpdate(existingPersonId, row);
           continue;
         }
 
@@ -671,6 +787,8 @@ export async function importVoterRows(
         // 5. Stage person create
         const personId = crypto.randomUUID();
         const cfv      = sanitizeCustomFields(row.customFieldValues, validCustomFieldIds);
+        const sl       = normaliseSupportLevel(row.supportLevel ?? "");
+        const confirmed = parseImportBoolean(row.isConfirmedVoter ?? "");
 
         newPersonRows.push({
           id: personId,
@@ -686,9 +804,13 @@ export async function importVoterRows(
           wardStatus,
           listSource:   ListSource.residents_list,
           pollNumber:   pollNumber ?? undefined,
+          ...(sl ? { supportLevel: sl } : {}),
+          ...(row.gender?.trim() ? { gender: row.gender.trim() } : {}),
+          ...(confirmed ? { isConfirmedVoter: true } : {}),
           ...(cfv ? { customFieldValues: cfv as Prisma.InputJsonValue } : {}),
         });
         newMembershipRows.push({ personId, listImportId, campaignId, status: "created" });
+        stageNotesAndTags(personId, row);
 
         // Keep lookup map current so a duplicate row in the same import is treated as a match
         personByNameAddr.set(pKey, personId);
@@ -726,8 +848,21 @@ export async function importVoterRows(
           )
         );
       }
+      if (importFieldUpdateOps.length > 0) {
+        await Promise.all(
+          importFieldUpdateOps.map(({ id, data }) =>
+            tx.person.update({ where: { id }, data })
+          )
+        );
+      }
+      if (newPersonTagRows.length > 0) {
+        await tx.personTag.createMany({ data: newPersonTagRows, skipDuplicates: true });
+      }
+      if (newNoteRows.length > 0) {
+        await tx.note.createMany({ data: newNoteRows });
+      }
     },
-    { timeout: 60_000 }
+    { timeout: 180_000 }
   );
 
   // Update ListImport with final row counts
@@ -741,12 +876,12 @@ export async function importVoterRows(
     geocodeNewAddresses(campaignId, newAddressIds).catch(console.error);
   }
 
-  revalidatePath("/voter-import");
+  revalidatePath("/import/voters");
 
   if (created > 0) {
     await createAuditLog({
       campaignId,
-      userId: auth.session.user.id,
+      userId: authSession.user.id,
       action: "VOTER_IMPORT_COMPLETED",
       entityType: "person",
       details: { created, matched, skipped },

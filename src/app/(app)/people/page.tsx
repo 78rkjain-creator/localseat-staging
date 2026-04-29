@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, canExportData, canAddResident } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { getPeopleList, getPeopleCount, getCampaignTags } from "@/lib/people";
+import { deriveSupportBadge } from "@/lib/support-badge";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -329,11 +330,15 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                         <span className="text-xs text-slate-400">Not contacted</span>
                       )}
 
-                      {latestResponse?.supportLevel && (
-                        <SupportLevelBadge
-                          level={latestResponse.supportLevel as SupportLevel}
-                        />
-                      )}
+                      {(() => {
+                        const badge = deriveSupportBadge({
+                          latestCanvassSupport: latestResponse?.supportLevel as SupportLevel ?? null,
+                          importedSupport: person.supportLevel as SupportLevel ?? null,
+                        });
+                        return badge ? (
+                          <SupportLevelBadge level={badge.level} source={badge.source} />
+                        ) : null;
+                      })()}
 
                       {(latestResponse?.outcome as string) === "other_candidate" && (
                         <span className="text-xs text-slate-500">Other candidate</span>

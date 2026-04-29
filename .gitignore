@@ -43,3 +43,7 @@ next-env.d.ts
 # Local TypeScript check output
 tsc_output.txt
 /demo/
+
+.claude/
+test-template.xlsx
+

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople, isReadOnly, hasMinimumRole } from "@/lib/permissions";
 import { getPersonDetail, getCampaignTags } from "@/lib/people";
+import { deriveSupportBadge } from "@/lib/support-badge";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/card";
 import { SupportLevelBadge, OutcomeBadge } from "@/components/ui/badge";
@@ -369,34 +370,42 @@ export default async function PersonDetailPage({ params }: PageProps) {
           </Card>
 
           {/* Support status */}
-          {latestCanvass && (
+          {(latestCanvass || person.supportLevel) && (
             <Card padding="md">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                Canvass status
+                {latestCanvass ? "Canvass status" : "Support level"}
               </h2>
               <div className="flex flex-col gap-2">
-                <OutcomeBadge outcome={latestCanvass.outcome as CanvassOutcome} />
-                {latestCanvass.outcome === "other_candidate" && latestCanvass.competitor?.name && (
+                {latestCanvass && (
+                  <OutcomeBadge outcome={latestCanvass.outcome as CanvassOutcome} />
+                )}
+                {latestCanvass?.outcome === "other_candidate" && latestCanvass.competitor?.name && (
                   <p className="text-xs text-slate-500">
                     Supporting: {latestCanvass.competitor.name}
                   </p>
                 )}
-                {latestCanvass.supportLevel && (
-                  <SupportLevelBadge
-                    level={latestCanvass.supportLevel as SupportLevel}
-                  />
+                {(() => {
+                  const badge = deriveSupportBadge({
+                    latestCanvassSupport: latestCanvass?.supportLevel as SupportLevel ?? null,
+                    importedSupport: person.supportLevel as SupportLevel ?? null,
+                  });
+                  return badge ? (
+                    <SupportLevelBadge level={badge.level} source={badge.source} />
+                  ) : null;
+                })()}
+                {latestCanvass && (latestCanvass.signRequest || latestCanvass.volunteerInterest || latestCanvass.donorInterest) && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {latestCanvass.signRequest && (
+                      <FlagChip label="Yard sign" color="blue" />
+                    )}
+                    {latestCanvass.volunteerInterest && (
+                      <FlagChip label="Volunteer" color="green" />
+                    )}
+                    {latestCanvass.donorInterest && (
+                      <FlagChip label="Donor interest" color="orange" />
+                    )}
+                  </div>
                 )}
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {latestCanvass.signRequest && (
-                    <FlagChip label="Yard sign" color="blue" />
-                  )}
-                  {latestCanvass.volunteerInterest && (
-                    <FlagChip label="Volunteer" color="green" />
-                  )}
-                  {latestCanvass.donorInterest && (
-                    <FlagChip label="Donor interest" color="orange" />
-                  )}
-                </div>
               </div>
             </Card>
           )}

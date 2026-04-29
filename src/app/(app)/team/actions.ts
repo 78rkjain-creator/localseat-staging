@@ -63,6 +63,12 @@ export interface AddMemberInput {
   phoneMobile?: string | null;
   role: string;
   skipVerification?: boolean;
+  streetNumber?: string | null;
+  streetName?: string | null;
+  unitNumber?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
 }
 
 // ── getTeamMembers ────────────────────────────────────────────────────────────
@@ -190,6 +196,16 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
     return { error: "email, firstName, lastName, and role are required." };
   }
 
+  const sn = input.streetNumber?.trim() || null;
+  const st = input.streetName?.trim() || null;
+  const ct = input.city?.trim() || null;
+  const pc = input.postalCode?.trim().replace(/\s/g, "").toUpperCase() || null;
+  const hasAny = !!(sn || st || ct || pc);
+  const hasAll = !!(sn && st && ct && pc);
+  if (hasAny && !hasAll) {
+    return { error: "Street number, street name, city, and postal code are all required when entering an address." };
+  }
+
   if (!Object.values(Role).includes(roleInput as Role)) {
     return { error: `Invalid role: ${roleInput}` };
   }
@@ -297,13 +313,13 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
     // imported voters who are also added as team members.
     const existingByUserId = await db.person.findFirst({
       where: { userId: user.id, campaignId },
-      select: { id: true },
+      select: { id: true, householdId: true },
     });
 
     const existingByEmail = !existingByUserId
       ? await db.person.findFirst({
           where: { campaignId, email: normalizedEmail, userId: null, deletedAt: null },
-          select: { id: true },
+          select: { id: true, householdId: true },
         })
       : null;
 
@@ -329,6 +345,44 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
         },
         select: { id: true },
       });
+    }
+
+    if (hasAll) {
+      const prov = input.province?.trim() || "ON";
+      const unit = input.unitNumber?.trim() || null;
+      let addr = await db.address.findFirst({
+        where: {
+          campaignId,
+          deletedAt: null,
+          streetNumber: { equals: sn!, mode: "insensitive" },
+          streetName: { equals: st!, mode: "insensitive" },
+          unitNumber: unit ? { equals: unit, mode: "insensitive" } : null,
+          postalCode: { equals: pc!, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (!addr) {
+        addr = await db.address.create({
+          data: { campaignId, streetNumber: sn!, streetName: st!, unitNumber: unit, city: ct!, province: prov, postalCode: pc! },
+          select: { id: true },
+        });
+      }
+      let hh = await db.household.findFirst({
+        where: { campaignId, addressId: addr.id, deletedAt: null },
+        select: { id: true },
+      });
+      if (!hh) {
+        hh = await db.household.create({
+          data: { campaignId, addressId: addr.id },
+          select: { id: true },
+        });
+      }
+      if (!existingPerson?.householdId) {
+        await db.person.update({
+          where: { id: person.id },
+          data: { householdId: hh.id },
+        });
+      }
     }
 
     return {

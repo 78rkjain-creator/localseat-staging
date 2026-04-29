@@ -97,6 +97,7 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
         phoneHome: true,
         phoneMobile: true,
         listSource: true,
+        supportLevel: true,
         userId: true,
         user: {
           select: {
