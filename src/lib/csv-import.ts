@@ -7,6 +7,8 @@ import type { SupportLevel } from "@/types";
 import { SUPPORT_LEVEL_VALUES } from "@/types";
 import { parseAddress } from "./address-parser";
 
+export const VOTER_LIST_ROW_CAP = 10_000;
+
 export interface RowFields {
   firstName: string;
   lastName: string;
@@ -300,6 +302,16 @@ export function parseCsvToReviewRows(
     return {
       rows: [],
       fileError: "File must have a header row and at least one data row.",
+      birthYearWarningCount: 0,
+      originalHeaders: [],
+    };
+  }
+
+  const dataRowCount = lines.slice(1).filter((l) => l.trim()).length;
+  if (dataRowCount > VOTER_LIST_ROW_CAP) {
+    return {
+      rows: [],
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
       birthYearWarningCount: 0,
       originalHeaders: [],
     };

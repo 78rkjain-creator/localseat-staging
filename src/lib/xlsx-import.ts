@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { buildReviewRow, normaliseKey } from "./csv-import";
+import { buildReviewRow, normaliseKey, VOTER_LIST_ROW_CAP } from "./csv-import";
 import type { ReviewRow, CustomFieldDef } from "./csv-import";
 
 function formatDate(value: unknown): string {
@@ -76,14 +76,22 @@ export async function parseXlsxToReviewRows(
     return { rows: [], fileError: "File must have a header row and at least one data row.", birthYearWarningCount: 0, originalHeaders: [] };
   }
 
+  const dataRowCount = (sheet.rowCount ?? 0) - 1;
+  if (dataRowCount > VOTER_LIST_ROW_CAP) {
+    return {
+      rows: [],
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
+      birthYearWarningCount: 0,
+      originalHeaders: [],
+    };
+  }
+
   const rows: ReviewRow[] = [];
   let id = 0;
   let birthYearWarningCount = 0;
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return; // skip header
-
-    if (rows.length >= 10000) return;
 
     const raw: Record<string, string> = {};
     headers.forEach((h, idx) => {
@@ -105,11 +113,6 @@ export async function parseXlsxToReviewRows(
     if (bumpedBirthYearWarning) birthYearWarningCount++;
     rows.push(reviewRow);
   });
-
-  const totalDataRows = (sheet.rowCount ?? 0) - 1;
-  if (totalDataRows > 10000) {
-    return { rows: [], fileError: "File contains more than 10,000 rows.", birthYearWarningCount: 0, originalHeaders: [] };
-  }
 
   if (rows.length === 0) {
     return { rows: [], fileError: "No data rows found after the header.", birthYearWarningCount: 0, originalHeaders: [] };

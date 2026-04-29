@@ -2,6 +2,8 @@ import { parseAddress } from "@/lib/address-parser";
 import { parseCsvLine, normaliseKey, parseTagList } from "@/lib/csv-import";
 import ExcelJS from "exceljs";
 
+export const TEAM_ROW_CAP = 1_000;
+
 export type TeamRowFields = {
   firstName:    string;
   lastName:     string;
@@ -215,11 +217,19 @@ export function parseTeamCsvToReviewRows(text: string): {
     }
   }
 
+  const dataRowCount = lines.slice(1).filter((l) => l.trim()).length;
+  if (dataRowCount > TEAM_ROW_CAP) {
+    return {
+      rows: [],
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${TEAM_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
+      originalHeaders: [],
+    };
+  }
+
   const rows: TeamReviewRow[] = [];
   let id = 0;
 
   for (let i = 1; i < lines.length; i++) {
-    if (rows.length >= 1000) break;
     const line = lines[i].trim();
     if (!line) continue;
 
@@ -342,12 +352,20 @@ export async function parseXlsxToTeamReviewRows(file: File): Promise<{
     }
   }
 
+  const dataRowCount = (sheet.rowCount ?? 0) - 1;
+  if (dataRowCount > TEAM_ROW_CAP) {
+    return {
+      rows: [],
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${TEAM_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
+      originalHeaders: [],
+    };
+  }
+
   const rows: TeamReviewRow[] = [];
   let id = 0;
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
-    if (rows.length >= 1000) return;
 
     const raw: Record<string, string> = {};
     headers.forEach((h, idx) => {
