@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 28, 2026 — Batch 10: configurable duplicate finder, person–team-member linking, team badge using userId+role, General Settings save feedback, duplicate team member fix on addTeamMember, fundraising goal campaign field._
+_Last updated: April 29, 2026 — Batch 11: Import & Data Management hub, voter-list expansion, team CSV/XLSX import, review UX overhaul, voter phone fields decoupled from required._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -303,6 +303,49 @@ Candidate
 - dataRetentionMonths (Int?) — policy setting (not enforced automatically)
 - electionDate (DateTime?) — stored on Campaign, shown/edited in General Settings
 - fundraisingGoal (Int?) — dollar goal shown in General Settings; added in migration 20260428000001
+
+---
+
+## Architecture Patterns
+
+**Import & Data Management hub**  
+`/import` is the home for all bulk-data ops. Future imports (donor lists, walk lists, etc.) follow this pattern:
+- Add a card to `src/app/(app)/import/page.tsx`
+- Page at `/import/<name>`
+- Parser in `src/lib/<name>-csv-import.ts` (mirrors csv-import.ts shape)
+- Server action with `checkExisting*` + `commit*` + `applyTags*` helpers
+- Reuse `parseAddress`, `parseTagList`, the grouped review UX, and `ExportFixModal` where possible
+
+**Smart address parser**  
+`src/lib/address-parser.ts` handles Canadian address formats. Any new import accepting addresses should call `parseAddress()` when given a combined "Address" column. Splits "2015-5 Massey Sq" into unit=2015 / num=5 / name=Massey Sq, etc.
+
+**Grouped review UX**  
+`csv-import.ts` exports `classifyRow` + `listMissingFields`. `ReviewBucket` has four states. Review screen renders four collapsible sections with bucket-specific bulk actions. Reusable pattern for any future import.
+
+**Row caps**
+```
+VOTER_LIST_ROW_CAP = 10_000  (src/lib/csv-import.ts)
+TEAM_ROW_CAP       = 1_000   (src/lib/team-csv-import.ts)
+```
+Both parsers (CSV and XLSX) for both flows enforce these caps before any row processing — bail out fast on oversized files. The splitter for >10k row imports is queued (Prompt C) but not yet built.
+
+**Permission gates for /import**
+- `canAccessImportHub` — sidebar visibility + `/import` page gate
+- `canManageVoterList` — voter list import + duplicate detection + review queue (manager-only)
+- `canImportTeam` — team import (manager + co_chair + field_organizer)
+
+---
+
+## Business Rules / Field Decisions
+
+**Voter list — phone fields are PERMANENTLY OPTIONAL.**  
+Both `phoneHome` and `phoneMobile` are optional for voter-list imports. Voter lists from city clerks, party canvasses, and other sources frequently have no phone numbers. This is final — do not add a phone-required gate to the voter-list classifier in the future.
+
+**Team import — phone REQUIRED.**  
+At least one of `phoneHome` or `phoneMobile` must be present for team-import rows. Team members have active campaign roles and need a contact channel. Different rule from voter list, intentional. The classifier in `src/lib/team-csv-import.ts` enforces this.
+
+**Team import — role validation at parse time.**  
+Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missing_required` bucket with a clear "Role (invalid: X)" annotation. Server-side validation is still in place as defense in depth.
 
 ---
 
@@ -638,6 +681,17 @@ Candidate
 
 **April 28, 2026 (Batch 10)** — 1 migration applied (`20260428000001_add_fundraising_goal`): added fundraisingGoal (Int?) to Campaign. Configurable duplicate finder, person–team-member linking, team badge using userId+role, General Settings save feedback, and duplicate team member fix deployed.
 
+**April 29, 2026 (Batch 11)** — Import & Data Management hub + voter-list expansion + team CSV/XLSX import + review UX overhaul. No schema migrations. New dependency: exceljs ^4.4.0.
+- Voter-list import expanded to capture supportLevel, tags, notes, gender, voter ID, and confirmedVoter status. Row cap raised to 10,000 (was 2,000). XLSX template alongside CSV.
+- Smart address parser (`src/lib/address-parser.ts`) handles common Canadian address formats — hyphen-prefix unit numbers, letter-prefix units, comma-separated, trailing annotation suffixes. Combined "Address" column auto-split into StreetNumber/StreetName/UnitNumber.
+- Review screen redesigned with four collapsible groups (Ready, Importable but incomplete, Possible duplicates, Missing required). Per-row "Missing: \<fields\>" annotation on status badge. "Export rows to fix" modal auto-skips to direct download when only one group has content.
+- supportBadge feature: People list, Person detail, and Walk list views show a support-level badge. Imported support shows with a DASHED border; canvass-derived support shows with a SOLID border. Pure UI feature — no schema change.
+- `/import` hub: card-based landing for all bulk-data ops. Permission-aware (managers see all cards; field organizers see only Team members). Old `/voter-import` URLs 307-redirect to `/import/voters` for backward compatibility.
+- Team CSV/XLSX import at `/import/team`. Permission gate: candidate, campaign_manager, co_chair, field_organizer. Field organizers can only add canvasser and sign_installer roles. Multi-layer sample-row protection (warning row + sample emails detected). XLSX template with permission-aware role dropdown. Row cap 1,000.
+- Onboarding tag colors aligned with `prisma/seed.ts` — newly-created campaigns now get 8 starter tags with the same colors as the seed.
+- Voter-list classifier: phone fields are now permanently optional. Different rule from team import (which still requires at least one phone). See Business Rules section.
+- `BackLink` client component (`src/components/ui/back-link.tsx`): uses `router.back()` with fallback href. Replaces static `<Link>` back-buttons on all import and duplicate pages.
+
 ---
 
 ## Remaining Work
@@ -687,6 +741,15 @@ Candidate
 | General Settings save feedback — useActionState, green success banner, red error, Saving… button state | April 28, 2026 |
 | Duplicate team member fix — addTeamMember now checks for existing Person by email before creating a new record | April 28, 2026 |
 | Fundraising goal campaign field — fundraisingGoal (Int?) added to Campaign model, shown/edited in General Settings | April 28, 2026 |
+| Import & Data Management hub at /import — card-based, permission-aware (managers see all cards; FO sees team only). Old /voter-import URLs redirect to /import/voters | April 29, 2026 |
+| Voter-list import expansion — captures supportLevel, tags, notes, gender, voterId, isConfirmedVoter; row cap raised to 10,000; XLSX template alongside CSV | April 29, 2026 |
+| Smart address parser (src/lib/address-parser.ts) — Canadian formats, combined "Address" column auto-split into StreetNumber/StreetName/UnitNumber | April 29, 2026 |
+| Review screen redesign — four collapsible groups, per-row "Missing: \<fields\>" badge annotation, "Export rows to fix" modal (auto-skips to direct download when only one group has content) | April 29, 2026 |
+| supportBadge feature — dashed border for imported support level, solid border for canvass-derived. No schema change | April 29, 2026 |
+| Team CSV/XLSX import at /import/team — FO-gated, sample-row protection, XLSX template with permission-aware role dropdown, row cap 1,000 | April 29, 2026 |
+| Onboarding tag colors aligned with seed.ts — 8 starter tags with correct colors/order on new campaign creation | April 29, 2026 |
+| Voter-list classifier — phone fields permanently optional (different rule from team import which still requires phone) | April 29, 2026 |
+| BackLink client component — router.back() with fallback href; replaces static back-links on all import and duplicate pages | April 29, 2026 |
 
 ### High Priority
 | Item | Effort |
@@ -696,6 +759,7 @@ Candidate
 ### Medium Priority
 | Item | Effort |
 |---|---|
+| CSV splitter + multi-batch session UI (Prompt C) — client-side splitter for >10k row imports, batches of ~9k rows, session at /import/voters/sessions/[id] with progress tracking. Currently the row cap rejects oversized files — splitter would offer to chunk automatically | Medium — ~5.5h est. |
 | Stripe payment integration | Medium — dev tier selector done, Stripe wiring remaining |
 | Two-factor authentication (2FA) | Medium |
 | UI/layout polish pass | Medium |
@@ -712,6 +776,9 @@ Candidate
 |---|---|
 | Demo instance isolation (unique DB per visitor) | Large, deferred |
 | Update HANDOFF.md each session | Ongoing |
+| Team form address fields (test gate A) — address fields added to manual team-add form in src/app/(app)/team/page.tsx; verify that adding a team member with address fields populated correctly links Person → Household → Address. Code review only, no new code expected | Needs manual verification |
+| BackLink router.back() — verify it works in all entry-path scenarios (direct URL load, hub → page, other page → import page) | Needs manual verification |
+| Export modal single-group auto-collapse — verify with mixed test data that direct-download fires correctly and the modal still appears for 2+ groups | Needs manual verification |
 
 ---
 
