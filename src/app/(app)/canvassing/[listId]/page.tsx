@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canAssignCanvassers, canManageWalkLists, hasMinimumRole } from "@/lib/permissions";
+import { canAssignCanvassers, canCanvass, canManageWalkLists, hasMinimumRole } from "@/lib/permissions";
+import { db } from "@/lib/db";
 import {
   getCanvassListDetail,
   getAvailableCanvassers,
@@ -40,8 +41,22 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
+
+  // Canvassers always go straight to the door-knocking view.
   if (activeRole === "canvasser") redirect(`/canvassing/${listId}/canvass`);
-  if (activeRole && !hasMinimumRole(activeRole as Role, "field_organizer")) {
+
+  // Check whether this user has an active assignment to this specific list.
+  const userAssignment = await db.canvassAssignment.findFirst({
+    where: { canvassListId: listId, canvasserId: session.user.id, deletedAt: null },
+    select: { id: true },
+  });
+
+  // Roles below field_organizer can access the page if they're assigned to canvass it.
+  const canUserCanvassThisList = activeRole
+    ? canCanvass(activeRole as Role) && Boolean(userAssignment)
+    : false;
+
+  if (activeRole && !hasMinimumRole(activeRole as Role, "field_organizer") && !canUserCanvassThisList) {
     redirect("/dashboard");
   }
 
@@ -54,12 +69,10 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   // Auto-refresh dynamic lists for managers before fetching full detail
   if (isManagerRole) {
-    const preview = await import("@/lib/db").then(({ db }) =>
-      db.canvassList.findFirst({
-        where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
-        select: { dynamicFilters: true },
-      })
-    );
+    const preview = await db.canvassList.findFirst({
+      where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
+      select: { dynamicFilters: true },
+    });
     if (preview?.dynamicFilters) {
       await _doRefresh(listId, activeCampaignId, session.user.id);
     }
@@ -298,6 +311,18 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+          {canUserCanvassThisList && (
+            <Link
+              href={`/canvassing/${listId}/canvass`}
+              className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors shadow-sm"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Canvass this list
+            </Link>
+          )}
           {canAssign && (
             <EditListButton
               listId={list.id}
