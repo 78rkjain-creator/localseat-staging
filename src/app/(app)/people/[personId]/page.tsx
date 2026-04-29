@@ -222,6 +222,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
               </span>
             )}
             <ListSourceBadge source={person.listSource as ListSource} />
+            {!isAnonymized && <WardStatusBadge wardStatus={person.wardStatus} />}
+            {!isAnonymized && (
+              <GeocodedBadge
+                lat={address?.lat ?? null}
+                lng={address?.lng ?? null}
+                hasAddress={!!address}
+              />
+            )}
           </div>
           {address && (
             <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -662,6 +670,51 @@ function ListSourceBadge({ source }: { source: ListSource }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorMap[source]}`}>
       {LIST_SOURCE_LABELS[source]}
+    </span>
+  );
+}
+
+function WardStatusBadge({ wardStatus }: { wardStatus: string }) {
+  if (wardStatus === "not_checked") return null;
+
+  const config: Record<string, { label: string; cls: string }> = {
+    inside:           { label: "In area",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    outside_accepted: { label: "In area",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    outside:          { label: "Out of area",   cls: "bg-rose-50 text-rose-700 border-rose-200" },
+    pending_review:   { label: "Pending review", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  };
+
+  const entry = config[wardStatus];
+  if (!entry) return null;
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${entry.cls}`}>
+      {entry.label}
+    </span>
+  );
+}
+
+function GeocodedBadge({
+  lat,
+  lng,
+  hasAddress,
+}: {
+  lat: number | null;
+  lng: number | null;
+  hasAddress: boolean;
+}) {
+  if (!hasAddress) return null;
+
+  const geocoded = lat !== null && lng !== null;
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+        geocoded
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : "bg-amber-50 text-amber-700 border-amber-200"
+      }`}
+    >
+      {geocoded ? "Geocoded" : "Not geocoded"}
     </span>
   );
 }

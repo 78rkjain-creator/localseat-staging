@@ -1,30 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { addResident } from "./actions";
 import { TagPicker } from "@/components/ui/tag-picker";
-import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
+import { AddressPicker } from "@/components/ui/address-picker";
+import type { AddressPickerResult } from "@/components/ui/address-picker";
 
 interface Tag {
   id: string;
   name: string;
   color: string | null;
-}
-
-interface AddressResult {
-  id: string;
-  streetNumber: string;
-  streetName: string;
-  unitNumber: string | null;
-  city: string;
-  province: string;
-  postalCode: string;
-}
-
-function formatAddress(addr: AddressResult): string {
-  let line = `${addr.streetNumber} ${addr.streetName}`;
-  if (addr.unitNumber) line += ` #${addr.unitNumber}`;
-  return `${line}, ${addr.city} ${addr.postalCode}`;
 }
 
 const inputClass =
@@ -39,26 +24,16 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
-  // Address mode
-  const [addressMode, setAddressMode] = useState<"search" | "manual">("search");
-
-  // Address search
-  const [addressQuery, setAddressQuery] = useState("");
-  const [addressResults, setAddressResults] = useState<AddressResult[]>([]);
-  const [selectedAddress, setSelectedAddress] = useState<AddressResult | null>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // New address fields
+  // Address — resolved from picker
+  const [pickedAddressId, setPickedAddressId] = useState<string | undefined>(undefined);
   const [streetNumber, setStreetNumber] = useState("");
   const [streetName, setStreetName] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("ON");
   const [postalCode, setPostalCode] = useState("");
-
-  // Shared unit field (applies in both modes)
-  const [unitNumber, setUnitNumber] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
   // Contact
   const [phoneHome, setPhoneHome] = useState("");
@@ -70,61 +45,35 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
   const [notes, setNotes] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Debounced address search
-  useEffect(() => {
-    if (addressQuery.length < 2) {
-      setAddressResults([]);
-      setShowDropdown(false);
+  function handleAddressPick(result: AddressPickerResult | null) {
+    if (!result) {
+      setPickedAddressId(undefined);
+      setStreetNumber(""); setStreetName(""); setCity(""); setProvince("ON"); setPostalCode("");
+      setLat(null); setLng(null);
       return;
     }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/addresses/search?q=${encodeURIComponent(addressQuery)}`);
-        if (res.ok) {
-          const data = (await res.json()) as AddressResult[];
-          setAddressResults(data);
-          setShowDropdown(data.length > 0);
-        }
-      } catch {
-        // silently ignore fetch errors in the combobox
-      }
-    }, 250);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [addressQuery]);
-
-  function handleAddressSelect(addr: AddressResult) {
-    setSelectedAddress(addr);
-    setAddressQuery(formatAddress(addr));
-    setShowDropdown(false);
-  }
-
-  function switchToManual() {
-    setAddressMode("manual");
-    setSelectedAddress(null);
-    setAddressQuery("");
-    setAddressResults([]);
-  }
-
-  function switchToSearch() {
-    setAddressMode("search");
-    setStreetNumber("");
-    setStreetName("");
-    setCity("");
-    setPostalCode("");
+    if (result.type === "campaign") {
+      setPickedAddressId(result.id);
+      setStreetNumber(""); setStreetName(""); setCity(""); setProvince("ON"); setPostalCode("");
+      setLat(null); setLng(null);
+    } else if (result.type === "mapbox") {
+      setPickedAddressId(undefined);
+      setStreetNumber(result.streetNumber);
+      setStreetName(result.streetName);
+      setCity(result.city);
+      setProvince(result.province);
+      setPostalCode(result.postalCode);
+      setLat(result.latitude);
+      setLng(result.longitude);
+    } else {
+      setPickedAddressId(undefined);
+      setStreetNumber(result.streetNumber);
+      setStreetName(result.streetName);
+      setCity(result.city);
+      setProvince(result.province);
+      setPostalCode(result.postalCode);
+      setLat(null); setLng(null);
+    }
   }
 
   function toggleTag(tagId: string) {
@@ -140,13 +89,15 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
       const result = await addResident({
         firstName,
         lastName,
-        addressId: addressMode === "search" ? (selectedAddress?.id ?? undefined) : undefined,
-        streetNumber: addressMode === "manual" ? streetNumber : undefined,
-        streetName: addressMode === "manual" ? streetName : undefined,
+        addressId: pickedAddressId,
+        streetNumber: pickedAddressId ? undefined : streetNumber,
+        streetName: pickedAddressId ? undefined : streetName,
         unitNumber: unitNumber || undefined,
-        city: addressMode === "manual" ? city : undefined,
-        province: addressMode === "manual" ? province : undefined,
-        postalCode: addressMode === "manual" ? postalCode : undefined,
+        city: pickedAddressId ? undefined : city,
+        province: pickedAddressId ? undefined : province,
+        postalCode: pickedAddressId ? undefined : postalCode,
+        lat: pickedAddressId ? undefined : lat,
+        lng: pickedAddressId ? undefined : lng,
         phoneHome: phoneHome || undefined,
         phoneMobile: phoneMobile || undefined,
         email: email || undefined,
@@ -155,7 +106,7 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
         tagIds: selectedTagIds,
       });
       if (result?.error) setError(result.error);
-      // On success the server action redirects — nothing to handle here
+      // On success the server action redirects
     });
   }
 
@@ -204,174 +155,25 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
 
       {/* ── Address ──────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Address</h2>
-          {addressMode === "search" ? (
-            <button
-              type="button"
-              onClick={switchToManual}
-              className="text-xs text-brand-500 hover:text-brand-600 font-medium"
-            >
-              Enter manually
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={switchToSearch}
-              className="text-xs text-brand-500 hover:text-brand-600 font-medium"
-            >
-              Search existing
-            </button>
-          )}
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Address</h2>
+        <div>
+          <label className={labelClass}>Search address</label>
+          <AddressPicker onSelect={handleAddressPick} />
         </div>
-
-        {addressMode === "search" ? (
-          <div ref={dropdownRef} className="relative">
-            <label className={labelClass}>Search address</label>
-            <input
-              type="text"
-              value={addressQuery}
-              onChange={(e) => {
-                setAddressQuery(e.target.value);
-                setSelectedAddress(null);
-              }}
-              onFocus={() => addressResults.length > 0 && setShowDropdown(true)}
-              className={inputClass}
-              placeholder="Start typing a street name or postal code…"
-              disabled={isPending}
-              autoComplete="off"
-            />
-            {showDropdown && (
-              <div className="absolute z-10 mt-1 w-full bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-                {addressResults.map((addr) => (
-                  <button
-                    key={addr.id}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleAddressSelect(addr);
-                    }}
-                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
-                  >
-                    {formatAddress(addr)}
-                  </button>
-                ))}
-              </div>
-            )}
-            {selectedAddress && (
-              <p className="mt-1.5 text-xs text-emerald-600 flex items-center gap-1">
-                <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                {formatAddress(selectedAddress)}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <AddressAutocomplete
-              onSelect={(parsed) => {
-                setStreetNumber(parsed.streetNumber);
-                setStreetName(parsed.streetName);
-                setCity(parsed.city);
-                setProvince(parsed.province);
-                setPostalCode(parsed.postalCode);
-              }}
-              placeholder="Search for an address…"
-              inputClassName={inputClass}
-              disabled={isPending}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelClass}>Street #</label>
-                <input
-                  type="text"
-                  value={streetNumber}
-                  onChange={(e) => setStreetNumber(e.target.value)}
-                  className={inputClass}
-                  placeholder="123"
-                  disabled={isPending}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>Street name</label>
-                <input
-                  type="text"
-                  value={streetName}
-                  onChange={(e) => setStreetName(e.target.value)}
-                  className={inputClass}
-                  placeholder="Main Street"
-                  disabled={isPending}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelClass}>Unit / apt</label>
-                <input
-                  type="text"
-                  value={unitNumber}
-                  onChange={(e) => setUnitNumber(e.target.value)}
-                  className={inputClass}
-                  placeholder="Optional"
-                  disabled={isPending}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className={inputClass}
-                  placeholder="e.g. Oakville"
-                  disabled={isPending}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Province</label>
-                <input
-                  type="text"
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                  className={inputClass}
-                  disabled={isPending}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Postal code</label>
-                <input
-                  type="text"
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                  className={inputClass}
-                  placeholder="L6J 1A1"
-                  disabled={isPending}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Unit override — only shown when an existing address is selected from search */}
-        {addressMode === "search" && selectedAddress && (
-          <div>
-            <label className={labelClass}>
-              Unit / apt{" "}
-              <span className="text-slate-400 font-normal">(leave blank to use selected address as-is)</span>
-            </label>
-            <input
-              type="text"
-              value={unitNumber}
-              onChange={(e) => setUnitNumber(e.target.value)}
-              className={inputClass}
-              placeholder="e.g. 4B"
-              disabled={isPending}
-            />
-          </div>
-        )}
+        <div>
+          <label className={labelClass}>
+            Unit / apt{" "}
+            <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={unitNumber}
+            onChange={(e) => setUnitNumber(e.target.value)}
+            className={inputClass}
+            placeholder="e.g. 4B"
+            disabled={isPending}
+          />
+        </div>
       </div>
 
       {/* ── Contact ───────────────────────────────────────────────────────── */}

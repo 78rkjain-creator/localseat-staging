@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updatePerson, updatePersonAddress } from "./actions";
-import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
+import { AddressPicker } from "@/components/ui/address-picker";
+import type { AddressPickerResult } from "@/components/ui/address-picker";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { SupportLevel } from "@/types";
 
@@ -50,13 +51,43 @@ export function PersonEditForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Address controlled state (only relevant when address prop is provided)
+  // Address controlled state
   const [addrStreetNumber, setAddrStreetNumber] = useState(address?.streetNumber ?? "");
   const [addrStreetName, setAddrStreetName] = useState(address?.streetName ?? "");
   const [addrUnitNumber, setAddrUnitNumber] = useState(address?.unitNumber ?? "");
   const [addrCity, setAddrCity] = useState(address?.city ?? "");
   const [addrProvince, setAddrProvince] = useState(address?.province ?? "ON");
   const [addrPostalCode, setAddrPostalCode] = useState(address?.postalCode ?? "");
+  const [addrLat, setAddrLat] = useState<number | null>(null);
+  const [addrLng, setAddrLng] = useState<number | null>(null);
+
+  function handleAddressPick(result: AddressPickerResult | null) {
+    if (!result) return;
+    if (result.type === "campaign") {
+      setAddrStreetNumber(result.streetNumber);
+      setAddrStreetName(result.streetName);
+      setAddrUnitNumber(result.unitNumber ?? "");
+      setAddrCity(result.city);
+      setAddrProvince(result.province);
+      setAddrPostalCode(result.postalCode);
+      setAddrLat(null); setAddrLng(null);
+    } else if (result.type === "mapbox") {
+      setAddrStreetNumber(result.streetNumber);
+      setAddrStreetName(result.streetName);
+      setAddrCity(result.city);
+      setAddrProvince(result.province);
+      setAddrPostalCode(result.postalCode);
+      setAddrLat(result.latitude); setAddrLng(result.longitude);
+    } else {
+      setAddrStreetNumber(result.streetNumber);
+      setAddrStreetName(result.streetName);
+      setAddrUnitNumber(result.unitNumber ?? "");
+      setAddrCity(result.city);
+      setAddrProvince(result.province);
+      setAddrPostalCode(result.postalCode);
+      setAddrLat(null); setAddrLng(null);
+    }
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,7 +113,8 @@ export function PersonEditForm({
         return;
       }
 
-      if (address) {
+      const hasAddressInput = addrStreetNumber.trim() || addrStreetName.trim() || addrCity.trim();
+      if (address || hasAddressInput) {
         const addrResult = await updatePersonAddress({
           personId,
           streetNumber: addrStreetNumber,
@@ -91,6 +123,8 @@ export function PersonEditForm({
           city: addrCity,
           province: addrProvince,
           postalCode: addrPostalCode,
+          lat: addrLat,
+          lng: addrLng,
         });
         if (addrResult.error) {
           setError(addrResult.error);
@@ -112,6 +146,8 @@ export function PersonEditForm({
     setAddrCity(address?.city ?? "");
     setAddrProvince(address?.province ?? "ON");
     setAddrPostalCode(address?.postalCode ?? "");
+    setAddrLat(null);
+    setAddrLng(null);
   }
 
   // ── Read-only view ──────────────────────────────────────────────────────────
@@ -231,67 +267,56 @@ export function PersonEditForm({
           </Field>
         </div>
 
-        {address && (
-          <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Address</p>
-            <AddressAutocomplete
-              onSelect={(parsed) => {
-                setAddrStreetNumber(parsed.streetNumber);
-                setAddrStreetName(parsed.streetName);
-                setAddrCity(parsed.city);
-                setAddrProvince(parsed.province);
-                setAddrPostalCode(parsed.postalCode);
-              }}
-              placeholder="Search for a new address…"
+        <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Address</p>
+          <AddressPicker onSelect={handleAddressPick} compact />
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              value={addrStreetNumber}
+              onChange={(e) => { setAddrStreetNumber(e.target.value); setAddrLat(null); setAddrLng(null); }}
+              placeholder="No."
+              className={inputCls}
             />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
               <input
-                value={addrStreetNumber}
-                onChange={(e) => setAddrStreetNumber(e.target.value)}
-                placeholder="No."
-                className={inputCls}
-              />
-              <div className="col-span-2">
-                <input
-                  value={addrStreetName}
-                  onChange={(e) => setAddrStreetName(e.target.value)}
-                  placeholder="Street name"
-                  className={inputCls}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                value={addrUnitNumber}
-                onChange={(e) => setAddrUnitNumber(e.target.value)}
-                placeholder="Unit"
-                className={inputCls}
-              />
-              <div className="col-span-2">
-                <input
-                  value={addrCity}
-                  onChange={(e) => setAddrCity(e.target.value)}
-                  placeholder="City"
-                  className={inputCls}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                value={addrProvince}
-                onChange={(e) => setAddrProvince(e.target.value)}
-                placeholder="Province"
-                className={inputCls}
-              />
-              <input
-                value={addrPostalCode}
-                onChange={(e) => setAddrPostalCode(e.target.value)}
-                placeholder="Postal code"
+                value={addrStreetName}
+                onChange={(e) => { setAddrStreetName(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                placeholder="Street name"
                 className={inputCls}
               />
             </div>
           </div>
-        )}
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              value={addrUnitNumber}
+              onChange={(e) => setAddrUnitNumber(e.target.value)}
+              placeholder="Unit"
+              className={inputCls}
+            />
+            <div className="col-span-2">
+              <input
+                value={addrCity}
+                onChange={(e) => { setAddrCity(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                placeholder="City"
+                className={inputCls}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={addrProvince}
+              onChange={(e) => setAddrProvince(e.target.value)}
+              placeholder="Province"
+              className={inputCls}
+            />
+            <input
+              value={addrPostalCode}
+              onChange={(e) => { setAddrPostalCode(e.target.value); setAddrLat(null); setAddrLng(null); }}
+              placeholder="Postal code"
+              className={inputCls}
+            />
+          </div>
+        </div>
 
         <Field label="Birth date">
           <input

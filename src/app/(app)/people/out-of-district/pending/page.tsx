@@ -28,6 +28,7 @@ export default async function PendingOutOfDistrictPage() {
       campaignId: activeCampaignId,
       deletedAt: null,
       outOfDistrictApprovalStatus: "pending",
+      listSource: { not: "team" },
     },
     select: {
       id: true,

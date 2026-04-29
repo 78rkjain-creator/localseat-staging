@@ -1,5 +1,8 @@
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Prisma } from "@prisma/client";
+import { WardStatus } from "@prisma/client";
+import { db } from "@/lib/db";
+import { geocodeAddress } from "./geocoding";
 
 // ── Ray-cast point-in-polygon ─────────────────────────────────────────────────
 // GeoJSON coordinates are [lng, lat]; point is supplied as lat, lng separately.
@@ -50,6 +53,78 @@ export function campaignHasWard(campaign: {
   wardBoundary: Prisma.JsonValue | null;
 }): boolean {
   return campaign.wardBoundary !== null;
+}
+
+// ── Geocode + classify a single address ───────────────────────────────────────
+// Resolves coordinates for the given address (using cached lat/lng if present,
+// otherwise calling Mapbox). Then, if the campaign has a wardBoundary and a
+// personId is supplied, updates the Person's wardStatus and isOutOfDistrict.
+// Anonymized persons are skipped for the Person update; the Address is still
+// geocoded because coordinates are not PII.
+// Never throws — all failures are caught and logged.
+
+export async function geocodeAndClassifyAddress(
+  addressId: string,
+  campaignId: string,
+  personId?: string,
+): Promise<void> {
+  try {
+    const address = await db.address.findUnique({
+      where: { id: addressId },
+      select: {
+        campaignId: true,
+        streetNumber: true,
+        streetName: true,
+        city: true,
+        lat: true,
+        lng: true,
+      },
+    });
+
+    if (!address) return;
+    if (address.campaignId !== campaignId) return;
+    // Defensive: skip addresses with no street fields
+    if (!address.streetNumber || !address.streetName || !address.city) return;
+
+    // Use cached coords if available, otherwise geocode and persist
+    let coords: { lat: number; lng: number } | null = null;
+    if (address.lat !== null && address.lng !== null) {
+      coords = { lat: address.lat, lng: address.lng };
+    } else {
+      coords = await geocodeAddress(addressId);
+    }
+
+    if (!coords) return; // geocoding failed or token missing — address left un-geocoded
+
+    if (!personId) return;
+
+    const campaign = await db.campaign.findUnique({
+      where: { id: campaignId },
+      select: { wardBoundary: true },
+    });
+    if (!campaign?.wardBoundary) return; // geocoding was still useful; no boundary to classify against
+
+    const boundary = campaign.wardBoundary as unknown as Polygon | MultiPolygon;
+    const inside = isPointInWard(coords.lat, coords.lng, boundary);
+    const wardStatus = inside ? WardStatus.inside : WardStatus.outside;
+
+    const person = await db.person.findUnique({
+      where: { id: personId },
+      select: { anonymizedAt: true },
+    });
+    // Skip Person update for anonymized records; coordinates are not PII
+    if (!person || person.anonymizedAt !== null) return;
+
+    await db.person.update({
+      where: { id: personId },
+      data: {
+        wardStatus,
+        ...(inside ? {} : { isOutOfDistrict: true }),
+      },
+    });
+  } catch (err) {
+    console.error(`[ward] geocodeAndClassifyAddress error — address ${addressId}:`, err);
+  }
 }
 
 // ── KML → GeoJSON Polygon ─────────────────────────────────────────────────────

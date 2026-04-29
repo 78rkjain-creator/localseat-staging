@@ -18,6 +18,8 @@ async function getPlatformStats() {
     totalLeads,
     unemailedLeads,
     recentLeads,
+    activePeople,
+    geocodedPeople,
   ] = await Promise.all([
     db.campaign.count(),
     db.user.count(),
@@ -27,7 +29,22 @@ async function getPlatformStats() {
     db.demoRegistration.count(),
     db.demoRegistration.count({ where: { emailedAt: null } }),
     db.demoRegistration.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    db.person.count({ where: { deletedAt: null, anonymizedAt: null } }),
+    db.person.count({
+      where: {
+        deletedAt: null,
+        anonymizedAt: null,
+        household: {
+          address: {
+            lat: { not: null },
+            lng: { not: null },
+          },
+        },
+      },
+    }),
   ]);
+
+  const geocodedPct = activePeople > 0 ? Math.round((geocodedPeople / activePeople) * 100) : 0;
 
   return {
     totalCampaigns,
@@ -38,6 +55,9 @@ async function getPlatformStats() {
     totalLeads,
     unemailedLeads,
     recentLeads,
+    activePeople,
+    geocodedPeople,
+    geocodedPct,
   };
 }
 
@@ -102,6 +122,31 @@ export default async function AdminDashboardPage() {
           description="All donor records across all campaigns"
         />
       </div>
+
+      {canSeeLeads && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Geocoding Coverage
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              label="Active People"
+              value={stats.activePeople}
+              description="Non-deleted, non-anonymized records"
+            />
+            <StatCard
+              label="Geocoded"
+              value={stats.geocodedPeople}
+              description="Have a linked address with lat/lng"
+            />
+            <StatCard
+              label="Coverage"
+              value={stats.geocodedPct}
+              description="% of active people geocoded"
+            />
+          </div>
+        </div>
+      )}
 
       {canSeeLeads && (
         <div className="mt-8">

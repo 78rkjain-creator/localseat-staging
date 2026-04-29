@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 29, 2026 — Batch 11: Import & Data Management hub, voter-list expansion, team CSV/XLSX import, review UX overhaul, voter phone fields decoupled from required._
+_Last updated: April 29, 2026 — Batch 12: Address edit fields always render, OOD detection on manual add + unified helper, geocoded/ward badges, team excluded from OOD queue, hybrid Mapbox+campaign autocomplete._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -333,6 +333,12 @@ Both parsers (CSV and XLSX) for both flows enforce these caps before any row pro
 - `canAccessImportHub` — sidebar visibility + `/import` page gate
 - `canManageVoterList` — voter list import + duplicate detection + review queue (manager-only)
 - `canImportTeam` — team import (manager + co_chair + field_organizer)
+
+**`geocodeAndClassifyAddress` — canonical post-create address pipeline**  
+Any new manual address entry point (form, action, API handler) must call `geocodeAndClassifyAddress(addressId, campaignId, personId?)` from `src/lib/ward.ts` after creating or updating an Address record. The helper: geocodes with Mapbox if lat/lng are null, runs `isPointInWard` against `campaign.wardBoundary`, sets `wardStatus` + `isOutOfDistrict` on the Person. Skips the Person update for anonymized records. Never throws — all failures are caught and logged. Use `void` (fire-and-forget) for form-save paths to keep UX fast; use `await` only when coords are already cached (pin drop).
+
+**Hybrid address picker**  
+`src/components/ui/address-picker.tsx` is the standard manual address input for all new forms. Returns an `AddressPickerResult` discriminated union (`type: "campaign" | "mapbox" | "manual"`). Campaign results include `addressId` (reuse existing address). Mapbox results include `latitude`/`longitude` (thread through to `db.address.create` so the geocode helper skips the redundant Mapbox API call). Manual results have no coordinates. CSV/bulk imports do not use this component — they go through the import pipeline directly.
 
 ---
 
@@ -750,6 +756,14 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Onboarding tag colors aligned with seed.ts — 8 starter tags with correct colors/order on new campaign creation | April 29, 2026 |
 | Voter-list classifier — phone fields permanently optional (different rule from team import which still requires phone) | April 29, 2026 |
 | BackLink client component — router.back() with fallback href; replaces static back-links on all import and duplicate pages | April 29, 2026 |
+| Person edit form — address fields always render in edit mode (was gated on existing address); Save creates Address + Household when none existed; empty/whitespace saves silently skipped | April 29, 2026 |
+| Address autocomplete API fix — `force-dynamic` added to `/api/addresses/search` route; was statically cached by Next.js, returning 401 for all authenticated requests | April 29, 2026 |
+| OOD detection on `/people/new` — geocodes address after create, runs `isPointInWard` against campaign `wardBoundary`, sets `wardStatus: "outside"` + `isOutOfDistrict: true` when outside; wrapped in try/catch so Mapbox failures don't block redirect | April 29, 2026 |
+| `/people/out-of-district` empty-state banner — amber banner with link to `/campaign-settings/ward` shown when no ward boundary configured | April 29, 2026 |
+| Unified `geocodeAndClassifyAddress` helper in `src/lib/ward.ts` — wired into address edit (create + update branches), pin drop on `/people/map`, `/team` manual add; update branch passes lat/lng from picker (null forces re-geocode); skips Person update for anonymized records | April 29, 2026 |
+| Geocoded + ward status badges on person detail header — three ward states (In area / Out of area / Pending review); `outside_accepted` treated as In area; Geocoded badge green when lat/lng present, amber "Not geocoded" when address exists without coords; no badges on anonymized records | April 29, 2026 |
+| Team excluded from OOD queue — `listSource: { not: "team" }` filter on both `/people/out-of-district/page.tsx` and `/people/out-of-district/pending/page.tsx`; helper still sets accurate `wardStatus` on team members | April 29, 2026 |
+| Hybrid address autocomplete — `/api/addresses/search` returns `{ campaign, mapbox }` with resident counts and server-side dedup; `address-picker.tsx` rewritten with two grouped sections, `AddressPickerResult` discriminated union, AbortController, 300ms debounce, 3-char minimum, session cache; wired into `/people/new`, person detail edit, and `/team` add; Mapbox lat/lng threaded through actions to `db.address.create`; classify-modal updated with `toAddressValue` adapter | April 29, 2026 |
 
 ### High Priority
 | Item | Effort |
@@ -776,7 +790,6 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 |---|---|
 | Demo instance isolation (unique DB per visitor) | Large, deferred |
 | Update HANDOFF.md each session | Ongoing |
-| Team form address fields (test gate A) — address fields added to manual team-add form in src/app/(app)/team/page.tsx; verify that adding a team member with address fields populated correctly links Person → Household → Address. Code review only, no new code expected | Needs manual verification |
 | BackLink router.back() — verify it works in all entry-path scenarios (direct URL load, hub → page, other page → import page) | Needs manual verification |
 | Export modal single-group auto-collapse — verify with mixed test data that direct-download fires correctly and the modal still appears for 2+ groups | Needs manual verification |
 

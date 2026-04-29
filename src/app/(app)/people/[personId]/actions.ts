@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { canManageVoterList, hasMinimumRole } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeBirthDate, sanitizeEnum } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
-import { geocodeAddress } from "@/lib/geocoding";
+import { geocodeAndClassifyAddress } from "@/lib/ward";
 import type { SupportLevel } from "@/types";
 import { Role } from "@prisma/client";
 
@@ -84,6 +84,8 @@ interface UpdatePersonAddressInput {
   city: string;
   province: string;
   postalCode: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export async function updatePersonAddress(
@@ -106,12 +108,50 @@ export async function updatePersonAddress(
 
   const person = await db.person.findFirst({
     where: { id: input.personId, campaignId: activeCampaignId, deletedAt: null },
-    select: { household: { select: { addressId: true } } },
+    select: { household: { select: { id: true, addressId: true } } },
   });
   if (!person) return { error: "Person not found." };
 
-  const addressId = person.household?.addressId;
-  if (!addressId) return { error: "No address on file for this person." };
+  const addressId = person.household?.addressId ?? null;
+
+  if (!addressId) {
+    const newAddress = await db.address.create({
+      data: {
+        campaignId: activeCampaignId,
+        streetNumber,
+        streetName,
+        unitNumber: input.unitNumber?.trim() || null,
+        city,
+        province: input.province.trim() || "ON",
+        postalCode: input.postalCode.trim(),
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+      },
+    });
+
+    const householdId = person.household?.id ?? null;
+    if (householdId) {
+      await db.household.update({
+        where: { id: householdId },
+        data: { addressId: newAddress.id },
+      });
+    } else {
+      const newHousehold = await db.household.create({
+        data: {
+          campaignId: activeCampaignId,
+          addressId: newAddress.id,
+        },
+      });
+      await db.person.update({
+        where: { id: input.personId },
+        data: { householdId: newHousehold.id },
+      });
+    }
+
+    void geocodeAndClassifyAddress(newAddress.id, activeCampaignId, input.personId);
+    revalidatePath(`/people/${input.personId}`);
+    return { success: true };
+  }
 
   await db.address.update({
     where: { id: addressId },
@@ -122,12 +162,13 @@ export async function updatePersonAddress(
       city,
       province: input.province.trim() || "ON",
       postalCode: input.postalCode.trim(),
-      lat: null,
-      lng: null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
     },
   });
 
-  void geocodeAddress(addressId);
+  // helper re-geocodes if lat/lng are null, otherwise uses cached coords
+  void geocodeAndClassifyAddress(addressId, activeCampaignId, input.personId);
 
   revalidatePath(`/people/${input.personId}`);
   return { success: true };

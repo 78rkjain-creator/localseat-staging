@@ -9,6 +9,7 @@ import { createAuditLog } from "@/lib/audit";
 import { sanitizeText, sanitizePhone, sanitizeEmail, sanitizeBirthDate } from "@/lib/sanitize";
 import { ListSource } from "@prisma/client";
 import type { Role } from "@/types";
+import { geocodeAndClassifyAddress } from "@/lib/ward";
 
 export interface AddResidentInput {
   firstName: string;
@@ -22,6 +23,9 @@ export interface AddResidentInput {
   city?: string;
   province?: string;
   postalCode?: string;
+  // Coordinates from picker (Mapbox pick only — skip geocode API call)
+  lat?: number | null;
+  lng?: number | null;
   // Contact
   phoneHome?: string;
   phoneMobile?: string;
@@ -143,6 +147,8 @@ export async function addResident(
           city,
           province,
           postalCode,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
         },
         select: { id: true },
       });
@@ -225,6 +231,11 @@ export async function addResident(
       hasNote: !!notes,
     },
   });
+
+  // ── Ward check ─────────────────────────────────────────────────────────────
+  if (resolvedAddressId) {
+    await geocodeAndClassifyAddress(resolvedAddressId, activeCampaignId, person.id);
+  }
 
   redirect(`/people/${person.id}`);
 }

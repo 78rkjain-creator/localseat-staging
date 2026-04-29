@@ -29,13 +29,31 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other:              "#94a3b8",
 };
 
-export async function CandidateDashboard({ campaignId }: Props) {
+async function getPeopleGeoStats(campaignId: string) {
+  const [activePeople, geocodedPeople] = await Promise.all([
+    db.person.count({ where: { campaignId, deletedAt: null, anonymizedAt: null } }),
+    db.person.count({
+      where: {
+        campaignId,
+        deletedAt: null,
+        anonymizedAt: null,
+        household: { address: { lat: { not: null }, lng: { not: null } } },
+      },
+    }),
+  ]);
+  const geocodedPct = activePeople > 0 ? Math.round((geocodedPeople / activePeople) * 100) : 0;
+  return { activePeople, geocodedPeople, geocodedPct };
+}
+
+export async function CandidateDashboard({ campaignId, role }: Props) {
+  const showGeoStats = role === "candidate" || role === "campaign_manager";
+
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
   const next72h = new Date(now.getTime() + 72 * 60 * 60 * 1000);
 
-  const [hero, data, needsYou, canvassers, liveActivity, upcomingEvents] = await Promise.all([
+  const [hero, data, needsYou, canvassers, liveActivity, upcomingEvents, geoStats] = await Promise.all([
     getDashboardHeroData(campaignId),
     getCandidateDashboardData(campaignId),
     getNeedsYouQueue(campaignId),
@@ -59,6 +77,7 @@ export async function CandidateDashboard({ campaignId }: Props) {
         _count: { select: { attendees: true } },
       },
     }),
+    showGeoStats ? getPeopleGeoStats(campaignId) : Promise.resolve(null),
   ]);
 
   const {
@@ -187,6 +206,27 @@ export async function CandidateDashboard({ campaignId }: Props) {
           <LineSparkline data={donorsSeries} />
         </KpiCard>
       </div>
+
+      {/* ── Geocoding coverage (candidate + campaign_manager only) ── */}
+      {showGeoStats && geoStats && (
+        <div className="grid grid-cols-3 gap-3 flex-shrink-0">
+          <GeoStatCard
+            label="People"
+            value={geoStats.activePeople.toLocaleString()}
+            description="Active records in this campaign"
+          />
+          <GeoStatCard
+            label="Geocoded"
+            value={geoStats.geocodedPeople.toLocaleString()}
+            description="With a mapped address"
+          />
+          <GeoStatCard
+            label="Coverage"
+            value={`${geoStats.geocodedPct}%`}
+            description="Of people geocoded"
+          />
+        </div>
+      )}
 
       {/* ── Panel grid ── */}
       <div className="grid grid-cols-12 grid-rows-2 gap-3 flex-1 min-h-0">
@@ -444,6 +484,16 @@ function relativeTime(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function GeoStatCard({ label, value, description }: { label: string; value: string; description: string }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="text-[22px] font-bold text-slate-900 tabular leading-none mt-1">{value}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">{description}</p>
+    </div>
+  );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────

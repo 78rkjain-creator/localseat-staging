@@ -9,6 +9,7 @@ import { SupportLevelBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
 import type { Role, SupportLevel } from "@/types";
+import { ListSource } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Out-of-District People" };
 
@@ -47,6 +48,7 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
     campaignId: activeCampaignId,
     deletedAt: null,
     isOutOfDistrict: true,
+    listSource: { not: ListSource.team },
   };
 
   const statusWhere = activeStatus ? { outOfDistrictApprovalStatus: activeStatus as "pending" | "approved" | "rejected" } : {};
@@ -64,7 +66,7 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
       }
     : { ...baseWhere, ...statusWhere };
 
-  const [people, total] = await Promise.all([
+  const [people, total, campaign] = await Promise.all([
     db.person.findMany({
       where: searchWhere,
       select: {
@@ -94,7 +96,13 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
       take: 100,
     }),
     db.person.count({ where: baseWhere }),
+    db.campaign.findUnique({
+      where: { id: activeCampaignId },
+      select: { wardBoundary: true },
+    }),
   ]);
+
+  const hasWardBoundary = campaign?.wardBoundary !== null && campaign?.wardBoundary !== undefined;
 
   const STATUS_PILLS = [
     { label: "All", value: undefined },
@@ -120,6 +128,21 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
           {total.toLocaleString()} out-of-district {total !== 1 ? "people" : "person"}
         </p>
       </div>
+
+      {/* No ward boundary warning */}
+      {!hasWardBoundary && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <p className="text-sm text-amber-800">
+            No ward boundary is configured — out-of-district detection is disabled.{" "}
+            <Link href="/campaign-settings/ward" className="font-medium underline underline-offset-2 hover:text-amber-900">
+              Configure ward boundary
+            </Link>
+          </p>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-3">

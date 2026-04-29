@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ListSource, WardStatus } from "@prisma/client";
 import type { Role } from "@/types";
+import { geocodeAndClassifyAddress } from "@/lib/ward";
 
 const CAN_CREATE: Role[] = ["candidate", "campaign_manager", "field_organizer"];
 
@@ -115,6 +116,9 @@ export async function createPinDropContact(input: PinDropInput): Promise<PinDrop
       },
       select: { id: true },
     });
+
+    // Address already has lat/lng from the pin drop — helper skips Mapbox, runs ward check only
+    await geocodeAndClassifyAddress(address.id, activeCampaignId, person.id);
 
     return { personId: person.id };
   } catch (err) {

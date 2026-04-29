@@ -2,7 +2,27 @@
 
 import { useState, useTransition } from "react";
 import { bulkClassifyTeamMembers, classifyTeamMember, type BulkClassifyItem, type ClassifyTeamMemberInput } from "@/lib/classify-actions";
-import { AddressPicker, addressValueComplete, type AddressValue } from "@/components/ui/address-picker";
+import { AddressPicker, addressValueComplete, type AddressValue, type AddressPickerResult } from "@/components/ui/address-picker";
+
+function toAddressValue(result: AddressPickerResult | null): AddressValue | null {
+  if (!result) return null;
+  if (result.type === "campaign") return { addressId: result.id };
+  if (result.type === "mapbox") return {
+    streetNumber: result.streetNumber,
+    streetName: result.streetName,
+    city: result.city,
+    province: result.province,
+    postalCode: result.postalCode,
+  };
+  return {
+    streetNumber: result.streetNumber,
+    streetName: result.streetName,
+    unitNumber: result.unitNumber,
+    city: result.city,
+    province: result.province,
+    postalCode: result.postalCode,
+  };
+}
 import { ROLE_LABELS } from "@/types";
 import type { Role } from "@/types";
 
@@ -235,7 +255,7 @@ export function ClassifyModal({ people: initialPeople, onClose }: ClassifyModalP
 
                   {d === "inside" && (
                     <div className="mt-2.5 ml-11">
-                      <AddressPicker onChange={v => setAddress(person.id, v)} compact />
+                      <AddressPicker onSelect={r => setAddress(person.id, toAddressValue(r))} compact />
                       {!addressValueComplete(addrVal) && !rowErr && (
                         <p className="text-xs text-slate-400 mt-1">Address required to save.</p>
                       )}
@@ -386,7 +406,7 @@ export function TeamMemberClassifyModal({ personId, name, onDone }: TeamMemberCl
               </div>
               {choice === "inside" && (
                 <div className="mt-3 pl-7">
-                  <AddressPicker onChange={setAddressValue} />
+                  <AddressPicker onSelect={r => setAddressValue(toAddressValue(r))} />
                 </div>
               )}
             </label>

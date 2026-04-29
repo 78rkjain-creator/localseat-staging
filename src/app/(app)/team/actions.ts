@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role, ListSource } from "@prisma/client";
 import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
+import { geocodeAndClassifyAddress } from "@/lib/ward";
 import { createAuditLog } from "@/lib/audit";
 import { canAddRole } from "@/lib/plan-limits";
 import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
@@ -69,6 +70,8 @@ export interface AddMemberInput {
   city?: string | null;
   province?: string | null;
   postalCode?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 // ── getTeamMembers ────────────────────────────────────────────────────────────
@@ -363,7 +366,7 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
       });
       if (!addr) {
         addr = await db.address.create({
-          data: { campaignId, streetNumber: sn!, streetName: st!, unitNumber: unit, city: ct!, province: prov, postalCode: pc! },
+          data: { campaignId, streetNumber: sn!, streetName: st!, unitNumber: unit, city: ct!, province: prov, postalCode: pc!, lat: input.lat ?? null, lng: input.lng ?? null },
           select: { id: true },
         });
       }
@@ -383,6 +386,7 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
           data: { householdId: hh.id },
         });
       }
+      void geocodeAndClassifyAddress(addr.id, campaignId, person.id);
     }
 
     return {

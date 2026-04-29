@@ -7,6 +7,8 @@ import { ROLE_LABELS } from "@/types";
 import { changeUserRole, transferCandidateRole } from "./role-actions";
 import { TeamMemberClassifyModal } from "./classify-modal";
 import { getTeamMembers, getRemovedMembers, addTeamMember, removeTeamMember, restoreTeamMember } from "./actions";
+import { AddressPicker } from "@/components/ui/address-picker";
+import type { AddressPickerResult } from "@/components/ui/address-picker";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -292,6 +294,39 @@ function AddMemberForm({
     lastName: string;
   } | null>(null);
 
+  // Controlled address state for picker fill-through
+  const [addrStreetNumber, setAddrStreetNumber] = useState("");
+  const [addrStreetName, setAddrStreetName] = useState("");
+  const [addrUnitNumber, setAddrUnitNumber] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrProvince, setAddrProvince] = useState("ON");
+  const [addrPostalCode, setAddrPostalCode] = useState("");
+  const [addrLat, setAddrLat] = useState<number | null>(null);
+  const [addrLng, setAddrLng] = useState<number | null>(null);
+
+  function handleAddressPick(result: AddressPickerResult | null) {
+    if (!result) {
+      setAddrStreetNumber(""); setAddrStreetName(""); setAddrCity(""); setAddrProvince("ON"); setAddrPostalCode("");
+      setAddrLat(null); setAddrLng(null);
+      return;
+    }
+    if (result.type === "campaign") {
+      setAddrStreetNumber(result.streetNumber); setAddrStreetName(result.streetName);
+      setAddrUnitNumber(result.unitNumber ?? ""); setAddrCity(result.city);
+      setAddrProvince(result.province); setAddrPostalCode(result.postalCode);
+      setAddrLat(null); setAddrLng(null);
+    } else if (result.type === "mapbox") {
+      setAddrStreetNumber(result.streetNumber); setAddrStreetName(result.streetName);
+      setAddrCity(result.city); setAddrProvince(result.province); setAddrPostalCode(result.postalCode);
+      setAddrLat(result.latitude); setAddrLng(result.longitude);
+    } else {
+      setAddrStreetNumber(result.streetNumber); setAddrStreetName(result.streetName);
+      setAddrUnitNumber(result.unitNumber ?? ""); setAddrCity(result.city);
+      setAddrProvince(result.province); setAddrPostalCode(result.postalCode);
+      setAddrLat(null); setAddrLng(null);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -308,12 +343,14 @@ function AddMemberForm({
         phoneMobile: (fd.get("phoneMobile") as string).trim() || null,
         role: fd.get("role") as string,
         skipVerification: fd.get("skipVerification") === "on",
-        streetNumber: (fd.get("streetNumber") as string | null)?.trim() || null,
-        streetName: (fd.get("streetName") as string | null)?.trim() || null,
-        unitNumber: (fd.get("unitNumber") as string | null)?.trim() || null,
-        city: (fd.get("city") as string | null)?.trim() || null,
-        province: (fd.get("province") as string | null)?.trim() || null,
-        postalCode: (fd.get("postalCode") as string | null)?.trim() || null,
+        streetNumber: addrStreetNumber.trim() || null,
+        streetName: addrStreetName.trim() || null,
+        unitNumber: addrUnitNumber.trim() || null,
+        city: addrCity.trim() || null,
+        province: addrProvince.trim() || null,
+        postalCode: addrPostalCode.trim() || null,
+        lat: addrLat,
+        lng: addrLng,
       });
       if (result.error) {
         setError(result.error);
@@ -390,33 +427,55 @@ function AddMemberForm({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-500">Address <span className="text-slate-400 font-normal">(optional)</span></label>
+          <AddressPicker onSelect={handleAddressPick} compact />
           <div className="grid grid-cols-4 gap-2">
             <div className="col-span-1">
-              <input name="streetNumber" placeholder="Street #" className={inputCls + " w-full"} />
+              <input
+                value={addrStreetNumber}
+                onChange={e => { setAddrStreetNumber(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                placeholder="Street #"
+                className={inputCls + " w-full"}
+              />
             </div>
             <div className="col-span-2">
-              <input name="streetName" placeholder="Street name" className={inputCls + " w-full"} />
+              <input
+                value={addrStreetName}
+                onChange={e => { setAddrStreetName(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                placeholder="Street name"
+                className={inputCls + " w-full"}
+              />
             </div>
             <div className="col-span-1">
-              <input name="unitNumber" placeholder="Unit" className={inputCls + " w-full"} />
+              <input
+                value={addrUnitNumber}
+                onChange={e => setAddrUnitNumber(e.target.value)}
+                placeholder="Unit"
+                className={inputCls + " w-full"}
+              />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-1">
-              <input name="city" placeholder="City" className={inputCls + " w-full"} />
+              <input
+                value={addrCity}
+                onChange={e => { setAddrCity(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                placeholder="City"
+                className={inputCls + " w-full"}
+              />
             </div>
             <div className="col-span-1">
               <input
-                name="province"
+                value={addrProvince}
+                onChange={e => setAddrProvince(e.target.value)}
                 placeholder="ON"
-                defaultValue="ON"
                 maxLength={2}
                 className={inputCls + " w-full uppercase"}
               />
             </div>
             <div className="col-span-1">
               <input
-                name="postalCode"
+                value={addrPostalCode}
+                onChange={e => { setAddrPostalCode(e.target.value); setAddrLat(null); setAddrLng(null); }}
                 placeholder="A1A 1A1"
                 className={inputCls + " w-full uppercase"}
               />
