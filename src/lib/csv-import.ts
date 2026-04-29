@@ -263,8 +263,7 @@ export function classifyRow(row: ReviewRow): ReviewBucket {
 
   const f = row.fields;
   const mandatoryMissing = !f.firstName || !f.lastName || !f.city || !f.province || !f.postalCode;
-  const hasAnyPhone = Boolean(f.phoneHome || f.phoneMobile);
-  if (mandatoryMissing || !hasAnyPhone) return "missing_required";
+  if (mandatoryMissing) return "missing_required";
 
   const hasEmail = Boolean(f.email);
   const hasAddress = Boolean(f.streetNumber && f.streetName);
@@ -280,7 +279,6 @@ export function listMissingFields(row: ReviewRow): string[] {
   if (!f.city)       out.push("City");
   if (!f.province)   out.push("Province");
   if (!f.postalCode) out.push("PostalCode");
-  if (!f.phoneHome && !f.phoneMobile) out.push("Phone");
   if (!f.email)      out.push("Email");
   if (!f.streetNumber || !f.streetName) out.push("Address");
   return out;

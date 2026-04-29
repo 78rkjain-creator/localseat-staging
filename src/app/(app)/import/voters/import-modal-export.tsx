@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { classifyRow, listMissingFields, normaliseKey } from "@/lib/csv-import";
+import { classifyRow } from "@/lib/csv-import";
 import type { ReviewRow, ReviewBucket } from "@/lib/csv-import";
+import { buildVoterExportCsv, triggerCsvDownload } from "@/lib/import-export";
 
 type ExportModalProps = {
   open: boolean;
@@ -32,70 +33,15 @@ export function ExportFixModal({ open, onClose, rows, originalHeaders }: ExportM
     (selected.incomplete       ? counts.incomplete       : 0) +
     (selected.duplicate        ? counts.duplicate        : 0);
 
-  function mapFieldByHeader(row: ReviewRow, header: string): string {
-    const norm = normaliseKey(header);
-    const f = row.fields;
-    const map: Record<string, string> = {
-      firstname:      f.firstName,
-      lastname:       f.lastName,
-      streetnumber:   f.streetNumber,
-      streetname:     f.streetName,
-      unitnumber:     f.unitNumber,
-      city:           f.city,
-      province:       f.province,
-      postalcode:     f.postalCode,
-      phonehome:      f.phoneHome,
-      phonemobile:    f.phoneMobile,
-      email:          f.email,
-      birthdate:      f.birthDate,
-      pollnumber:     f.pollNumber,
-      voterid:        f.voterId,
-      supportlevel:   f.supportLevel,
-      tags:           f.tags,
-      gender:         f.gender,
-      notes:          f.notes,
-      confirmedvoter: f.isConfirmedVoter,
-    };
-    return map[norm] ?? "";
-  }
-
   function handleExport() {
     const wanted = new Set<ReviewBucket>();
     if (selected.missing_required) wanted.add("missing_required");
     if (selected.incomplete)       wanted.add("incomplete");
     if (selected.duplicate)        wanted.add("duplicate");
 
-    const selectedRows = rows.filter((r) => wanted.has(classifyRow(r)));
-
-    const headers = [...originalHeaders];
-    if (includeAnnotation) headers.push("Missing fields");
-
-    const escape = (v: string) => {
-      if (v.includes(",") || v.includes('"') || v.includes("\n")) {
-        return `"${v.replace(/"/g, '""')}"`;
-      }
-      return v;
-    };
-
-    const lines: string[] = [headers.map(escape).join(",")];
-    for (const row of selectedRows) {
-      const values = originalHeaders.map((h) => row.rawValues?.[h] ?? mapFieldByHeader(row, h));
-      if (includeAnnotation) {
-        values.push(listMissingFields(row).join("; "));
-      }
-      lines.push(values.map((v) => escape(v ?? "")).join(","));
-    }
-
-    const csv = "﻿" + lines.join("\n"); // UTF-8 BOM for Excel
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
+    const csv = buildVoterExportCsv(rows, originalHeaders, wanted, includeAnnotation);
     const date = new Date().toISOString().split("T")[0];
-    a.href     = url;
-    a.download = `voter-import-rows-to-fix-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
+    triggerCsvDownload(csv, `voter-import-rows-to-fix-${date}.csv`);
     onClose();
   }
 

@@ -9,6 +9,7 @@ import type { VoterCsvRow, FlaggedRow, TagPlan } from "./actions";
 import {
   parseCsvToReviewRows,
   getMissingFields,
+  listMissingFields,
   FIELD_LABELS,
   MANDATORY_FIELDS,
   parseTagList,
@@ -17,6 +18,7 @@ import {
 import { parseXlsxToReviewRows } from "@/lib/xlsx-import";
 import type { ReviewRow, RowFields, RowStatus, CustomFieldDef, ReviewBucket } from "@/lib/csv-import";
 import { ExportFixModal } from "./import-modal-export";
+import { buildVoterExportCsv, triggerCsvDownload } from "@/lib/import-export";
 
 // ── Local constants ────────────────────────────────────────────────────────
 
@@ -388,6 +390,24 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     });
   }
 
+  function handleExportClick() {
+    const counts = {
+      missing_required: bucketed.missing_required.length,
+      incomplete:       bucketed.incomplete.length,
+      duplicate:        bucketed.duplicate.length,
+    };
+    const groupsWithContent = (Object.entries(counts) as [ReviewBucket, number][]).filter(([, n]) => n > 0);
+    if (groupsWithContent.length === 0) return;
+    if (groupsWithContent.length === 1) {
+      const onlyBucket = groupsWithContent[0][0];
+      const csv = buildVoterExportCsv(reviewRows, originalHeaders, new Set([onlyBucket]));
+      const date = new Date().toISOString().split("T")[0];
+      triggerCsvDownload(csv, `voter-import-rows-to-fix-${date}.csv`);
+      return;
+    }
+    setExportOpen(true);
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -566,7 +586,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setExportOpen(true)}
+              onClick={handleExportClick}
               disabled={(missingRequiredCount + incompleteCount + duplicateCount2) === 0}
             >
               Export rows to fix
@@ -960,20 +980,27 @@ function ReviewRowComponent({
       <td className="px-3 py-2 text-xs text-slate-400">{row.originalRowNum}</td>
 
       {/* Status — sticky */}
-      <td className={`px-3 py-2 whitespace-nowrap sticky left-8 min-w-[88px] z-10 ${stickyBg}`}>
-        {isRejected ? (
-          <StatusBadge label="Rejected"   color="slate"  />
-        ) : isApproved ? (
-          <StatusBadge label="Approved"   color="green"  />
-        ) : bucket === "ready" ? (
-          <StatusBadge label="Ready"      color="green"  />
-        ) : bucket === "duplicate" ? (
-          <StatusBadge label="Duplicate"  color="orange" />
-        ) : bucket === "incomplete" ? (
-          <StatusBadge label="Incomplete" color="amber"  />
-        ) : (
-          <StatusBadge label="Review"     color="red"    />
-        )}
+      <td className={`px-3 py-2 sticky left-8 min-w-[88px] z-10 ${stickyBg}`}>
+        <div className="flex flex-col gap-0.5">
+          {isRejected ? (
+            <StatusBadge label="Rejected"   color="slate"  />
+          ) : isApproved ? (
+            <StatusBadge label="Approved"   color="green"  />
+          ) : bucket === "ready" ? (
+            <StatusBadge label="Ready"      color="green"  />
+          ) : bucket === "duplicate" ? (
+            <StatusBadge label="Duplicate"  color="orange" />
+          ) : bucket === "incomplete" ? (
+            <StatusBadge label="Incomplete" color="amber"  />
+          ) : (
+            <StatusBadge label="Review"     color="red"    />
+          )}
+          {(bucket === "incomplete" || bucket === "missing_required") && !isRejected && (
+            <span className="text-[11px] text-slate-500 leading-tight whitespace-normal">
+              Missing: {listMissingFields(row).join(", ")}
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Actions — sticky */}

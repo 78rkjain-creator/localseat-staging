@@ -8,6 +8,7 @@ import { getVoterList, getCampaignTags } from "@/lib/people";
 import { db } from "@/lib/db";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
+import { BackLink } from "@/components/ui/back-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { VoterListSearchBar } from "./search-bar";
 import { ImportButton } from "./import-button";
@@ -62,15 +63,7 @@ export default async function VoterImportPage({ searchParams }: PageProps) {
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-6xl mx-auto">
-      <Link
-        href="/import"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6"
-      >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        Import & Data Management
-      </Link>
+      <BackLink fallbackHref="/import" label="Back to Import & Data Management" />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
