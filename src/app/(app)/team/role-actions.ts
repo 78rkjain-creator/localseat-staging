@@ -26,10 +26,12 @@ export async function changeUserRole(
   if (!activeCampaignId) return { error: "No active campaign." };
 
   const isFieldOrg = activeRole === Role.field_organizer;
+  const isVolCoord = activeRole === Role.volunteer_coordinator;
   const callerCanManage =
     canManageRolesExceptCandidate(activeRole as Role) ||
     isSuperUser(platformRole) ||
-    isFieldOrg;
+    isFieldOrg ||
+    isVolCoord;
   if (!callerCanManage) return { error: "Insufficient permissions." };
 
   // campaign_manager cannot assign the candidate role — only candidate/super_user can
@@ -52,6 +54,14 @@ export async function changeUserRole(
     return { error: "Field organizers can only assign canvasser or sign installer roles." };
   }
 
+  // volunteer_coordinator can only assign working-tier or same-tier leadership roles
+  const VOL_COORD_ALLOWED_ROLES: Role[] = [
+    Role.canvasser, Role.sign_installer, Role.field_organizer, Role.volunteer_coordinator,
+  ];
+  if (isVolCoord && !VOL_COORD_ALLOWED_ROLES.includes(newRole)) {
+    return { error: "Volunteer coordinators can only assign canvasser, sign installer, field organizer, or volunteer coordinator roles." };
+  }
+
   // Verify the target membership belongs to the caller's campaign
   const membership = await db.campaignMembership.findFirst({
     where: { id: membershipId, campaignId: activeCampaignId, deletedAt: null },
@@ -67,6 +77,12 @@ export async function changeUserRole(
   // field_organizer can only act on canvasser or sign_installer rows
   if (isFieldOrg && !FIELD_ORG_ALLOWED_ROLES.includes(membership.role)) {
     return { error: "Field organizers can only change canvasser or sign installer roles." };
+  }
+
+  // volunteer_coordinator can only act on canvasser or sign_installer rows
+  const VOL_COORD_EDITABLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
+  if (isVolCoord && !VOL_COORD_EDITABLE_ROLES.includes(membership.role)) {
+    return { error: "Volunteer coordinators can only change canvasser or sign installer roles." };
   }
 
   const previousRole = membership.role;

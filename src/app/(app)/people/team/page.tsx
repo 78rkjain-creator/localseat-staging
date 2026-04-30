@@ -3,13 +3,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewTeamDirectory, hasMinimumRole } from "@/lib/permissions";
+import {
+  canViewTeamDirectory,
+  canManageTeam,
+  hasMinimumRole,
+  isSuperUser,
+} from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
+import { RoleEditorCell } from "../role-editor-client";
 import type { Role } from "@/types";
+import { ROLE_LABELS } from "@/types";
 import type { Prisma } from "@prisma/client";
 import { Role as PrismaRole, WardStatus } from "@prisma/client";
 
@@ -25,14 +32,26 @@ const LEADERSHIP_ROLES = [
   PrismaRole.finance_lead,
 ];
 
-const ROLE_LABELS: Partial<Record<PrismaRole, string>> = {
-  candidate: "Candidate",
-  campaign_manager: "Campaign Manager",
-  data_manager: "Data Manager",
-  co_chair: "Co-Chair",
-  field_organizer: "Field Organizer",
-  volunteer_coordinator: "Volunteer Coordinator",
-  finance_lead: "Finance Lead",
+// Roles visible in the team-page dropdown for non-super_user editors
+const TEAM_EDITOR_ROLES_BASE: Role[] = [
+  "campaign_manager",
+  "data_manager",
+  "co_chair",
+  "field_organizer",
+  "volunteer_coordinator",
+  "finance_lead",
+  "canvasser",
+  "sign_installer",
+];
+
+const ROLE_BADGE: Partial<Record<Role, string>> = {
+  candidate:             "bg-brand-50 text-brand-700 border-brand-200",
+  campaign_manager:      "bg-slate-800 text-white border-slate-800",
+  data_manager:          "bg-slate-700 text-white border-slate-700",
+  co_chair:              "bg-purple-50 text-purple-700 border-purple-200",
+  field_organizer:       "bg-emerald-50 text-emerald-700 border-emerald-200",
+  volunteer_coordinator: "bg-teal-50 text-teal-700 border-teal-200",
+  finance_lead:          "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 const MISSING_FILTER_OPTIONS = [
@@ -74,12 +93,19 @@ export default async function TeamPage({ searchParams }: PageProps) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  // All authenticated campaign members can view the leadership directory
   if (activeRole && !canViewTeamDirectory(activeRole as Role)) redirect("/dashboard");
 
+  const currentUserId = session.user.id;
+  const canFullEdit = activeRole ? canManageTeam(activeRole as Role) : false;
+  const isSuperUserViewer = isSuperUser(session.user.platformRole ?? null);
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
     : false;
+
+  // Dropdown roles for team-page editor (super_user can also assign candidate)
+  const teamEditorRoles: Role[] = isSuperUserViewer
+    ? (["candidate", ...TEAM_EDITOR_ROLES_BASE] as Role[])
+    : TEAM_EDITOR_ROLES_BASE;
 
   const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
@@ -141,6 +167,7 @@ export default async function TeamPage({ searchParams }: PageProps) {
         firstName: true,
         lastName: true,
         email: true,
+        userId: true,
         isOutOfDistrict: true,
         user: {
           select: {
@@ -150,7 +177,7 @@ export default async function TeamPage({ searchParams }: PageProps) {
                 deletedAt: null,
                 role: { in: LEADERSHIP_ROLES },
               },
-              select: { role: true },
+              select: { id: true, role: true },
               take: 1,
             },
           },
@@ -216,36 +243,71 @@ export default async function TeamPage({ searchParams }: PageProps) {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-card overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {people.map((person) => {
-              const role = person.user?.memberships[0]?.role;
-              const roleLabel = role ? (ROLE_LABELS[role] ?? role) : null;
+              const membership = person.user?.memberships[0];
+              const role = membership?.role as Role | undefined;
+              const membershipId = membership?.id;
+
+              // Editor visible to FULL_ACCESS only; not self; not candidate rows
+              const canEditRow =
+                canFullEdit &&
+                !!membershipId &&
+                person.userId !== currentUserId &&
+                role !== "candidate";
+
+              const fullName = `${person.firstName} ${person.lastName}`;
 
               return (
                 <li key={person.id}>
-                  <Link
-                    href={`/people/${person.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-semibold text-violet-600">
-                        {person.firstName[0]}
-                        {person.lastName[0]}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors">
+                    {/* Avatar */}
+                    <Link href={`/people/${person.id}`} className="flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center hover:ring-2 hover:ring-violet-300 transition-all">
+                        <span className="text-sm font-semibold text-violet-600">
+                          {person.firstName[0]}
+                          {person.lastName[0]}
+                        </span>
+                      </div>
+                    </Link>
 
+                    {/* Name + email + view record */}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 truncate">
-                        {person.firstName} {person.lastName}
-                      </p>
+                      <Link
+                        href={`/people/${person.id}`}
+                        className="block font-semibold text-slate-900 truncate hover:text-brand-600 transition-colors"
+                      >
+                        {fullName}
+                      </Link>
                       {person.email && (
                         <p className="text-sm text-slate-500 truncate">{person.email}</p>
                       )}
+                      <Link
+                        href={`/people/${person.id}`}
+                        className="text-xs text-brand-600 hover:underline"
+                      >
+                        View record
+                      </Link>
                     </div>
 
+                    {/* Role — editable dropdown or static badge */}
                     <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      {roleLabel && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                          {roleLabel}
-                        </span>
+                      {canEditRow && role ? (
+                        <RoleEditorCell
+                          membershipId={membershipId}
+                          personName={fullName}
+                          currentRole={role}
+                          availableRoles={teamEditorRoles}
+                          context="team"
+                        />
+                      ) : (
+                        role && (
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                              ROLE_BADGE[role] ?? "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}
+                          >
+                            {ROLE_LABELS[role]}
+                          </span>
+                        )
                       )}
                       {person.isOutOfDistrict ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200">
@@ -258,16 +320,19 @@ export default async function TeamPage({ searchParams }: PageProps) {
                       )}
                     </div>
 
-                    <svg
-                      className="h-4 w-4 text-slate-300 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
+                    {/* Chevron */}
+                    <Link href={`/people/${person.id}`} className="flex-shrink-0">
+                      <svg
+                        className="h-4 w-4 text-slate-300"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
                 </li>
               );
             })}

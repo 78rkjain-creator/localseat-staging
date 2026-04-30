@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
 import { AddVolunteerButton, RemoveVolunteerButton } from "./volunteer-client";
+import { RoleEditorCell } from "../role-editor-client";
 import type { Role } from "@/types";
 import type { Prisma } from "@prisma/client";
 import { Role as PrismaRole, WardStatus } from "@prisma/client";
@@ -18,6 +19,14 @@ import type { VolunteerTier } from "./volunteer-client";
 export const metadata: Metadata = { title: "Volunteers" };
 
 const WORKING_ROLES: PrismaRole[] = [PrismaRole.canvasser, PrismaRole.sign_installer];
+
+// Dropdown options for the volunteers-page role editor
+const VOLUNTEERS_EDITOR_ROLES: Role[] = [
+  "canvasser",
+  "sign_installer",
+  "field_organizer",
+  "volunteer_coordinator",
+];
 
 const TIER_ORDER: Record<VolunteerTier, number> = {
   canvasser: 0,
@@ -84,31 +93,27 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewVolunteers(activeRole as Role)) redirect("/dashboard");
 
+  const currentUserId = session.user.id;
   const canManage = activeRole ? canManageVolunteers(activeRole as Role) : false;
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
     : false;
 
-  // Working-tier membership filter used in both branches of the OR
   const workingMembershipFilter: Prisma.CampaignMembershipWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
     role: { in: WORKING_ROLES },
   };
 
-  // UNION: canvasser/sign_installer members OR pure volunteers (volunteer interest, no working membership)
+  // UNION: canvasser/sign_installer members OR pure volunteers (no working membership)
   const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
     anonymizedAt: null,
     OR: [
-      // Branch 1: has a canvasser or sign_installer membership
       {
-        user: {
-          memberships: { some: workingMembershipFilter },
-        },
+        user: { memberships: { some: workingMembershipFilter } },
       },
-      // Branch 2: has volunteer interest but no working-tier membership
       {
         AND: [
           {
@@ -119,9 +124,7 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
           },
           {
             NOT: {
-              user: {
-                memberships: { some: workingMembershipFilter },
-              },
+              user: { memberships: { some: workingMembershipFilter } },
             },
           },
         ],
@@ -185,7 +188,7 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
           select: {
             memberships: {
               where: workingMembershipFilter,
-              select: { role: true },
+              select: { id: true, role: true },
               take: 1,
             },
           },
@@ -262,17 +265,27 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-card overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {people.map((person) => {
-              const memberRole = person.user?.memberships[0]?.role ?? null;
+              const membership = person.user?.memberships[0];
+              const membershipId = membership?.id;
+              const memberRole = membership?.role ?? null;
               const tier = getTier(memberRole);
               const tierLabel = TIER_LABELS[tier];
               const tierColor = TIER_COLORS[tier];
               const phone = person.phoneMobile || person.phoneHome;
               const fullName = `${person.firstName} ${person.lastName}`;
 
+              // Role editor: visible for working-tier members (canvasser/sign_installer) where
+              // editor has manage permission and it's not the editor's own row
+              const canEditRow =
+                canManage &&
+                tier !== "volunteer" &&
+                !!membershipId &&
+                person.userId !== currentUserId;
+
               return (
                 <li key={person.id} className="group">
-                  <div className="flex items-center gap-4 px-5 py-4">
-                    {/* Avatar — click navigates to person detail */}
+                  <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors">
+                    {/* Avatar */}
                     <Link href={`/people/${person.id}`} className="flex-shrink-0">
                       <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center hover:ring-2 hover:ring-emerald-300 transition-all">
                         <span className="text-sm font-semibold text-emerald-600">
@@ -282,23 +295,44 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
                       </div>
                     </Link>
 
-                    {/* Name / contact — click navigates to person detail */}
-                    <Link href={`/people/${person.id}`} className="min-w-0 flex-1 hover:opacity-80 transition-opacity">
-                      <p className="font-semibold text-slate-900 truncate">{fullName}</p>
+                    {/* Name + contact + view record */}
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/people/${person.id}`}
+                        className="block font-semibold text-slate-900 truncate hover:text-brand-600 transition-colors"
+                      >
+                        {fullName}
+                      </Link>
                       {(person.email || phone) && (
                         <p className="text-sm text-slate-500 truncate">
                           {person.email ?? phone}
                         </p>
                       )}
-                    </Link>
-
-                    {/* Tier badge + remove */}
-                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${tierColor}`}
+                      <Link
+                        href={`/people/${person.id}`}
+                        className="text-xs text-brand-600 hover:underline"
                       >
-                        {tierLabel}
-                      </span>
+                        View record
+                      </Link>
+                    </div>
+
+                    {/* Role editor or tier badge, plus remove button */}
+                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                      {canEditRow && memberRole ? (
+                        <RoleEditorCell
+                          membershipId={membershipId}
+                          personName={fullName}
+                          currentRole={memberRole as Role}
+                          availableRoles={VOLUNTEERS_EDITOR_ROLES}
+                          context="volunteers"
+                        />
+                      ) : (
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${tierColor}`}
+                        >
+                          {tierLabel}
+                        </span>
+                      )}
                       {canManage && (
                         <RemoveVolunteerButton
                           tier={tier}
@@ -309,21 +343,8 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
                       )}
                     </div>
 
-                    {/* Mobile: just chevron */}
-                    <Link href={`/people/${person.id}`} className="sm:hidden flex-shrink-0">
-                      <svg
-                        className="h-4 w-4 text-slate-300"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-
-                    {/* Desktop: chevron on its own */}
-                    <Link href={`/people/${person.id}`} className="hidden sm:block flex-shrink-0">
+                    {/* Chevron */}
+                    <Link href={`/people/${person.id}`} className="flex-shrink-0">
                       <svg
                         className="h-4 w-4 text-slate-300"
                         fill="none"
