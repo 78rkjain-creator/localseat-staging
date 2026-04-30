@@ -143,7 +143,7 @@ export async function getAvailableCanvassers(
     select: {
       user: { select: { id: true, firstName: true, lastName: true } },
     },
-    orderBy: [{ user: { lastName: "asc" } }, { user: { firstName: "asc" } }],
+    orderBy: [{ user: { firstName: "asc" } }, { user: { lastName: "asc" } }],
   });
 
   return memberships.map((m) => m.user);

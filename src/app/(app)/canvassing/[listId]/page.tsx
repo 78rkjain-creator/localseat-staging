@@ -29,12 +29,15 @@ import type { Role, CanvassOutcome, SupportLevel } from "@/types";
 
 interface PageProps {
   params: Promise<{ listId: string }>;
+  searchParams: Promise<{ sort?: string }>;
 }
 
 export const metadata: Metadata = { title: "Walk list" };
 
-export default async function CanvassListDetailPage({ params }: PageProps) {
+export default async function CanvassListDetailPage({ params, searchParams }: PageProps) {
   const { listId } = await params;
+  const { sort: rawSort } = await searchParams;
+  const sortDir: "asc" | "desc" = rawSort === "desc" ? "desc" : "asc";
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -110,16 +113,24 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
   // Group entries by base address (streetNumber + streetName, without unit).
   // Units at the same building appear under one header, sorted numerically.
   type EntryWithPerson = (typeof list.entries)[number];
-  const addressGroups = new Map<string, EntryWithPerson[]>();
+  type GroupData = { displayKey: string; streetNumber: string; streetName: string; entries: EntryWithPerson[] };
+  const addressGroups = new Map<string, GroupData>();
   for (const entry of list.entries) {
     const addr = entry.person.household?.address;
     const key = addr ? `${addr.streetNumber} ${addr.streetName}` : "Unknown address";
-    if (!addressGroups.has(key)) addressGroups.set(key, []);
-    addressGroups.get(key)!.push(entry);
+    if (!addressGroups.has(key)) {
+      addressGroups.set(key, {
+        displayKey: key,
+        streetNumber: addr?.streetNumber ?? "",
+        streetName: addr?.streetName ?? "Unknown address",
+        entries: [],
+      });
+    }
+    addressGroups.get(key)!.entries.push(entry);
   }
   // Sort units within each building numerically (Prisma sorts unit strings alphabetically).
   for (const group of addressGroups.values()) {
-    group.sort((a, b) => {
+    group.entries.sort((a, b) => {
       const uA = a.person.household?.address?.unitNumber;
       const uB = b.person.household?.address?.unitNumber;
       const nA = uA ? (parseInt(uA, 10) || 0) : -1;
@@ -129,10 +140,19 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
     });
   }
   // When optimized, insertion order (from sortOrder-sorted DB query) is the route order.
-  // When not optimized, sort alphabetically so managers can scan easily.
-  const sortedGroups = isOptimized
-    ? [...addressGroups.entries()]
-    : [...addressGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  // When not optimized: streets alphabetical, then street numbers asc/desc within each street.
+  const sortedGroups: GroupData[] = isOptimized
+    ? [...addressGroups.values()]
+    : [...addressGroups.values()].sort((a, b) => {
+        const streetCmp = a.streetName.localeCompare(b.streetName);
+        if (streetCmp !== 0) return streetCmp;
+        const nA = parseInt(a.streetNumber, 10) || 0;
+        const nB = parseInt(b.streetNumber, 10) || 0;
+        if (nA !== nB) return sortDir === "asc" ? nA - nB : nB - nA;
+        return sortDir === "asc"
+          ? a.streetNumber.localeCompare(b.streetNumber)
+          : b.streetNumber.localeCompare(a.streetNumber);
+      });
 
   const printDate = new Date().toLocaleDateString("en-CA", {
     year: "numeric",
@@ -482,12 +502,37 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
                   </span>
                 )}
               </h2>
-              {canManage && !isDynamic && (
-                <div className="flex items-center gap-2">
-                  <AddPeopleButton listId={list.id} tags={tags} />
-                  <CsvImportButton listId={list.id} />
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {list.entries.length > 0 && !isOptimized && (
+                  <Link
+                    href={`/canvassing/${listId}?sort=${sortDir === "asc" ? "desc" : "asc"}`}
+                    className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    title={sortDir === "asc" ? "Switch to high → low" : "Switch to low → high"}
+                  >
+                    {sortDir === "asc" ? (
+                      <>
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                        </svg>
+                        Low → High
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+                        </svg>
+                        High → Low
+                      </>
+                    )}
+                  </Link>
+                )}
+                {canManage && !isDynamic && (
+                  <>
+                    <AddPeopleButton listId={list.id} tags={tags} />
+                    <CsvImportButton listId={list.id} />
+                  </>
+                )}
+              </div>
             </div>
 
             {list.entries.length === 0 ? (
@@ -501,7 +546,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               </div>
             ) : (
               <div className="flex flex-col gap-4 -mx-5 sm:-mx-8">
-                {sortedGroups.map(([addressLine, groupEntries]) => {
+                {sortedGroups.map(({ displayKey: addressLine, entries: groupEntries }) => {
                   const isBuilding = groupEntries.length > 1 || groupEntries.some(e => e.person.household?.address?.unitNumber);
                   return (
                   <div key={addressLine}>
@@ -689,7 +734,7 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {sortedGroups.flatMap(([addressKey, groupEntries]) =>
+              {sortedGroups.flatMap(({ displayKey: addressKey, entries: groupEntries }) =>
                 groupEntries.map((entry, personIdx) => {
                   const isFirst = personIdx === 0;
                   const unit = entry.person.household?.address?.unitNumber;
