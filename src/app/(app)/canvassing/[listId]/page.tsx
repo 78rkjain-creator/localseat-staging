@@ -110,6 +110,8 @@ export default async function CanvassListDetailPage({ params, searchParams }: Pa
     return addr && "streetNumber" in addr; // address exists = likely geocoded via the walk list
   }).length;
 
+  const isEmpty = list.entries.length === 0;
+
   // Group entries by base address (streetNumber + streetName, without unit).
   // Units at the same building appear under one header, sorted numerically.
   type EntryWithPerson = (typeof list.entries)[number];
@@ -330,68 +332,118 @@ export default async function CanvassListDetailPage({ params, searchParams }: Pa
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-          {canUserCanvassThisList && (
-            <Link
-              href={`/canvassing/${listId}/canvass`}
-              className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors shadow-sm"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Canvass this list
-            </Link>
-          )}
-          {canAssign && (
-            <EditListButton
-              listId={list.id}
-              currentName={list.name}
-              isDynamic={isDynamic}
-              currentFilters={isDynamic ? (list.dynamicFilters as DynamicFilters | null) : null}
-              tags={tags}
-            />
-          )}
-          {canManage && (
-            <ArchiveDeleteButtons
-              listId={list.id}
-              listName={list.name}
-              isArchived={list.status === "archived"}
-              canDelete={isFullAccess}
-            />
-          )}
-          <PrintButton />
-          {canAssignNow && list.entries.length > 0 && (
-            <OptimizeRouteButton
-              listId={list.id}
-              geocodedCount={geocodedEntryCount}
-              totalCount={list.entries.length}
-            />
-          )}
-          <Link
-            href={`/canvassing/${list.id}/map`}
-            className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            View list on map
-          </Link>
-          {canManage && (
-            <a
-              href={`/canvassing/export?listId=${list.id}`}
-              download
-              className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
-            >
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Export CSV
-            </a>
-          )}
-          {canAssignNow && availableCanvassers.length > 0 && (
-            <AssignCanvasserButton listId={list.id} canvassers={availableCanvassers} />
-          )}
+        <div className="flex flex-col gap-2 flex-shrink-0 items-end">
+          {/* Row 1: operational actions */}
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {canUserCanvassThisList && (
+              isEmpty ? (
+                <button
+                  type="button"
+                  disabled
+                  title="Add people to this list to enable this action"
+                  className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl bg-brand-600 text-white text-sm font-semibold shadow-sm opacity-50 cursor-not-allowed"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Canvass this list
+                </button>
+              ) : (
+                <Link
+                  href={`/canvassing/${listId}/canvass`}
+                  className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors shadow-sm"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Canvass this list
+                </Link>
+              )
+            )}
+            {canAssignNow && (
+              <OptimizeRouteButton
+                listId={list.id}
+                geocodedCount={geocodedEntryCount}
+                totalCount={list.entries.length}
+                disabled={isEmpty}
+              />
+            )}
+            {isEmpty ? (
+              <button
+                type="button"
+                disabled
+                title="Add people to this list to enable this action"
+                className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium shadow-sm opacity-50 cursor-not-allowed"
+              >
+                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                View list on map
+              </button>
+            ) : (
+              <Link
+                href={`/canvassing/${list.id}/map`}
+                className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                View list on map
+              </Link>
+            )}
+            {canAssignNow && availableCanvassers.length > 0 && (
+              <AssignCanvasserButton listId={list.id} canvassers={availableCanvassers} />
+            )}
+          </div>
+          {/* Row 2: management actions */}
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {canAssign && (
+              <EditListButton
+                listId={list.id}
+                currentName={list.name}
+                isDynamic={isDynamic}
+                currentFilters={isDynamic ? (list.dynamicFilters as DynamicFilters | null) : null}
+                tags={tags}
+              />
+            )}
+            {canManage && (
+              <ArchiveDeleteButtons
+                listId={list.id}
+                listName={list.name}
+                isArchived={list.status === "archived"}
+                canDelete={isFullAccess}
+              />
+            )}
+            <PrintButton disabled={isEmpty} />
+            {canManage && (
+              isEmpty ? (
+                <button
+                  type="button"
+                  disabled
+                  title="Add people to this list to enable this action"
+                  className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium shadow-sm opacity-50 cursor-not-allowed"
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export CSV
+                </button>
+              ) : (
+                <a
+                  href={`/canvassing/export?listId=${list.id}`}
+                  download
+                  className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export CSV
+                </a>
+              )
+            )}
+          </div>
         </div>
       </div>
 

@@ -8,9 +8,10 @@ interface Props {
   listId: string;
   geocodedCount: number;
   totalCount: number;
+  disabled?: boolean;
 }
 
-export function OptimizeRouteButton({ listId, geocodedCount, totalCount }: Props) {
+export function OptimizeRouteButton({ listId, geocodedCount, totalCount, disabled = false }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -34,13 +35,12 @@ export function OptimizeRouteButton({ listId, geocodedCount, totalCount }: Props
     router.refresh();
   }
 
-  if (totalCount === 0) return null;
-
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={loading}
+      disabled={loading || disabled}
+      title={disabled ? "Add people to this list to enable this action" : undefined}
       className="inline-flex items-center gap-1.5 h-11 px-4 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {loading ? (
