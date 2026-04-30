@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople, hasMinimumRole } from "@/lib/permissions";
+import { canViewVolunteers, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,16 +13,7 @@ import type { Role } from "@/types";
 import type { Prisma } from "@prisma/client";
 import { WardStatus } from "@prisma/client";
 
-export const metadata: Metadata = { title: "Team" };
-
-const ROLE_LABELS: Record<string, string> = {
-  candidate: "Candidate",
-  campaign_manager: "Campaign Manager",
-  field_organizer: "Field Organizer",
-  canvasser: "Canvasser",
-  volunteer_coordinator: "Volunteer Coordinator",
-  finance_lead: "Finance Lead",
-};
+export const metadata: Metadata = { title: "Volunteers" };
 
 const MISSING_FILTER_OPTIONS = [
   { label: "Missing address", value: "missing_address" },
@@ -44,14 +35,14 @@ function buildUrl(params: { q?: string; missing?: string }) {
   if (params.q) p.set("q", params.q);
   if (params.missing) p.set("missing", params.missing);
   const s = p.toString();
-  return `/people/team${s ? `?${s}` : ""}`;
+  return `/people/volunteers${s ? `?${s}` : ""}`;
 }
 
 interface PageProps {
   searchParams: Promise<{ q?: string; missing?: string }>;
 }
 
-export default async function TeamPage({ searchParams }: PageProps) {
+export default async function VolunteersPage({ searchParams }: PageProps) {
   const { q, missing: rawMissing } = await searchParams;
 
   const activeMissing: string[] = rawMissing
@@ -63,17 +54,21 @@ export default async function TeamPage({ searchParams }: PageProps) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole && !canViewAllPeople(activeRole as Role)) redirect("/dashboard");
+  if (!activeRole || !canViewVolunteers(activeRole as Role)) redirect("/dashboard");
 
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
     : false;
 
+  // Base filter: anyone with a VolunteerRecord OR a canvass response expressing volunteer interest
   const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
     anonymizedAt: null,
-    userId: { not: null },
+    OR: [
+      { volunteerRecords: { some: { deletedAt: null } } },
+      { canvassResponses: { some: { volunteerInterest: true } } },
+    ],
   };
 
   const missingAnd: Prisma.PersonWhereInput[] = [];
@@ -120,19 +115,12 @@ export default async function TeamPage({ searchParams }: PageProps) {
         firstName: true,
         lastName: true,
         email: true,
-        isOutOfDistrict: true,
-        user: {
-          select: {
-            memberships: {
-              where: { campaignId: activeCampaignId, deletedAt: null },
-              select: { role: true },
-              take: 1,
-            },
-          },
-        },
-        linkedDonors: {
+        phoneMobile: true,
+        phoneHome: true,
+        userId: true,
+        volunteerRecords: {
           where: { deletedAt: null },
-          select: { id: true },
+          select: { status: true },
           take: 1,
         },
       },
@@ -147,9 +135,9 @@ export default async function TeamPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Volunteers</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {total.toLocaleString()} campaign team {total !== 1 ? "members" : "member"}
+            {total.toLocaleString()} {total !== 1 ? "volunteers" : "volunteer"}
           </p>
         </div>
         {canBulkGeocode && (
@@ -189,16 +177,16 @@ export default async function TeamPage({ searchParams }: PageProps) {
       {/* List */}
       {people.length === 0 ? (
         <EmptyState
-          title="No team members"
-          description="Campaign team members will appear here once they have been added to the campaign."
+          title="No volunteers"
+          description="Volunteers appear here after being imported or once someone expresses volunteer interest during a canvass."
         />
       ) : (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-card overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {people.map((person) => {
-              const role = person.user?.memberships[0]?.role;
-              const roleLabel = role ? (ROLE_LABELS[role] ?? role) : null;
-              const hasDonorRecord = person.linkedDonors.length > 0;
+              const isTeamMember = !!person.userId;
+              const volunteerStatus = person.volunteerRecords[0]?.status ?? null;
+              const phone = person.phoneMobile || person.phoneHome;
 
               return (
                 <li key={person.id}>
@@ -206,8 +194,8 @@ export default async function TeamPage({ searchParams }: PageProps) {
                     href={`/people/${person.id}`}
                     className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors"
                   >
-                    <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-semibold text-violet-600">
+                    <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-semibold text-emerald-600">
                         {person.firstName[0]}
                         {person.lastName[0]}
                       </span>
@@ -217,29 +205,22 @@ export default async function TeamPage({ searchParams }: PageProps) {
                       <p className="font-semibold text-slate-900 truncate">
                         {person.firstName} {person.lastName}
                       </p>
-                      {person.email && (
-                        <p className="text-sm text-slate-500 truncate">{person.email}</p>
+                      {(person.email || phone) && (
+                        <p className="text-sm text-slate-500 truncate">
+                          {person.email ?? phone}
+                        </p>
                       )}
                     </div>
 
                     <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      {roleLabel && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                          {roleLabel}
-                        </span>
-                      )}
-                      {person.isOutOfDistrict ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200">
-                          Out of district
-                        </span>
-                      ) : (
+                      {volunteerStatus === "committed" && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          In district
+                          Committed
                         </span>
                       )}
-                      {hasDonorRecord && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                          Donor
+                      {isTeamMember && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+                          Team member
                         </span>
                       )}
                     </div>

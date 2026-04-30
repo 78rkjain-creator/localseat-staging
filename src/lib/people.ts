@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageVoterList } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
+import { WardStatus } from "@prisma/client";
 import type { Prisma, SupportLevel, CanvassOutcome, ListSource, Role } from "@prisma/client";
 
 export interface PeopleListFilters {
@@ -17,12 +18,18 @@ export interface PeopleListFilters {
   customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
   listSource?: ListSource[]; // when provided and fewer than 5 values, filter to those sources
   isOutOfDistrict?: boolean;
+  missingAddress?: boolean;
+  missingPhone?: boolean;
+  missingEmail?: boolean;
+  needsClassification?: boolean; // wardStatus = not_checked AND has address
+  notGeocoded?: boolean;         // address exists but lat/lng null
+  volunteerInterest?: boolean;   // has a canvass response with volunteerInterest = true
   page?: number;
 }
 
 const PEOPLE_PAGE_SIZE = 50;
 
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, isOutOfDistrict, page = 1 }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, isOutOfDistrict, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -66,6 +73,46 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
 
   if (typeof isOutOfDistrict === "boolean") {
     andFilters.push({ isOutOfDistrict });
+  }
+
+  if (missingAddress) {
+    andFilters.push({
+      OR: [
+        { householdId: null },
+        { household: { address: { streetNumber: "", streetName: "", city: "" } } },
+      ],
+    });
+  }
+
+  if (missingPhone) {
+    andFilters.push({ phoneHome: null, phoneMobile: null });
+  }
+
+  if (missingEmail) {
+    andFilters.push({ email: null });
+  }
+
+  if (needsClassification) {
+    andFilters.push({
+      wardStatus: WardStatus.not_checked,
+      householdId: { not: null },
+    });
+  }
+
+  if (notGeocoded) {
+    andFilters.push({
+      householdId: { not: null },
+      household: { address: { lat: null } },
+    });
+  }
+
+  if (volunteerInterest) {
+    andFilters.push({
+      OR: [
+        { canvassResponses: { some: { volunteerInterest: true } } },
+        { volunteerRecords: { some: { deletedAt: null } } },
+      ],
+    });
   }
 
   const where: Prisma.PersonWhereInput = {
@@ -143,6 +190,17 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
 
 export async function getPeopleCount(campaignId: string): Promise<number> {
   return db.person.count({ where: { campaignId, deletedAt: null } });
+}
+
+export async function getNeedsGeocodeCount(campaignId: string): Promise<number> {
+  return db.person.count({
+    where: {
+      campaignId,
+      deletedAt: null,
+      householdId: { not: null },
+      household: { address: { lat: null } },
+    },
+  });
 }
 
 /**
@@ -224,6 +282,11 @@ export async function getPersonDetail(personId: string, campaignId: string) {
         orderBy: { createdAt: "desc" },
         take: 1,
         select: { id: true, status: true, amount: true },
+      },
+      volunteerRecords: {
+        where: { deletedAt: null },
+        select: { id: true, status: true },
+        take: 1,
       },
     },
   });

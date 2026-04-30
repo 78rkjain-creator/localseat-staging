@@ -153,8 +153,11 @@ export function TeamImportClient({
         return;
       }
 
-      // Server-side dedup check
-      const emails = rows.map((r) => r.fields.email).filter(Boolean);
+      // Server-side dedup check — volunteer rows don't create user accounts, skip them
+      const emails = rows
+        .filter((r) => r.fields.role.trim().toLowerCase() !== "volunteer")
+        .map((r) => r.fields.email)
+        .filter(Boolean);
       const { skippedEmails, linkedExistingEmails } = await checkExistingMembers(emails);
       const skippedSet = new Set(skippedEmails.map((e) => e.toLowerCase()));
       const linkedSet  = new Set(linkedExistingEmails.map((e) => e.toLowerCase()));

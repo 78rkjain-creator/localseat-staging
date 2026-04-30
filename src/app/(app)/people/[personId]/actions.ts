@@ -395,3 +395,37 @@ export async function removeTagFromPerson(
   revalidatePath(`/people/${personId}`);
   return {};
 }
+
+// ── Geocode person ────────────────────────────────────────────────────────────
+
+export async function geocodePerson(personId: string): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !hasMinimumRole(activeRole as Role, Role.field_organizer)) {
+    return { error: "Permission denied." };
+  }
+  const campaignId = activeCampaignId;
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId, deletedAt: null },
+    select: { household: { select: { addressId: true } } },
+  });
+  if (!person) return { error: "Person not found." };
+  const addressId = person.household?.addressId;
+  if (!addressId) return { error: "This person has no address to geocode." };
+
+  await geocodeAndClassifyAddress(addressId, campaignId, personId);
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "PERSON_GEOCODED",
+    entityType: "person",
+    entityId: personId,
+    details: { addressId },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
+}

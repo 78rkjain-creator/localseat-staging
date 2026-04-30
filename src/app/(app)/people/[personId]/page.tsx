@@ -26,6 +26,8 @@ import { SignatureSection } from "./signature-section";
 import { saveSignature } from "./signature-actions";
 import { AnonymizeButton } from "./anonymize-button";
 import { TeamLinkButton } from "./team-link-button";
+import { GeocodeButton } from "./geocode-button";
+import { PromoteToUserButton } from "./promote-to-user-button";
 import type { AvailableMember } from "./team-link-button";
 import { ROLE_LABELS } from "@/types";
 
@@ -168,6 +170,8 @@ export default async function PersonDetailPage({ params }: PageProps) {
 
   const isTeamMember = !!person.userId;
   const linkedRole = person.user?.memberships?.[0]?.role ?? null;
+  const isVolunteer = person.volunteerRecords.length > 0;
+  const canPromoteToUser = canAnonymize && isVolunteer && !isTeamMember && !!person.email;
 
   // New OOD fields are present at runtime but not yet in the generated Prisma types.
   // These casts can be removed after running `prisma generate`.
@@ -214,6 +218,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
             {isTeamMember && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
                 Team{linkedRole ? ` · ${ROLE_LABELS[linkedRole as import("@/types").Role] ?? linkedRole}` : ""}
+              </span>
+            )}
+            {isVolunteer && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Volunteer
               </span>
             )}
             {isAnonymized && (
@@ -275,6 +284,22 @@ export default async function PersonDetailPage({ params }: PageProps) {
               linkedUserId={person.userId ?? null}
               linkedRole={linkedRole}
               availableMembers={availableMembers}
+            />
+          )}
+          {!isAnonymized && canToggleWalkList && (
+            <GeocodeButton
+              personId={person.id}
+              lat={address?.lat ?? null}
+              lng={address?.lng ?? null}
+              wardStatus={person.wardStatus}
+              hasCompleteAddress={!!(address?.streetNumber && address?.streetName && address?.city)}
+            />
+          )}
+          {!isAnonymized && canPromoteToUser && (
+            <PromoteToUserButton
+              personId={person.id}
+              personName={`${person.firstName} ${person.lastName}`}
+              personEmail={person.email!}
             />
           )}
         </div>

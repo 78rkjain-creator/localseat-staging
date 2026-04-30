@@ -5,8 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { addTeamMember } from "@/app/(app)/team/actions";
-import { Role } from "@prisma/client";
+import { Role, ListSource, VolunteerStatus } from "@prisma/client";
 import { parseTagList } from "@/lib/csv-import";
+import { geocodeAndClassifyAddress } from "@/lib/ward";
 import type { TeamReviewRow } from "@/lib/team-csv-import";
 
 // ── Permission constants ──────────────────────────────────────────────────────
@@ -147,6 +148,125 @@ export async function commitTeamImport(args: {
   const failed: { row: number; reason: string }[] = [];
 
   for (const row of args.rows) {
+    // Normalize role first so we can branch on volunteer before any status checks
+    const rawRole = row.fields.role.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+    // ── Volunteer rows: create Person + VolunteerRecord, no User/Membership ──
+    if (rawRole === "volunteer") {
+      if (row.status === "rejected") continue;
+
+      try {
+        const f = row.fields;
+        const normalizedEmail = f.email?.trim().toLowerCase() || null;
+
+        const existingPerson = normalizedEmail
+          ? await db.person.findFirst({
+              where: { campaignId: activeCampaignId, email: normalizedEmail, deletedAt: null },
+              select: { id: true, householdId: true },
+            })
+          : null;
+
+        let personId: string;
+        let existingHouseholdId: string | null = existingPerson?.householdId ?? null;
+
+        if (existingPerson) {
+          personId = existingPerson.id;
+        } else {
+          const person = await db.person.create({
+            data: {
+              campaignId: activeCampaignId,
+              firstName: f.firstName.trim(),
+              lastName: f.lastName.trim() || "",
+              email: normalizedEmail,
+              phoneMobile: f.phoneMobile.trim() || null,
+              phoneHome: f.phoneHome.trim() || null,
+              listSource: ListSource.manual,
+              includeInWalkLists: false,
+              needsDistrictClassification: true,
+            },
+            select: { id: true },
+          });
+          personId = person.id;
+        }
+
+        await db.volunteerRecord.upsert({
+          where: { campaignId_personId: { campaignId: activeCampaignId, personId } },
+          create: { campaignId: activeCampaignId, personId, status: VolunteerStatus.interested },
+          update: { deletedAt: null, status: VolunteerStatus.interested },
+        });
+
+        const sn   = f.streetNumber.trim() || null;
+        const st   = f.streetName.trim()   || null;
+        const ct   = f.city.trim()         || null;
+        const pc   = f.postalCode.trim().replace(/\s/g, "").toUpperCase() || null;
+        const unit = f.unitNumber.trim()   || null;
+        const prov = f.province.trim()     || "ON";
+        const hasAny = !!(sn || st || ct || pc);
+        const hasAll = !!(sn && st && ct && pc);
+
+        if (hasAny && !existingHouseholdId) {
+          let addr: { id: string } | null = null;
+          if (hasAll) {
+            addr = await db.address.findFirst({
+              where: {
+                campaignId: activeCampaignId,
+                deletedAt: null,
+                streetNumber: { equals: sn!, mode: "insensitive" },
+                streetName:   { equals: st!, mode: "insensitive" },
+                unitNumber:   unit ? { equals: unit, mode: "insensitive" } : null,
+                postalCode:   { equals: pc!, mode: "insensitive" },
+              },
+              select: { id: true },
+            });
+          }
+          if (!addr) {
+            addr = await db.address.create({
+              data: {
+                campaignId: activeCampaignId,
+                streetNumber: sn ?? "",
+                streetName:   st ?? "",
+                unitNumber:   unit,
+                city:         ct ?? "",
+                province:     prov,
+                postalCode:   pc ?? "",
+              },
+              select: { id: true },
+            });
+          }
+          let hh = await db.household.findFirst({
+            where: { campaignId: activeCampaignId, addressId: addr.id, deletedAt: null },
+            select: { id: true },
+          });
+          if (!hh) {
+            hh = await db.household.create({
+              data: { campaignId: activeCampaignId, addressId: addr.id },
+              select: { id: true },
+            });
+          }
+          await db.person.update({
+            where: { id: personId },
+            data: { householdId: hh.id },
+          });
+          void geocodeAndClassifyAddress(addr.id, activeCampaignId, personId);
+        }
+
+        if (tagIdByLower.size > 0 && f.tags) {
+          const tagIds = parseTagList(f.tags)
+            .map((name) => tagIdByLower.get(name.toLowerCase()))
+            .filter((id): id is string => typeof id === "string");
+          if (tagIds.length > 0) {
+            await applyTagsToTeamMember(personId, tagIds);
+          }
+        }
+
+        created++;
+      } catch {
+        failed.push({ row: row.originalRowNum, reason: "Unexpected error creating volunteer record." });
+      }
+      continue;
+    }
+
+    // ── Regular team member rows ──────────────────────────────────────────────
     // Skip rows that should be passed over
     if (row.status === "rejected") continue;
     if (row.status === "skipped_already_member") {
@@ -155,9 +275,6 @@ export async function commitTeamImport(args: {
     }
 
     const isLinked = row.status === "linked_existing_user";
-
-    // Normalize role
-    const rawRole = row.fields.role.trim().toLowerCase().replace(/[\s-]+/g, "_");
 
     // Validate role against Role enum
     if (!Object.values(Role).includes(rawRole as Role)) {
@@ -221,6 +338,7 @@ export async function commitTeamImport(args: {
 
   revalidatePath("/team");
   revalidatePath("/import/team");
+  revalidatePath("/people/volunteers");
 
   return { created, linked, skipped, failed };
 }

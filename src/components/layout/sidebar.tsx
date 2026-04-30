@@ -500,6 +500,9 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                       }]
                     : []),
                   { href: "/people/team", label: "Team" },
+                  ...(role && canViewVolunteers(role)
+                    ? [{ href: "/people/volunteers", label: "Volunteers" }]
+                    : []),
                   ...(role === "candidate" || role === "campaign_manager" || role === "co_chair" || role === "field_organizer"
                     ? [{ href: "/people/map", label: "Contact Map" }]
                     : []),

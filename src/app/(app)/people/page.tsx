@@ -3,15 +3,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople, canExportData, canAddResident } from "@/lib/permissions";
+import { canViewAllPeople, canExportData, canAddResident, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { getPeopleList, getPeopleCount, getCampaignTags } from "@/lib/people";
+import { getPeopleList, getPeopleCount, getCampaignTags, getNeedsGeocodeCount } from "@/lib/people";
 import { deriveSupportBadge } from "@/lib/support-badge";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "./search-bar";
 import { DistrictClassifyBanner } from "./classify-banner";
+import { BulkGeocodeButton } from "./bulk-geocode-button";
 import type { UnclassifiedPerson } from "./classify-modal";
 import type { Role, SupportLevel } from "@/types";
 import { ROLE_LABELS } from "@/types";
@@ -35,16 +36,35 @@ const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[
   { label: "Not contacted", value: "not_contacted" },
 ];
 
+const MISSING_FILTER_OPTIONS = [
+  { label: "Missing address", value: "missing_address" },
+  { label: "Missing phone", value: "missing_phone" },
+  { label: "Missing email", value: "missing_email" },
+  { label: "Needs classification", value: "needs_classification" },
+  { label: "Not geocoded", value: "not_geocoded" },
+];
+
+function toggleMissingFilter(key: string, active: string[]): string | undefined {
+  const next = active.includes(key)
+    ? active.filter((k) => k !== key)
+    : [...active, key];
+  return next.length > 0 ? next.join(",") : undefined;
+}
+
 function buildUrl(params: {
   q?: string;
   tag?: string;
   supportFilter?: string;
+  missing?: string;
+  volunteer?: string;
   page?: number;
 }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.tag) p.set("tag", params.tag);
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
+  if (params.missing) p.set("missing", params.missing);
+  if (params.volunteer) p.set("volunteer", params.volunteer);
   if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people${s ? `?${s}` : ""}`;
@@ -63,12 +83,15 @@ interface PageProps {
     q?: string;
     tag?: string;
     supportFilter?: string;
+    missing?: string;
+    volunteer?: string;
     page?: string;
   }>;
 }
 
 export default async function PeopleMasterListPage({ searchParams }: PageProps) {
-  const { q, tag, supportFilter: rawSupportFilter, page: rawPage } = await searchParams;
+  const { q, tag, supportFilter: rawSupportFilter, missing: rawMissing, volunteer: rawVolunteer, page: rawPage } =
+    await searchParams;
 
   const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
@@ -76,6 +99,12 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
     rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS
       ? (rawSupportFilter as SupportFilter)
       : undefined;
+
+  const activeMissing: string[] = rawMissing
+    ? rawMissing.split(",").filter(Boolean)
+    : [];
+
+  const showVolunteer = rawVolunteer === "true";
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -86,8 +115,11 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
   const canAdd = activeRole ? canAddResident(activeRole as Role) : false;
+  const canBulkGeocode = activeRole
+    ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
+    : false;
 
-  const [{ people, total: filteredTotal }, totalCount, allTags, unclassifiedPeople] =
+  const [{ people, total: filteredTotal }, totalCount, allTags, unclassifiedPeople, needsGeocodeCount] =
     await Promise.all([
       getPeopleList({
         campaignId: activeCampaignId,
@@ -95,6 +127,12 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
         tagId: tag,
         supportFilter,
         page,
+        missingAddress: activeMissing.includes("missing_address"),
+        missingPhone: activeMissing.includes("missing_phone"),
+        missingEmail: activeMissing.includes("missing_email"),
+        needsClassification: activeMissing.includes("needs_classification"),
+        notGeocoded: activeMissing.includes("not_geocoded"),
+        volunteerInterest: showVolunteer || undefined,
       }),
       getPeopleCount(activeCampaignId),
       getCampaignTags(activeCampaignId),
@@ -132,6 +170,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
         take: 100,
       }),
+      getNeedsGeocodeCount(activeCampaignId),
     ]);
 
   const classifyPeople: UnclassifiedPerson[] = unclassifiedPeople.map((p) => {
@@ -146,7 +185,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
   const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
-  const isFiltered = !!q || !!activeTagId || !!supportFilter;
+  const isFiltered = !!q || !!activeTagId || !!supportFilter || activeMissing.length > 0 || showVolunteer;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -165,6 +204,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {canBulkGeocode && <BulkGeocodeButton initialCount={needsGeocodeCount} />}
           {canAdd && (
             <Link
               href="/people/new"
@@ -222,13 +262,13 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
       </div>
 
       {/* Support filter pills */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {SUPPORT_FILTER_PILLS.map((pill) => {
           const isActive = supportFilter === pill.value;
           return (
             <Link
               key={pill.label}
-              href={buildUrl({ q, tag, supportFilter: pill.value })}
+              href={buildUrl({ q, tag, supportFilter: pill.value, missing: rawMissing, volunteer: rawVolunteer })}
               className={
                 isActive
                   ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
@@ -236,6 +276,42 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               }
             >
               {pill.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Volunteer interest filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Link
+          href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: showVolunteer ? undefined : "true" })}
+          className={
+            showVolunteer
+              ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+              : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+          }
+        >
+          Volunteer interest
+        </Link>
+      </div>
+
+      {/* Missing data filter chips */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <span className="text-xs text-slate-400 font-medium">Missing:</span>
+        {MISSING_FILTER_OPTIONS.map((opt) => {
+          const isActive = activeMissing.includes(opt.value);
+          const next = toggleMissingFilter(opt.value, activeMissing);
+          return (
+            <Link
+              key={opt.value}
+              href={buildUrl({ q, tag, supportFilter, missing: next, volunteer: rawVolunteer })}
+              className={
+                isActive
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {opt.label}
             </Link>
           );
         })}
@@ -376,7 +452,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               <div className="flex md:hidden items-center justify-between px-5 py-4">
                 {page > 1 ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page - 1 })}
+                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page - 1 })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
                   >
                     <svg
@@ -409,7 +485,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                 </span>
                 {page < totalPages ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page + 1 })}
+                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page + 1 })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
                   >
                     Next
@@ -443,7 +519,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
               <div className="hidden md:flex items-center justify-center gap-1 px-5 py-4">
                 {page > 1 ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page - 1 })}
+                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page - 1 })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     aria-label="Previous page"
                   >
@@ -485,7 +561,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
                   ) : (
                     <Link
                       key={pageNum}
-                      href={buildUrl({ q, tag, supportFilter, page: pageNum })}
+                      href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: pageNum })}
                       aria-current={pageNum === page ? "page" : undefined}
                       className={
                         pageNum === page
@@ -500,7 +576,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
 
                 {page < totalPages ? (
                   <Link
-                    href={buildUrl({ q, tag, supportFilter, page: page + 1 })}
+                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page + 1 })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     aria-label="Next page"
                   >

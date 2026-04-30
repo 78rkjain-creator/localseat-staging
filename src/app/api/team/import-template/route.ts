@@ -30,6 +30,7 @@ const ALL_ROLES = [
   "volunteer_coordinator",
   "finance_lead",
   "sign_installer",
+  "volunteer",
 ];
 
 const FO_ROLES = ["canvasser", "sign_installer"];
@@ -65,7 +66,7 @@ export async function GET() {
   // Row 2: warning row
   const warningRow = sheet.getRow(2);
   warningRow.getCell(1).value =
-    "*** DELETE THIS ROW AND THE 3 SAMPLES BELOW BEFORE IMPORTING ***";
+    "*** DELETE THIS ROW AND THE 4 SAMPLES BELOW BEFORE IMPORTING ***";
   warningRow.font = { color: { argb: "FFCC0000" }, bold: true };
 
   // Rows 3-5: sample rows
@@ -84,6 +85,11 @@ export async function GET() {
     "", "",
     "55", "Queen St W", "4B", "Toronto", "ON", "M5H 2N2", "early-supporter",
   ]);
+  sheet.addRow([
+    "Alex", "Chen", "alex.chen@example.com", "volunteer",
+    "", "",
+    "", "", "", "", "", "", "",
+  ]);
 
   // Role column index (4th column = D)
   const roleColIdx = TEAM_HEADERS.findIndex((h) => h.key === "role") + 1;
@@ -91,9 +97,9 @@ export async function GET() {
   const roleFormulae = `"${allowedRoles.join(",")}"`;
 
   // Pre-touch cell so ExcelJS validation writer has a real cell to anchor to
-  sheet.getCell(`${roleCol}6`).value = "";
+  sheet.getCell(`${roleCol}7`).value = "";
 
-  for (let row = 6; row <= 1006; row++) {
+  for (let row = 7; row <= 1007; row++) {
     sheet.getCell(`${roleCol}${row}`).dataValidation = {
       type: "list",
       allowBlank: true,

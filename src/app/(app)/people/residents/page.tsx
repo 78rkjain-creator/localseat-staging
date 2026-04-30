@@ -3,14 +3,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople, canExportData, canAddResident } from "@/lib/permissions";
+import { canViewAllPeople, canExportData, canAddResident, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { getPeopleList, getCampaignTags } from "@/lib/people";
+import { getPeopleList, getCampaignTags, getNeedsGeocodeCount } from "@/lib/people";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
 import { ResidentsDateFilter, ResidentsListSourceFilter } from "./filters-client";
+import { BulkGeocodeButton } from "../bulk-geocode-button";
 import type { Role, SupportLevel, ListSource } from "@/types";
 import { ListSource as PrismaListSource } from "@prisma/client";
 
@@ -41,6 +42,21 @@ const SUPPORT_FILTER_PILLS: { label: string; value: SupportFilter | undefined }[
   { label: "Not contacted", value: "not_contacted" },
 ];
 
+const MISSING_FILTER_OPTIONS = [
+  { label: "Missing address", value: "missing_address" },
+  { label: "Missing phone", value: "missing_phone" },
+  { label: "Missing email", value: "missing_email" },
+  { label: "Needs classification", value: "needs_classification" },
+  { label: "Not geocoded", value: "not_geocoded" },
+];
+
+function toggleMissingFilter(key: string, active: string[]): string | undefined {
+  const next = active.includes(key)
+    ? active.filter((k) => k !== key)
+    : [...active, key];
+  return next.length > 0 ? next.join(",") : undefined;
+}
+
 function buildUrl(params: {
   q?: string;
   tag?: string;
@@ -48,6 +64,8 @@ function buildUrl(params: {
   contactedAfter?: string;
   cfFilters?: string;
   listSource?: string;
+  missing?: string;
+  volunteer?: string;
   page?: number;
 }) {
   const p = new URLSearchParams();
@@ -57,6 +75,8 @@ function buildUrl(params: {
   if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
   if (params.cfFilters) p.set("cfFilters", params.cfFilters);
   if (params.listSource) p.set("listSource", params.listSource);
+  if (params.missing) p.set("missing", params.missing);
+  if (params.volunteer) p.set("volunteer", params.volunteer);
   if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people/residents${s ? `?${s}` : ""}`;
@@ -85,6 +105,8 @@ interface PageProps {
     contactedAfter?: string;
     cfFilters?: string;
     listSource?: string;
+    missing?: string;
+    volunteer?: string;
     page?: string;
   }>;
 }
@@ -99,6 +121,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     contactedAfter,
     cfFilters: rawCfFilters,
     listSource: rawListSource,
+    missing: rawMissing,
+    volunteer: rawVolunteer,
     page: rawPage,
   } = await searchParams;
 
@@ -112,6 +136,12 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
   const activeCfFilters: string[] = rawCfFilters
     ? rawCfFilters.split(",").filter(Boolean)
     : [];
+
+  const activeMissing: string[] = rawMissing
+    ? rawMissing.split(",").filter(Boolean)
+    : [];
+
+  const showVolunteer = rawVolunteer === "true";
 
   // Parse explicit source selection; limit to residents-valid sources (no team).
   const activeListSources: ListSource[] = rawListSource
@@ -135,8 +165,11 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
 
   const canExport = activeRole ? canExportData(activeRole as Role) : false;
   const canAdd = activeRole ? canAddResident(activeRole as Role) : false;
+  const canBulkGeocode = activeRole
+    ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
+    : false;
 
-  const [{ people, total: filteredTotal }, totalCount, allTags, campaignData] =
+  const [{ people, total: filteredTotal }, totalCount, allTags, campaignData, needsGeocodeCount] =
     await Promise.all([
       getPeopleList({
         campaignId: activeCampaignId,
@@ -148,6 +181,12 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         listSource: effectiveListSources,
         isOutOfDistrict: false,
         page,
+        missingAddress: activeMissing.includes("missing_address"),
+        missingPhone: activeMissing.includes("missing_phone"),
+        missingEmail: activeMissing.includes("missing_email"),
+        needsClassification: activeMissing.includes("needs_classification"),
+        notGeocoded: activeMissing.includes("not_geocoded"),
+        volunteerInterest: showVolunteer || undefined,
       }),
       // Total count: all non-team, in-district residents.
       db.person.count({
@@ -170,6 +209,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         where: { id: activeCampaignId },
         select: { customFields: true },
       }),
+      getNeedsGeocodeCount(activeCampaignId),
     ]);
 
   const rawCfDefs = campaignData?.customFields;
@@ -186,6 +226,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     !!supportFilter ||
     !!contactedAfter ||
     activeCfFilters.length > 0 ||
+    activeMissing.length > 0 ||
+    showVolunteer ||
     (activeListSources.length > 0 &&
       activeListSources.length < RESIDENTS_LIST_SOURCE_VALUES.length);
 
@@ -206,6 +248,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {canBulkGeocode && <BulkGeocodeButton initialCount={needsGeocodeCount} />}
           {canAdd && (
             <Link
               href="/people/new"
@@ -254,7 +297,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
       </div>
 
       {/* Support filter pills + date filter */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {SUPPORT_FILTER_PILLS.map((pill) => {
           const isActive = supportFilter === pill.value;
           return (
@@ -267,6 +310,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 contactedAfter,
                 cfFilters: rawCfFilters,
                 listSource: rawListSource,
+                missing: rawMissing,
+                volunteer: rawVolunteer,
               })}
               className={
                 isActive
@@ -288,6 +333,29 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         />
       </div>
 
+      {/* Volunteer interest filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Link
+          href={buildUrl({
+            q,
+            tag,
+            supportFilter,
+            contactedAfter,
+            cfFilters: rawCfFilters,
+            listSource: rawListSource,
+            missing: rawMissing,
+            volunteer: showVolunteer ? undefined : "true",
+          })}
+          className={
+            showVolunteer
+              ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+              : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+          }
+        >
+          Volunteer interest
+        </Link>
+      </div>
+
       {/* Custom field filter pills */}
       {customFieldDefs.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -305,6 +373,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                   contactedAfter,
                   cfFilters: nextCfFilters,
                   listSource: rawListSource,
+                  missing: rawMissing,
+                  volunteer: rawVolunteer,
                 })}
                 className={
                   isActive
@@ -319,8 +389,39 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         </div>
       )}
 
+      {/* Missing data filter chips */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-xs text-slate-400 font-medium">Missing:</span>
+        {MISSING_FILTER_OPTIONS.map((opt) => {
+          const isActive = activeMissing.includes(opt.value);
+          const next = toggleMissingFilter(opt.value, activeMissing);
+          return (
+            <Link
+              key={opt.value}
+              href={buildUrl({
+                q,
+                tag,
+                supportFilter,
+                contactedAfter,
+                cfFilters: rawCfFilters,
+                listSource: rawListSource,
+                missing: next,
+                volunteer: rawVolunteer,
+              })}
+              className={
+                isActive
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {opt.label}
+            </Link>
+          );
+        })}
+      </div>
+
       {/* List source filter */}
-      <div className="mb-4">
+      <div className="mb-5">
         <ResidentsListSourceFilter
           activeListSources={activeListSources}
           q={q}
@@ -460,6 +561,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       contactedAfter,
                       cfFilters: rawCfFilters,
                       listSource: rawListSource,
+                      missing: rawMissing,
+                      volunteer: rawVolunteer,
                       page: page - 1,
                     })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -503,6 +606,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       contactedAfter,
                       cfFilters: rawCfFilters,
                       listSource: rawListSource,
+                      missing: rawMissing,
+                      volunteer: rawVolunteer,
                       page: page + 1,
                     })}
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -545,6 +650,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       contactedAfter,
                       cfFilters: rawCfFilters,
                       listSource: rawListSource,
+                      missing: rawMissing,
+                      volunteer: rawVolunteer,
                       page: page - 1,
                     })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
@@ -595,6 +702,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                         contactedAfter,
                         cfFilters: rawCfFilters,
                         listSource: rawListSource,
+                        missing: rawMissing,
+                        volunteer: rawVolunteer,
                         page: pageNum,
                       })}
                       aria-current={pageNum === page ? "page" : undefined}
@@ -618,6 +727,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       contactedAfter,
                       cfFilters: rawCfFilters,
                       listSource: rawListSource,
+                      missing: rawMissing,
+                      volunteer: rawVolunteer,
                       page: page + 1,
                     })}
                     className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"

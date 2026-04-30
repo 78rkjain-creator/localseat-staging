@@ -51,6 +51,7 @@ const VALID_ROLE_VALUES = new Set([
   "volunteer_coordinator",
   "finance_lead",
   "sign_installer",
+  "volunteer",
 ]);
 
 function normalizeRoleString(raw: string): string {
@@ -68,6 +69,7 @@ const SAMPLE_EMAILS = new Set([
   "jane.doe@example.com",
   "john.smith@example.com",
   "maria.garcia@example.com",
+  "alex.chen@example.com",
 ]);
 
 function detectWarningRow(firstCell: string): boolean {
@@ -144,10 +146,16 @@ export function buildTeamReviewRow(
 
 function getMissingRequiredFields(fields: TeamRowFields): (keyof TeamRowFields)[] {
   const missing: (keyof TeamRowFields)[] = [];
-  if (!fields.firstName)  missing.push("firstName");
-  if (!fields.lastName)   missing.push("lastName");
-  if (!fields.email)      missing.push("email");
-  if (!fields.role)       missing.push("role");
+  if (!fields.firstName) missing.push("firstName");
+
+  if (fields.role && normalizeRoleString(fields.role) === "volunteer") {
+    if (!fields.email && !fields.phoneMobile) missing.push("email");
+    return missing;
+  }
+
+  if (!fields.lastName)  missing.push("lastName");
+  if (!fields.email)     missing.push("email");
+  if (!fields.role)      missing.push("role");
   if (!fields.phoneHome && !fields.phoneMobile) missing.push("phoneHome");
   return missing;
 }
@@ -159,6 +167,13 @@ export function classifyTeamRow(row: TeamReviewRow): "ready" | "incomplete" | "m
   if (row.status === "rejected") return "missing_required";
 
   const f = row.fields;
+  const normalizedRole = f.role ? normalizeRoleString(f.role) : "";
+
+  if (normalizedRole === "volunteer") {
+    if (!f.firstName || (!f.email && !f.phoneMobile)) return "missing_required";
+    return "ready"; // address optional for volunteers — never "incomplete"
+  }
+
   const mandatoryMissing = !f.firstName || !f.lastName || !f.email || !f.role;
   const hasAnyPhone = Boolean(f.phoneHome || f.phoneMobile);
   const roleInvalid = Boolean(f.role) && !isValidRoleString(f.role);
@@ -172,6 +187,15 @@ export function classifyTeamRow(row: TeamReviewRow): "ready" | "incomplete" | "m
 
 export function listMissingTeamFields(row: TeamReviewRow): string[] {
   const f = row.fields;
+  const normalizedRole = f.role ? normalizeRoleString(f.role) : "";
+
+  if (normalizedRole === "volunteer") {
+    const out: string[] = [];
+    if (!f.firstName) out.push("FirstName");
+    if (!f.email && !f.phoneMobile) out.push("Email or Mobile Phone");
+    return out;
+  }
+
   const out: string[] = [];
   if (!f.firstName)  out.push("FirstName");
   if (!f.lastName)   out.push("LastName");
@@ -212,7 +236,7 @@ export function parseTeamCsvToReviewRows(text: string): {
       return {
         rows: [],
         fileError:
-          "Sample rows are still in your file. Delete the warning row and the 3 sample rows (Jane Doe, John Smith, Maria Garcia), then upload again.",
+          "Sample rows are still in your file. Delete the warning row and the 4 sample rows (Jane Doe, John Smith, Maria Garcia, Alex Chen), then upload again.",
         originalHeaders: [],
       };
     }
@@ -258,7 +282,7 @@ export function parseTeamCsvToReviewRows(text: string): {
     return {
       rows: [],
       fileError:
-        "Sample rows still in file. Delete jane.doe@example.com, john.smith@example.com, and maria.garcia@example.com rows.",
+        "Sample rows still in file. Delete jane.doe@example.com, john.smith@example.com, maria.garcia@example.com, and alex.chen@example.com rows.",
       originalHeaders: [],
     };
   }
@@ -347,7 +371,7 @@ export async function parseXlsxToTeamReviewRows(file: File): Promise<{
       return {
         rows: [],
         fileError:
-          "Sample rows are still in your file. Delete the warning row and the 3 sample rows (Jane Doe, John Smith, Maria Garcia), then upload again.",
+          "Sample rows are still in your file. Delete the warning row and the 4 sample rows (Jane Doe, John Smith, Maria Garcia, Alex Chen), then upload again.",
         originalHeaders: [],
       };
     }
@@ -397,7 +421,7 @@ export async function parseXlsxToTeamReviewRows(file: File): Promise<{
     return {
       rows: [],
       fileError:
-        "Sample rows still in file. Delete jane.doe@example.com, john.smith@example.com, and maria.garcia@example.com rows.",
+        "Sample rows still in file. Delete jane.doe@example.com, john.smith@example.com, maria.garcia@example.com, and alex.chen@example.com rows.",
       originalHeaders: [],
     };
   }

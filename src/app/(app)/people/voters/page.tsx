@@ -3,21 +3,52 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople } from "@/lib/permissions";
+import { canViewAllPeople, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { getNeedsGeocodeCount } from "@/lib/people";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
+import { BulkGeocodeButton } from "../bulk-geocode-button";
 import type { Role, SupportLevel } from "@/types";
+import type { Prisma } from "@prisma/client";
+import { WardStatus } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Voter List" };
 
+const MISSING_FILTER_OPTIONS = [
+  { label: "Missing address", value: "missing_address" },
+  { label: "Missing phone", value: "missing_phone" },
+  { label: "Missing email", value: "missing_email" },
+  { label: "Needs classification", value: "needs_classification" },
+  { label: "Not geocoded", value: "not_geocoded" },
+];
+
+function toggleMissingFilter(key: string, active: string[]): string | undefined {
+  const next = active.includes(key)
+    ? active.filter((k) => k !== key)
+    : [...active, key];
+  return next.length > 0 ? next.join(",") : undefined;
+}
+
+function buildUrl(params: { q?: string; missing?: string }) {
+  const p = new URLSearchParams();
+  if (params.q) p.set("q", params.q);
+  if (params.missing) p.set("missing", params.missing);
+  const s = p.toString();
+  return `/people/voters${s ? `?${s}` : ""}`;
+}
+
 interface PageProps {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; missing?: string }>;
 }
 
 export default async function VotersPage({ searchParams }: PageProps) {
-  const { q } = await searchParams;
+  const { q, missing: rawMissing } = await searchParams;
+
+  const activeMissing: string[] = rawMissing
+    ? rawMissing.split(",").filter(Boolean)
+    : [];
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -26,25 +57,54 @@ export default async function VotersPage({ searchParams }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole as Role)) redirect("/dashboard");
 
-  const baseWhere = {
+  const canBulkGeocode = activeRole
+    ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
+    : false;
+
+  const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
     isConfirmedVoter: true,
-  } as const;
+  };
 
-  const searchWhere = q?.trim()
+  const missingAnd: Prisma.PersonWhereInput[] = [];
+  if (activeMissing.includes("missing_address")) {
+    missingAnd.push({
+      OR: [
+        { householdId: null },
+        { household: { address: { streetNumber: "", streetName: "", city: "" } } },
+      ],
+    });
+  }
+  if (activeMissing.includes("missing_phone")) {
+    missingAnd.push({ phoneHome: null, phoneMobile: null });
+  }
+  if (activeMissing.includes("missing_email")) {
+    missingAnd.push({ email: null });
+  }
+  if (activeMissing.includes("needs_classification")) {
+    missingAnd.push({ wardStatus: WardStatus.not_checked, householdId: { not: null } });
+  }
+  if (activeMissing.includes("not_geocoded")) {
+    missingAnd.push({ householdId: { not: null }, household: { address: { lat: null } } });
+  }
+
+  const filterWhere: Prisma.PersonWhereInput =
+    missingAnd.length > 0 ? { ...baseWhere, AND: missingAnd } : baseWhere;
+
+  const searchWhere: Prisma.PersonWhereInput = q?.trim()
     ? {
-        ...baseWhere,
+        ...filterWhere,
         OR: [
-          { firstName: { contains: q.trim(), mode: "insensitive" as const } },
-          { lastName: { contains: q.trim(), mode: "insensitive" as const } },
-          { email: { contains: q.trim(), mode: "insensitive" as const } },
-          { phoneHome: { contains: q.trim(), mode: "insensitive" as const } },
+          { firstName: { contains: q.trim(), mode: "insensitive" } },
+          { lastName: { contains: q.trim(), mode: "insensitive" } },
+          { email: { contains: q.trim(), mode: "insensitive" } },
+          { phoneHome: { contains: q.trim(), mode: "insensitive" } },
         ],
       }
-    : baseWhere;
+    : filterWhere;
 
-  const [people, total] = await Promise.all([
+  const [people, total, needsGeocodeCount] = await Promise.all([
     db.person.findMany({
       where: searchWhere,
       select: {
@@ -73,29 +133,59 @@ export default async function VotersPage({ searchParams }: PageProps) {
       take: 50,
     }),
     db.person.count({ where: baseWhere }),
+    getNeedsGeocodeCount(activeCampaignId),
   ]);
 
-  const isFiltered = !!q?.trim();
+  const isFiltered = !!q?.trim() || activeMissing.length > 0;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
-        <p className="text-slate-500 text-sm mt-0.5">
-          {total.toLocaleString()} confirmed voter{total !== 1 ? "s" : ""}
-          {isFiltered && people.length < total && (
-            <>
-              {" "}
-              &mdash; showing {people.length} result{people.length !== 1 ? "s" : ""}
-            </>
-          )}
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {total.toLocaleString()} confirmed voter{total !== 1 ? "s" : ""}
+            {isFiltered && people.length < total && (
+              <>
+                {" "}
+                &mdash; showing {people.length} result{people.length !== 1 ? "s" : ""}
+              </>
+            )}
+          </p>
+        </div>
+        {canBulkGeocode && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <BulkGeocodeButton initialCount={needsGeocodeCount} />
+          </div>
+        )}
       </div>
 
       {/* Search */}
-      <div className="mb-5">
+      <div className="mb-3">
         <PeopleSearchBar defaultValue={q ?? ""} />
+      </div>
+
+      {/* Missing data filter chips */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <span className="text-xs text-slate-400 font-medium">Missing:</span>
+        {MISSING_FILTER_OPTIONS.map((opt) => {
+          const isActive = activeMissing.includes(opt.value);
+          const next = toggleMissingFilter(opt.value, activeMissing);
+          return (
+            <Link
+              key={opt.value}
+              href={buildUrl({ q, missing: next })}
+              className={
+                isActive
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {opt.label}
+            </Link>
+          );
+        })}
       </div>
 
       {/* List */}
@@ -104,7 +194,7 @@ export default async function VotersPage({ searchParams }: PageProps) {
           title={isFiltered ? "No results" : "No confirmed voters yet"}
           description={
             isFiltered
-              ? "Try a different name or clear the search."
+              ? "Try a different name or clear the filter."
               : "Confirmed voters appear here after an Official Voters List is imported and matched."
           }
         />
