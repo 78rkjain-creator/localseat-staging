@@ -4,30 +4,31 @@ import { useRef, useState, useTransition } from "react";
 import { SignaturePad } from "./signature-pad";
 import type { SignaturePadHandle } from "./signature-pad";
 
-export type SignaturePurpose =
-  | "lawn_sign_consent"
-  | "volunteer_consent"
-  | "petition"
-  | "other";
-
-const PURPOSE_LABELS: Record<SignaturePurpose, string> = {
-  lawn_sign_consent: "Lawn sign consent",
-  volunteer_consent: "Volunteer consent",
-  petition: "Petition",
-  other: "Other",
-};
+export interface ConsentTypeOption {
+  id: string;
+  label: string;
+}
 
 interface Props {
   personId: string;
+  consentTypes: ConsentTypeOption[];
   onClose: () => void;
-  onSave: (data: { personId: string; purpose: string; signatureData: string }) => Promise<void>;
+  onSave: (data: { personId: string; consentTypeIds: string[]; signatureData: string }) => Promise<void>;
 }
 
-export function SignatureModal({ personId, onClose, onSave }: Props) {
+export function SignatureModal({ personId, consentTypes, onClose, onSave }: Props) {
   const padRef = useRef<SignaturePadHandle>(null);
-  const [purpose, setPurpose] = useState<SignaturePurpose>("lawn_sign_consent");
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    consentTypes.length > 0 ? [consentTypes[0]!.id] : []
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function toggleType(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
 
   function handleClear() {
     padRef.current?.clear();
@@ -35,6 +36,10 @@ export function SignatureModal({ personId, onClose, onSave }: Props) {
   }
 
   function handleSave() {
+    if (selectedIds.length === 0) {
+      setError("Select at least one consent type.");
+      return;
+    }
     if (padRef.current?.isEmpty()) {
       setError("Please draw a signature before saving.");
       return;
@@ -43,7 +48,7 @@ export function SignatureModal({ personId, onClose, onSave }: Props) {
     if (!dataURL) return;
     setError(null);
     startTransition(async () => {
-      await onSave({ personId, purpose, signatureData: dataURL });
+      await onSave({ personId, consentTypeIds: selectedIds, signatureData: dataURL });
       onClose();
     });
   }
@@ -65,18 +70,26 @@ export function SignatureModal({ personId, onClose, onSave }: Props) {
             </button>
           </div>
 
-          <div className="mb-4">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Purpose</label>
-            <select
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value as SignaturePurpose)}
-              className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
-            >
-              {(Object.entries(PURPOSE_LABELS) as [SignaturePurpose, string][]).map(([val, label]) => (
-                <option key={val} value={val}>{label}</option>
-              ))}
-            </select>
-          </div>
+          {consentTypes.length > 0 && (
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">
+                Purpose
+              </label>
+              <div className="flex flex-col gap-2">
+                {consentTypes.map((type) => (
+                  <label key={type.id} className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(type.id)}
+                      onChange={() => toggleType(type.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                    />
+                    <span className="text-sm text-slate-800">{type.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           <SignaturePad ref={padRef} height={200} />
 

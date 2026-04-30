@@ -119,6 +119,7 @@ export async function geocodeAndClassifyAddress(
       where: { id: personId },
       data: {
         wardStatus,
+        needsDistrictClassification: false,
         ...(inside ? {} : { isOutOfDistrict: true }),
       },
     });

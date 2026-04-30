@@ -65,7 +65,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
 
   const canLinkTeamMember = canAnonymize; // candidate + campaign_manager only
 
-  const [person, campaign, listMemberships, campaignTags, signatures] = await Promise.all([
+  const [person, campaign, listMemberships, campaignTags, signatures, consentTypes] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
     db.campaign.findUnique({
       where: { id: activeCampaignId },
@@ -91,8 +91,14 @@ export default async function PersonDetailPage({ params }: PageProps) {
         signatureData: true,
         collectedAt: true,
         collectedBy: { select: { firstName: true, lastName: true } },
+        consentItems: { select: { consentType: { select: { label: true } } } },
       },
       orderBy: { collectedAt: "desc" },
+    }),
+    db.signatureConsentType.findMany({
+      where: { campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true, label: true },
+      orderBy: { sortOrder: "asc" },
     }),
   ]);
   if (!person) notFound();
@@ -648,6 +654,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
             <SignatureSection
               personId={person.id}
               signatures={signatures}
+              consentTypes={consentTypes}
               onSave={saveSignature}
             />
           </Card>

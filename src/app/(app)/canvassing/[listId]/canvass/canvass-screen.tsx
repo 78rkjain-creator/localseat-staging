@@ -179,6 +179,7 @@ interface CanvassScreenProps {
   appointmentsByPersonId?: Record<string, string>;
   fieldMessages?: FieldMessageItem[];
   activeSurvey?: ActiveSurvey | null;
+  consentTypes?: { id: string; label: string }[];
 }
 
 export function CanvassScreen({
@@ -193,6 +194,7 @@ export function CanvassScreen({
   appointmentsByPersonId = {},
   fieldMessages = [],
   activeSurvey = null,
+  consentTypes = [],
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -1159,6 +1161,7 @@ export function CanvassScreen({
       {showSignatureModal && (
         <SignatureModal
           personId={selectedPersonId}
+          consentTypes={consentTypes}
           onClose={() => setShowSignatureModal(false)}
           onSave={saveSignature}
         />

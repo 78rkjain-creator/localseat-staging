@@ -218,6 +218,7 @@ model Campaign {
   fieldMessages         FieldMessage[]
   surveys               Survey[]
   signatureRecords      SignatureRecord[]
+  signatureConsentTypes SignatureConsentType[]
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -1136,11 +1137,42 @@ model SignatureRecord {
   collectedAt   DateTime @default(now())
   createdAt     DateTime @default(now())
 
-  person      Person   @relation(fields: [personId], references: [id])
-  campaign    Campaign @relation(fields: [campaignId], references: [id])
-  collectedBy User     @relation("SignatureCollector", fields: [collectedById], references: [id])
+  person       Person             @relation(fields: [personId], references: [id])
+  campaign     Campaign           @relation(fields: [campaignId], references: [id])
+  collectedBy  User               @relation("SignatureCollector", fields: [collectedById], references: [id])
+  consentItems SignatureConsent[]
 
   @@index([personId])
   @@index([campaignId])
   @@map("signature_records")
+}
+
+model SignatureConsentType {
+  id         String    @id @default(cuid())
+  campaignId String
+  label      String
+  sortOrder  Int       @default(0)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  campaign Campaign          @relation(fields: [campaignId], references: [id])
+  consents SignatureConsent[]
+
+  @@index([campaignId])
+  @@map("signature_consent_types")
+}
+
+model SignatureConsent {
+  id            String   @id @default(cuid())
+  signatureId   String
+  consentTypeId String
+  createdAt     DateTime @default(now())
+
+  signature   SignatureRecord     @relation(fields: [signatureId], references: [id])
+  consentType SignatureConsentType @relation(fields: [consentTypeId], references: [id])
+
+  @@unique([signatureId, consentTypeId])
+  @@index([signatureId])
+  @@index([consentTypeId])
+  @@map("signature_consents")
 }

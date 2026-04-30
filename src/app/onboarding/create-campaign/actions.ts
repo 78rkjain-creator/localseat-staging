@@ -77,6 +77,15 @@ export async function createCampaign(
     ],
   });
 
+  await db.signatureConsentType.createMany({
+    data: [
+      { campaignId: campaign.id, label: "Lawn sign consent", sortOrder: 0 },
+      { campaignId: campaign.id, label: "Volunteer consent",  sortOrder: 1 },
+      { campaignId: campaign.id, label: "Petition",           sortOrder: 2 },
+      { campaignId: campaign.id, label: "Other",              sortOrder: 3 },
+    ],
+  });
+
   await createAuditLog({
     campaignId: campaign.id,
     userId: session.user.id,

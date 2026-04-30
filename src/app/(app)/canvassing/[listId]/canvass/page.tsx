@@ -26,11 +26,16 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign, fieldMessages, activeSurvey] = await Promise.all([
+  const [queue, campaign, fieldMessages, activeSurvey, consentTypes] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
     getActiveFieldMessages(activeCampaignId),
     getActiveSurveyForCanvass(activeCampaignId),
+    db.signatureConsentType.findMany({
+      where: { campaignId: activeCampaignId, deletedAt: null },
+      select: { id: true, label: true },
+      orderBy: { sortOrder: "asc" },
+    }),
   ]);
   if (!queue) notFound();
 
@@ -72,6 +77,7 @@ export default async function CanvassPage({ params }: PageProps) {
       appointmentsByPersonId={appointmentsByPersonId}
       fieldMessages={fieldMessages}
       activeSurvey={activeSurvey}
+      consentTypes={consentTypes}
     />
   );
 }

@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import { SignatureModal } from "@/components/signature-modal";
+import type { ConsentTypeOption } from "@/components/signature-modal";
 
-const PURPOSE_LABELS: Record<string, string> = {
+const LEGACY_PURPOSE_LABELS: Record<string, string> = {
   lawn_sign_consent: "Lawn sign consent",
   volunteer_consent: "Volunteer consent",
   petition: "Petition",
   other: "Other",
 };
+
+interface ConsentItem {
+  consentType: { label: string };
+}
 
 interface SignatureItem {
   id: string;
@@ -16,15 +21,24 @@ interface SignatureItem {
   signatureData: string;
   collectedAt: Date;
   collectedBy: { firstName: string; lastName: string };
+  consentItems: ConsentItem[];
 }
 
 interface Props {
   personId: string;
   signatures: SignatureItem[];
-  onSave: (data: { personId: string; purpose: string; signatureData: string }) => Promise<void>;
+  consentTypes: ConsentTypeOption[];
+  onSave: (data: { personId: string; consentTypeIds: string[]; signatureData: string }) => Promise<void>;
 }
 
-export function SignatureSection({ personId, signatures, onSave }: Props) {
+function purposeLabel(sig: SignatureItem): string {
+  if (sig.consentItems.length > 0) {
+    return sig.consentItems.map((c) => c.consentType.label).join(", ");
+  }
+  return LEGACY_PURPOSE_LABELS[sig.purpose] ?? sig.purpose;
+}
+
+export function SignatureSection({ personId, signatures, consentTypes, onSave }: Props) {
   const [showModal, setShowModal] = useState(false);
 
   function formatDate(date: Date): string {
@@ -48,9 +62,7 @@ export function SignatureSection({ personId, signatures, onSave }: Props) {
                 className="h-14 w-32 object-contain border border-slate-200 rounded-lg bg-white flex-shrink-0"
               />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-800">
-                  {PURPOSE_LABELS[sig.purpose] ?? sig.purpose}
-                </p>
+                <p className="text-sm font-medium text-slate-800">{purposeLabel(sig)}</p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {formatDate(sig.collectedAt)} · {sig.collectedBy.firstName} {sig.collectedBy.lastName}
                 </p>
@@ -76,6 +88,7 @@ export function SignatureSection({ personId, signatures, onSave }: Props) {
       {showModal && (
         <SignatureModal
           personId={personId}
+          consentTypes={consentTypes}
           onClose={() => setShowModal(false)}
           onSave={onSave}
         />

@@ -6,14 +6,14 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { updateDataRetention } from "./actions";
 
-export const metadata: Metadata = { title: "Privacy & Data" };
-
-const PURPOSE_LABELS: Record<string, string> = {
+const LEGACY_PURPOSE_LABELS: Record<string, string> = {
   lawn_sign_consent: "Lawn sign consent",
   volunteer_consent: "Volunteer consent",
   petition: "Petition",
   other: "Other",
 };
+
+export const metadata: Metadata = { title: "Privacy & Data" };
 
 const RETENTION_OPTIONS: { label: string; value: number | null }[] = [
   { label: "6 months", value: 6 },
@@ -77,6 +77,7 @@ export default async function PrivacyPage() {
           select: { id: true, firstName: true, lastName: true, anonymizedAt: true },
         },
         collectedBy: { select: { firstName: true, lastName: true } },
+        consentItems: { select: { consentType: { select: { label: true } } } },
       },
       orderBy: { collectedAt: "desc" },
       take: 25,
@@ -229,7 +230,9 @@ export default async function PrivacyPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {PURPOSE_LABELS[sig.purpose] ?? sig.purpose}
+                        {sig.consentItems.length > 0
+                          ? sig.consentItems.map((c) => c.consentType.label).join(", ")
+                          : (LEGACY_PURPOSE_LABELS[sig.purpose] ?? sig.purpose)}
                       </td>
                       <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
                         {sig.collectedBy.firstName} {sig.collectedBy.lastName}

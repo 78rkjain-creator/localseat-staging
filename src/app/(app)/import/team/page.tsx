@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { TeamImportClient } from "./import-client";
 import { BackLink } from "@/components/ui/back-link";
 
-export const metadata: Metadata = { title: "Import Team Members" };
+export const metadata: Metadata = { title: "Import Team Members & Volunteers" };
 
 const PERMITTED_ROLES = ["candidate", "campaign_manager", "co_chair", "field_organizer"] as const;
 const FO_ALLOWED_NEW_ROLES = ["canvasser", "sign_installer"] as const;
@@ -57,9 +57,9 @@ export default async function TeamImportPage() {
       <BackLink fallbackHref="/import" label="Back to Import & Data Management" />
 
       <header className="mb-6 space-y-1">
-        <h1 className="text-2xl font-bold text-slate-900">Import team members</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Import team members & volunteers</h1>
         <p className="text-sm text-slate-500">
-          Bulk-add canvassers, field organizers, and other campaign roles.
+          Bulk-add canvassers, field organizers, volunteers, and other campaign roles.
         </p>
       </header>
 

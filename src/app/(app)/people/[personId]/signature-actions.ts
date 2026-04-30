@@ -10,7 +10,7 @@ const ALLOWED_ROLES = ["candidate", "campaign_manager", "field_organizer", "canv
 
 export async function saveSignature(data: {
   personId: string;
-  purpose: string;
+  consentTypeIds: string[];
   signatureData: string;
 }) {
   const session = await getServerSession(authOptions);
@@ -19,6 +19,7 @@ export async function saveSignature(data: {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return;
   if (!ALLOWED_ROLES.includes(activeRole as typeof ALLOWED_ROLES[number])) return;
+  if (!data.consentTypeIds || data.consentTypeIds.length === 0) return;
 
   // Verify person belongs to this campaign
   const person = await db.person.findFirst({
@@ -27,15 +28,32 @@ export async function saveSignature(data: {
   });
   if (!person) return;
 
-  await db.signatureRecord.create({
+  // Verify all consent type IDs belong to this campaign
+  const validTypes = await db.signatureConsentType.findMany({
+    where: {
+      id: { in: data.consentTypeIds },
+      campaignId: activeCampaignId,
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  if (validTypes.length === 0) return;
+  const validIds = validTypes.map((t) => t.id);
+
+  const record = await db.signatureRecord.create({
     data: {
       personId: data.personId,
       campaignId: activeCampaignId,
-      purpose: data.purpose,
+      purpose: "",
       signatureData: data.signatureData,
       collectedById: session.user.id,
+      consentItems: {
+        create: validIds.map((id) => ({ consentTypeId: id })),
+      },
     },
   });
+
+  void record;
 
   revalidatePath(`/people/${data.personId}`);
 }

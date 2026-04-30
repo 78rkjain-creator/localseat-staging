@@ -49,8 +49,8 @@ export default async function ImportHubPage() {
             {showTeamCard && (
               <ImportCard
                 href="/import/team"
-                title="Team members"
-                description="Bulk-add canvassers, field organizers, and other campaign roles."
+                title="Team members & volunteers"
+                description="Bulk-add canvassers, field organizers, volunteers, and other campaign roles."
                 icon={<UserPlus className="h-6 w-6" />}
               />
             )}
