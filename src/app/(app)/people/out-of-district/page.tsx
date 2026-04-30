@@ -271,7 +271,7 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
                     address.unitNumber ? ` #${address.unitNumber}` : ""
                   }`
                 : null;
-              const status = person.outOfDistrictApprovalStatus ?? "pending";
+              const status = person.outOfDistrictApprovalStatus ?? null;
               const latestResponse = person.canvassResponses[0];
 
               return (
@@ -302,13 +302,15 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
                           level={latestResponse.supportLevel as SupportLevel}
                         />
                       )}
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                          STATUS_COLORS[status] ?? "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}
-                      >
-                        {STATUS_LABELS[status] ?? status}
-                      </span>
+                      {status && (
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                            STATUS_COLORS[status] ?? "bg-slate-100 text-slate-500 border-slate-200"
+                          }`}
+                        >
+                          {STATUS_LABELS[status] ?? status}
+                        </span>
+                      )}
                     </div>
 
                     <svg

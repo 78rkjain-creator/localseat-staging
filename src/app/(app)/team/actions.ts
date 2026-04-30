@@ -15,7 +15,8 @@ import crypto from "crypto";
 import type { Role as AppRole } from "@/types";
 
 const FIELD_ORGANIZER_VISIBLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer, Role.volunteer_coordinator];
-const FIELD_ORG_ADDABLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
+// Roles that field_organizer and volunteer_coordinator may add
+const RESTRICTED_ADDABLE_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
 
 async function requireTeamAccess() {
   const session = await getServerSession(authOptions);
@@ -198,7 +199,9 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
   const { session, campaignId, activeRole } = auth;
 
   const isFieldOrg = activeRole === Role.field_organizer;
-  if (!activeRole || (!canManageTeam(activeRole as AppRole) && !isFieldOrg)) {
+  const isVolCoord = activeRole === Role.volunteer_coordinator;
+  const isRestricted = isFieldOrg || isVolCoord;
+  if (!activeRole || (!canManageTeam(activeRole as AppRole) && !isRestricted)) {
     return { error: "Forbidden." };
   }
 
@@ -226,8 +229,8 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
     return { error: "Only the candidate may assign the campaign_manager role." };
   }
 
-  if (isFieldOrg && !FIELD_ORG_ADDABLE_ROLES.includes(role)) {
-    return { error: "Field organizers can only add canvasser or sign installer members." };
+  if (isRestricted && !RESTRICTED_ADDABLE_ROLES.includes(role)) {
+    return { error: "Field organizers and volunteer coordinators can only add canvasser or sign installer members." };
   }
 
   const normalizedEmail = email.trim().toLowerCase();

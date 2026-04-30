@@ -3,17 +3,45 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewVolunteers, hasMinimumRole } from "@/lib/permissions";
+import { canViewVolunteers, canManageVolunteers, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
+import { AddVolunteerButton, RemoveVolunteerButton } from "./volunteer-client";
 import type { Role } from "@/types";
 import type { Prisma } from "@prisma/client";
-import { WardStatus } from "@prisma/client";
+import { Role as PrismaRole, WardStatus } from "@prisma/client";
+import type { VolunteerTier } from "./volunteer-client";
 
 export const metadata: Metadata = { title: "Volunteers" };
+
+const WORKING_ROLES: PrismaRole[] = [PrismaRole.canvasser, PrismaRole.sign_installer];
+
+const TIER_ORDER: Record<VolunteerTier, number> = {
+  canvasser: 0,
+  sign_installer: 1,
+  volunteer: 2,
+};
+
+const TIER_LABELS: Record<VolunteerTier, string> = {
+  canvasser: "Canvasser",
+  sign_installer: "Sign Installer",
+  volunteer: "Volunteer",
+};
+
+const TIER_COLORS: Record<VolunteerTier, string> = {
+  canvasser: "bg-violet-50 text-violet-700 border-violet-200",
+  sign_installer: "bg-orange-50 text-orange-600 border-orange-200",
+  volunteer: "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+
+function getTier(memberRole: string | null | undefined): VolunteerTier {
+  if (memberRole === "canvasser") return "canvasser";
+  if (memberRole === "sign_installer") return "sign_installer";
+  return "volunteer";
+}
 
 const MISSING_FILTER_OPTIONS = [
   { label: "Missing address", value: "missing_address" },
@@ -56,18 +84,48 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewVolunteers(activeRole as Role)) redirect("/dashboard");
 
+  const canManage = activeRole ? canManageVolunteers(activeRole as Role) : false;
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
     : false;
 
-  // Base filter: anyone with a VolunteerRecord OR a canvass response expressing volunteer interest
+  // Working-tier membership filter used in both branches of the OR
+  const workingMembershipFilter: Prisma.CampaignMembershipWhereInput = {
+    campaignId: activeCampaignId,
+    deletedAt: null,
+    role: { in: WORKING_ROLES },
+  };
+
+  // UNION: canvasser/sign_installer members OR pure volunteers (volunteer interest, no working membership)
   const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
     anonymizedAt: null,
     OR: [
-      { volunteerRecords: { some: { deletedAt: null } } },
-      { canvassResponses: { some: { volunteerInterest: true } } },
+      // Branch 1: has a canvasser or sign_installer membership
+      {
+        user: {
+          memberships: { some: workingMembershipFilter },
+        },
+      },
+      // Branch 2: has volunteer interest but no working-tier membership
+      {
+        AND: [
+          {
+            OR: [
+              { volunteerRecords: { some: { deletedAt: null } } },
+              { canvassResponses: { some: { volunteerInterest: true } } },
+            ],
+          },
+          {
+            NOT: {
+              user: {
+                memberships: { some: workingMembershipFilter },
+              },
+            },
+          },
+        ],
+      },
     ],
   };
 
@@ -107,7 +165,7 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
       }
     : filterWhere;
 
-  const [people, total, needsGeocodeCount] = await Promise.all([
+  const [rawPeople, total, needsGeocodeCount] = await Promise.all([
     db.person.findMany({
       where: searchWhere,
       select: {
@@ -123,12 +181,31 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
           select: { status: true },
           take: 1,
         },
+        user: {
+          select: {
+            memberships: {
+              where: workingMembershipFilter,
+              select: { role: true },
+              take: 1,
+            },
+          },
+        },
       },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),
     db.person.count({ where: baseWhere }),
     getNeedsGeocodeCount(activeCampaignId),
   ]);
+
+  // Sort: canvassers → sign_installers → volunteers, then alpha within each tier
+  const people = [...rawPeople].sort((a, b) => {
+    const ta = TIER_ORDER[getTier(a.user?.memberships[0]?.role)];
+    const tb = TIER_ORDER[getTier(b.user?.memberships[0]?.role)];
+    if (ta !== tb) return ta - tb;
+    const la = a.lastName.toLowerCase();
+    const lb = b.lastName.toLowerCase();
+    if (la !== lb) return la < lb ? -1 : 1;
+    return a.firstName.toLowerCase() < b.firstName.toLowerCase() ? -1 : 1;
+  });
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -140,12 +217,13 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
             {total.toLocaleString()} {total !== 1 ? "volunteers" : "volunteer"}
           </p>
         </div>
-        {canBulkGeocode && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <BulkGeocodeButton initialCount={needsGeocodeCount} />
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canBulkGeocode && <BulkGeocodeButton initialCount={needsGeocodeCount} />}
+        </div>
       </div>
+
+      {/* Add volunteer panel (managers only) */}
+      {canManage && <AddVolunteerButton />}
 
       {/* Search */}
       <div className="mb-3">
@@ -178,63 +256,85 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
       {people.length === 0 ? (
         <EmptyState
           title="No volunteers"
-          description="Volunteers appear here after being imported or once someone expresses volunteer interest during a canvass."
+          description="Canvassers, sign installers, and contacts who expressed volunteer interest appear here."
         />
       ) : (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-card overflow-hidden">
           <ul className="divide-y divide-slate-100">
             {people.map((person) => {
-              const isTeamMember = !!person.userId;
-              const volunteerStatus = person.volunteerRecords[0]?.status ?? null;
+              const memberRole = person.user?.memberships[0]?.role ?? null;
+              const tier = getTier(memberRole);
+              const tierLabel = TIER_LABELS[tier];
+              const tierColor = TIER_COLORS[tier];
               const phone = person.phoneMobile || person.phoneHome;
+              const fullName = `${person.firstName} ${person.lastName}`;
 
               return (
-                <li key={person.id}>
-                  <Link
-                    href={`/people/${person.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-semibold text-emerald-600">
-                        {person.firstName[0]}
-                        {person.lastName[0]}
-                      </span>
-                    </div>
+                <li key={person.id} className="group">
+                  <div className="flex items-center gap-4 px-5 py-4">
+                    {/* Avatar — click navigates to person detail */}
+                    <Link href={`/people/${person.id}`} className="flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center hover:ring-2 hover:ring-emerald-300 transition-all">
+                        <span className="text-sm font-semibold text-emerald-600">
+                          {person.firstName[0]}
+                          {person.lastName[0]}
+                        </span>
+                      </div>
+                    </Link>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 truncate">
-                        {person.firstName} {person.lastName}
-                      </p>
+                    {/* Name / contact — click navigates to person detail */}
+                    <Link href={`/people/${person.id}`} className="min-w-0 flex-1 hover:opacity-80 transition-opacity">
+                      <p className="font-semibold text-slate-900 truncate">{fullName}</p>
                       {(person.email || phone) && (
                         <p className="text-sm text-slate-500 truncate">
                           {person.email ?? phone}
                         </p>
                       )}
-                    </div>
+                    </Link>
 
+                    {/* Tier badge + remove */}
                     <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      {volunteerStatus === "committed" && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Committed
-                        </span>
-                      )}
-                      {isTeamMember && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                          Team member
-                        </span>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${tierColor}`}
+                      >
+                        {tierLabel}
+                      </span>
+                      {canManage && (
+                        <RemoveVolunteerButton
+                          tier={tier}
+                          personId={person.id}
+                          userId={person.userId}
+                          name={fullName}
+                        />
                       )}
                     </div>
 
-                    <svg
-                      className="h-4 w-4 text-slate-300 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
+                    {/* Mobile: just chevron */}
+                    <Link href={`/people/${person.id}`} className="sm:hidden flex-shrink-0">
+                      <svg
+                        className="h-4 w-4 text-slate-300"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+
+                    {/* Desktop: chevron on its own */}
+                    <Link href={`/people/${person.id}`} className="hidden sm:block flex-shrink-0">
+                      <svg
+                        className="h-4 w-4 text-slate-300"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </div>
                 </li>
               );
             })}

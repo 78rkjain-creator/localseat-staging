@@ -48,6 +48,11 @@ export function canViewTeam(role: Role): boolean {
   return FIELD_AND_ABOVE.includes(role) || role === Role.co_chair;
 }
 
+// All authenticated campaign members can view the /people/team leadership directory.
+export function canViewTeamDirectory(_role: Role): boolean {
+  return true;
+}
+
 // Only candidate and campaign_manager may add or remove team members.
 export function canManageTeam(role: Role): boolean {
   return FULL_ACCESS.includes(role);

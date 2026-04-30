@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { canViewAllPeople, hasMinimumRole } from "@/lib/permissions";
+import { canViewTeamDirectory, hasMinimumRole } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -11,15 +11,26 @@ import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
 import type { Role } from "@/types";
 import type { Prisma } from "@prisma/client";
-import { WardStatus } from "@prisma/client";
+import { Role as PrismaRole, WardStatus } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Team" };
 
-const ROLE_LABELS: Record<string, string> = {
+const LEADERSHIP_ROLES = [
+  PrismaRole.candidate,
+  PrismaRole.campaign_manager,
+  PrismaRole.data_manager,
+  PrismaRole.co_chair,
+  PrismaRole.field_organizer,
+  PrismaRole.volunteer_coordinator,
+  PrismaRole.finance_lead,
+];
+
+const ROLE_LABELS: Partial<Record<PrismaRole, string>> = {
   candidate: "Candidate",
   campaign_manager: "Campaign Manager",
+  data_manager: "Data Manager",
+  co_chair: "Co-Chair",
   field_organizer: "Field Organizer",
-  canvasser: "Canvasser",
   volunteer_coordinator: "Volunteer Coordinator",
   finance_lead: "Finance Lead",
 };
@@ -63,7 +74,8 @@ export default async function TeamPage({ searchParams }: PageProps) {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole && !canViewAllPeople(activeRole as Role)) redirect("/dashboard");
+  // All authenticated campaign members can view the leadership directory
+  if (activeRole && !canViewTeamDirectory(activeRole as Role)) redirect("/dashboard");
 
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
@@ -74,6 +86,15 @@ export default async function TeamPage({ searchParams }: PageProps) {
     deletedAt: null,
     anonymizedAt: null,
     userId: { not: null },
+    user: {
+      memberships: {
+        some: {
+          campaignId: activeCampaignId,
+          deletedAt: null,
+          role: { in: LEADERSHIP_ROLES },
+        },
+      },
+    },
   };
 
   const missingAnd: Prisma.PersonWhereInput[] = [];
@@ -124,16 +145,15 @@ export default async function TeamPage({ searchParams }: PageProps) {
         user: {
           select: {
             memberships: {
-              where: { campaignId: activeCampaignId, deletedAt: null },
+              where: {
+                campaignId: activeCampaignId,
+                deletedAt: null,
+                role: { in: LEADERSHIP_ROLES },
+              },
               select: { role: true },
               take: 1,
             },
           },
-        },
-        linkedDonors: {
-          where: { deletedAt: null },
-          select: { id: true },
-          take: 1,
         },
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -149,7 +169,7 @@ export default async function TeamPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Team</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {total.toLocaleString()} campaign team {total !== 1 ? "members" : "member"}
+            {total.toLocaleString()} leadership {total !== 1 ? "members" : "member"}
           </p>
         </div>
         {canBulkGeocode && (
@@ -189,8 +209,8 @@ export default async function TeamPage({ searchParams }: PageProps) {
       {/* List */}
       {people.length === 0 ? (
         <EmptyState
-          title="No team members"
-          description="Campaign team members will appear here once they have been added to the campaign."
+          title="No leadership members"
+          description="Campaign leadership members will appear here once they have been added to the campaign with a leadership role."
         />
       ) : (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-card overflow-hidden">
@@ -198,7 +218,6 @@ export default async function TeamPage({ searchParams }: PageProps) {
             {people.map((person) => {
               const role = person.user?.memberships[0]?.role;
               const roleLabel = role ? (ROLE_LABELS[role] ?? role) : null;
-              const hasDonorRecord = person.linkedDonors.length > 0;
 
               return (
                 <li key={person.id}>
@@ -235,11 +254,6 @@ export default async function TeamPage({ searchParams }: PageProps) {
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                           In district
-                        </span>
-                      )}
-                      {hasDonorRecord && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                          Donor
                         </span>
                       )}
                     </div>
