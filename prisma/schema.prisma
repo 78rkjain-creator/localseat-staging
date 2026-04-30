@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   candidate
   campaign_manager
+  data_manager
   co_chair
   field_organizer
   canvasser
@@ -37,6 +38,7 @@ enum CanvassOutcome {
   unavailable
   deceased
   other_candidate
+  language_barrier
 }
 
 enum OutreachChannel {
@@ -556,6 +558,7 @@ model CanvassResponse {
   personId          String
   outcome           CanvassOutcome
   supportLevel      SupportLevel?
+  outcomeDetail     String?
   signRequest       Boolean        @default(false)
   volunteerInterest Boolean        @default(false)
   donorInterest     Boolean        @default(false)

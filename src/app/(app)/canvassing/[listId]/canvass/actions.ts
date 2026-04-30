@@ -35,6 +35,8 @@ export interface SaveResponseInput {
   queuedAt?: number;
   surveyId?: string | null;
   surveyAnswers?: Record<string, unknown> | null;
+  /** For support level 3 (undecided): clarifying sub-option chosen by the canvasser. */
+  outcomeDetail?: string | null;
 }
 
 export async function saveCanvassResponse(
@@ -93,6 +95,7 @@ export async function saveCanvassResponse(
       personId: input.personId,
       outcome,
       supportLevel: isContacted ? supportLevel : null,
+      outcomeDetail: (isContacted && input.outcomeDetail) ? input.outcomeDetail : null,
       signRequest: isContacted ? input.signRequest : false,
       volunteerInterest: isContacted ? input.volunteerInterest : false,
       donorInterest: isContacted ? input.donorInterest : false,
@@ -129,7 +132,8 @@ export async function saveCanvassResponse(
       input.outcome === "refused" ? "Refused" :
       input.outcome === "moved" ? "Moved" :
       input.outcome === "unavailable" ? "Unavailable" :
-      input.outcome === "deceased" ? "Deceased" : input.outcome;
+      input.outcome === "deceased" ? "Deceased" :
+      input.outcome === "language_barrier" ? "Language barrier" : input.outcome;
 
     await db.outreachLog.create({
       data: {
@@ -184,7 +188,7 @@ export async function saveCanvassResponse(
       if (!existingTask) {
         // Find the best person to assign: first active field organizer, else campaign manager, else candidate
         const assignee = await (async () => {
-          for (const role of ["field_organizer", "campaign_manager", "candidate"] as const) {
+          for (const role of ["field_organizer", "campaign_manager", "data_manager", "candidate"] as const) {
             const membership = await db.campaignMembership.findFirst({
               where: { campaignId: activeCampaignId, role, deletedAt: null, user: { isActive: true } },
               select: { userId: true },

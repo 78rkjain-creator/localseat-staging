@@ -62,8 +62,8 @@ export default async function CanvassListDetailPage({ params }: PageProps) {
 
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
   const canAssign = activeRole ? canAssignCanvassers(activeRole as Role) : false;
-  const isManagerRole = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "co_chair";
-  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager";
+  const isManagerRole = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager" || activeRole === "co_chair";
+  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
   const campaignName =
     session.user.memberships.find((m) => m.campaignId === activeCampaignId)?.campaignName ?? "Campaign";
 

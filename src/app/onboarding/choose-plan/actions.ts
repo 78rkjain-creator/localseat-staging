@@ -57,7 +57,7 @@ export async function selectPlanDev(
     where: {
       campaignId,
       userId: session.user.id,
-      role: { in: ["candidate", "campaign_manager"] },
+      role: { in: ["candidate", "campaign_manager", "data_manager"] },
       deletedAt: null,
     },
     select: { id: true },

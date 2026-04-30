@@ -30,7 +30,7 @@ export default async function AppLayout({
 
   const demoMode = process.env.DEMO_MODE === "true";
 
-  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager";
+  const isFullAccess = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
 
   const [pendingDataCorrectionsCount, pendingOutOfDistrictCount] = await Promise.all([
     activeCampaignId && activeRole && canReviewAddressChanges(activeRole as Role)

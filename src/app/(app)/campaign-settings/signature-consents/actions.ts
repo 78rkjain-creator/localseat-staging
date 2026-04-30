@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const CONSENT_TYPE_CAP = 6;
-const ALLOWED_ROLES = ["candidate", "campaign_manager"] as const;
+const ALLOWED_ROLES = ["candidate", "campaign_manager", "data_manager"] as const;
 
 async function getAuthorizedCampaignId(): Promise<string> {
   const session = await getServerSession(authOptions);

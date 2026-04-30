@@ -26,6 +26,7 @@ export default async function EventsPage() {
   const canCreate =
     activeRole === "candidate" ||
     activeRole === "campaign_manager" ||
+    activeRole === "data_manager" ||
     activeRole === "co_chair" ||
     activeRole === "field_organizer";
 

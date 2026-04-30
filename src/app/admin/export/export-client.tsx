@@ -43,6 +43,7 @@ const SUPPORT_LEVELS = [
 const CAMPAIGN_ROLES = [
   { value: "candidate", label: "Candidate" },
   { value: "campaign_manager", label: "Campaign Manager" },
+  { value: "data_manager", label: "Data Manager" },
   { value: "field_organizer", label: "Field Organizer" },
   { value: "volunteer_coordinator", label: "Volunteer Coordinator" },
   { value: "canvasser", label: "Canvasser" },

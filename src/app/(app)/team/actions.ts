@@ -29,6 +29,7 @@ async function requireTeamAccess() {
 
 export interface TeamMemberData {
   membershipId: string;
+  personId: string | null;
   role: Role;
   joinedAt: string;
   user: {
@@ -82,7 +83,7 @@ export async function getTeamMembers(): Promise<{ error?: string; members?: Team
   const { campaignId, activeRole } = auth;
 
   const role = activeRole as Role | undefined;
-  const isFullAccess = role === Role.candidate || role === Role.campaign_manager;
+  const isFullAccess = role === Role.candidate || role === Role.campaign_manager || role === Role.data_manager;
   const isFieldOrganizer = role === Role.field_organizer;
 
   if (!isFullAccess && !isFieldOrganizer) {
@@ -113,9 +114,17 @@ export async function getTeamMembers(): Promise<{ error?: string; members?: Team
       orderBy: { createdAt: "asc" },
     });
 
+    const userIds = members.map((m) => m.user.id);
+    const linkedPersons = await db.person.findMany({
+      where: { userId: { in: userIds }, campaignId, deletedAt: null },
+      select: { id: true, userId: true },
+    });
+    const personByUserId = new Map(linkedPersons.map((p) => [p.userId!, p.id]));
+
     return {
       members: members.map((m) => ({
         membershipId: m.id,
+        personId: personByUserId.get(m.user.id) ?? null,
         role: m.role,
         joinedAt: m.createdAt.toISOString(),
         user: {

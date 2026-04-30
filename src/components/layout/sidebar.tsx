@@ -89,9 +89,9 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [accountOpen]);
 
-  // Admin sub-items — only shown to candidate, campaign_manager, and co_chair.
+  // Admin sub-items — only shown to candidate, campaign_manager, data_manager, and co_chair.
   const adminItems: NavItem[] = [
-    ...(role === "candidate" || role === "campaign_manager"
+    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager"
       ? [
           {
             href: "/campaign-settings/general",
@@ -141,7 +141,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
         </svg>
       ),
     },
-    ...(role === "candidate" || role === "campaign_manager" || role === "co_chair"
+    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
       ? [
           {
             href: "/campaign-settings/script",
@@ -154,7 +154,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           },
         ]
       : []),
-    ...(role === "candidate" || role === "campaign_manager" || role === "co_chair"
+    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
       ? [
           {
             href: "/campaign-settings/reports",
@@ -167,7 +167,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           },
         ]
       : []),
-    ...(role === "candidate" || role === "campaign_manager"
+    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager"
       ? [
           {
             href: "/campaign-settings/custom-fields",
@@ -215,6 +215,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   const showAdmin =
     role === "candidate" ||
     role === "campaign_manager" ||
+    role === "data_manager" ||
     role === "co_chair";
 
   // Sign installers get a stripped-down nav — Signs only.
@@ -307,7 +308,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           </svg>
         ),
       },
-      ...(role === "candidate" || role === "campaign_manager" || role === "co_chair"
+      ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
         ? [
             {
               href: "/analytics",
@@ -380,7 +381,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             },
           ]
         : []),
-      ...(role === "candidate" || role === "campaign_manager" || role === "field_organizer"
+      ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "field_organizer"
         ? [
             {
               href: "/field-messages",
@@ -512,7 +513,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                   ...(role && canViewVolunteers(role)
                     ? [{ href: "/people/volunteers", label: "Volunteers" }]
                     : []),
-                  ...(role === "candidate" || role === "campaign_manager" || role === "co_chair" || role === "field_organizer"
+                  ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair" || role === "field_organizer"
                     ? [{ href: "/people/map", label: "Contact Map" }]
                     : []),
                 ] as { href: string; label: string; badge?: number }[]).map((item) => {

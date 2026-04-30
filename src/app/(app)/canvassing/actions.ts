@@ -21,7 +21,7 @@ function statusForRole(role: string): CanvassListStatus {
     : CanvassListStatus.active;
 }
 
-const APPROVER_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
+const APPROVER_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
 
 // ── Create walk list ───────────────────────────────────────────────────────
 
@@ -612,7 +612,7 @@ export async function deleteList(listId: string): Promise<{ error?: string }> {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
-  if (!activeRole || !["candidate", "campaign_manager"].includes(activeRole)) {
+  if (!activeRole || !["candidate", "campaign_manager", "data_manager"].includes(activeRole)) {
     return { error: "You don't have permission to delete walk lists." };
   }
 

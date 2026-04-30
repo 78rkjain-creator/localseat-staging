@@ -35,10 +35,11 @@ export default async function EventDetailPage({ params }: PageProps) {
   const canManage =
     activeRole === "candidate" ||
     activeRole === "campaign_manager" ||
+    activeRole === "data_manager" ||
     activeRole === "co_chair" ||
     activeRole === "field_organizer";
 
-  const canDelete = activeRole === "candidate" || activeRole === "campaign_manager";
+  const canDelete = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
 
   const dateStr = event.date.toLocaleDateString("en-CA", {
     weekday: "long",

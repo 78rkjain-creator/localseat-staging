@@ -93,7 +93,7 @@ const MANAGER_MORE_LINKS: Tab[] = [
 ];
 
 function useShowMore(role: Role | string | null | undefined): boolean {
-  return role === "candidate" || role === "campaign_manager" || role === "co_chair";
+  return role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair";
 }
 
 export function MobileNav() {

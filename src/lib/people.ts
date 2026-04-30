@@ -17,7 +17,9 @@ export interface PeopleListFilters {
   contactedAfter?: string; // ISO date string
   customFieldFilters?: string[]; // field IDs — person must have a non-empty value for all of them (AND)
   listSource?: ListSource[]; // when provided and fewer than 5 values, filter to those sources
+  wardIn?: WardStatus[];    // filter to persons whose wardStatus is in this set
   isOutOfDistrict?: boolean;
+  excludeAnonymized?: boolean; // when true, omit persons with anonymizedAt set
   missingAddress?: boolean;
   missingPhone?: boolean;
   missingEmail?: boolean;
@@ -29,7 +31,7 @@ export interface PeopleListFilters {
 
 const PEOPLE_PAGE_SIZE = 50;
 
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, isOutOfDistrict, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, page = 1 }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, wardIn, isOutOfDistrict, excludeAnonymized, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -69,6 +71,14 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
 
   if (listSource && listSource.length > 0 && listSource.length < 5) {
     andFilters.push({ listSource: { in: listSource } });
+  }
+
+  if (wardIn && wardIn.length > 0) {
+    andFilters.push({ wardStatus: { in: wardIn } });
+  }
+
+  if (excludeAnonymized) {
+    andFilters.push({ anonymizedAt: null });
   }
 
   if (typeof isOutOfDistrict === "boolean") {

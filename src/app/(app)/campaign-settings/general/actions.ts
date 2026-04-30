@@ -20,7 +20,7 @@ export async function saveGeneralSettings(
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") redirect("/dashboard");
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
 
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   if (!name) return { error: "Campaign name is required." };

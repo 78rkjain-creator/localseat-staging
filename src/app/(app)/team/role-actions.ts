@@ -39,6 +39,13 @@ export async function changeUserRole(
     return { error: "Only the candidate may assign the candidate role." };
   }
 
+  // data_manager cannot assign the data_manager role — only candidate/campaign_manager/super_user can
+  const callerCanAssignDataManager =
+    activeRole === Role.candidate || activeRole === Role.campaign_manager || isSuperUser(platformRole);
+  if (newRole === Role.data_manager && !callerCanAssignDataManager) {
+    return { error: "Only the candidate or campaign manager may assign the data manager role." };
+  }
+
   // field_organizer can only assign canvasser or sign_installer
   const FIELD_ORG_ALLOWED_ROLES: Role[] = [Role.canvasser, Role.sign_installer];
   if (isFieldOrg && !FIELD_ORG_ALLOWED_ROLES.includes(newRole)) {

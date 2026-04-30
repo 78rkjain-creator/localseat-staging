@@ -13,7 +13,7 @@ export default async function CompetitorsPage() {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") redirect("/dashboard");
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
 
   const competitors = await getCompetitors(activeCampaignId);
 

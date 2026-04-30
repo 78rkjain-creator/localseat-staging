@@ -36,7 +36,7 @@ export default async function CanvassingPage() {
   ]);
 
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
-  const isApprover = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "co_chair";
+  const isApprover = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager" || activeRole === "co_chair";
   const isFieldOrganizer = activeRole === "field_organizer";
 
   // Split lists by status for display

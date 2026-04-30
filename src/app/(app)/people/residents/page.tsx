@@ -10,20 +10,15 @@ import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PeopleSearchBar } from "../search-bar";
-import { ResidentsDateFilter, ResidentsListSourceFilter } from "./filters-client";
+import { ResidentsDateFilter } from "./filters-client";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
-import type { Role, SupportLevel, ListSource } from "@/types";
-import { ListSource as PrismaListSource } from "@prisma/client";
+import type { Role, SupportLevel } from "@/types";
+import { WardStatus } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Residents List" };
 
-// Residents view excludes team members by default.
-const RESIDENTS_LIST_SOURCE_VALUES: ListSource[] = [
-  "voters_list",
-  "residents_list",
-  "manual",
-  "canvass",
-];
+// Ward statuses that qualify as "lives in ward"
+const WARD_IN: WardStatus[] = [WardStatus.inside, WardStatus.outside_accepted];
 
 type SupportFilter = "supporting" | "undecided" | "not_supporting" | "not_contacted";
 
@@ -63,7 +58,6 @@ function buildUrl(params: {
   supportFilter?: string;
   contactedAfter?: string;
   cfFilters?: string;
-  listSource?: string;
   missing?: string;
   volunteer?: string;
   page?: number;
@@ -74,7 +68,6 @@ function buildUrl(params: {
   if (params.supportFilter) p.set("supportFilter", params.supportFilter);
   if (params.contactedAfter) p.set("contactedAfter", params.contactedAfter);
   if (params.cfFilters) p.set("cfFilters", params.cfFilters);
-  if (params.listSource) p.set("listSource", params.listSource);
   if (params.missing) p.set("missing", params.missing);
   if (params.volunteer) p.set("volunteer", params.volunteer);
   if (params.page && params.page > 1) p.set("page", String(params.page));
@@ -104,7 +97,6 @@ interface PageProps {
     supportFilter?: string;
     contactedAfter?: string;
     cfFilters?: string;
-    listSource?: string;
     missing?: string;
     volunteer?: string;
     page?: string;
@@ -120,7 +112,6 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     supportFilter: rawSupportFilter,
     contactedAfter,
     cfFilters: rawCfFilters,
-    listSource: rawListSource,
     missing: rawMissing,
     volunteer: rawVolunteer,
     page: rawPage,
@@ -142,19 +133,6 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     : [];
 
   const showVolunteer = rawVolunteer === "true";
-
-  // Parse explicit source selection; limit to residents-valid sources (no team).
-  const activeListSources: ListSource[] = rawListSource
-    ? (rawListSource
-        .split(",")
-        .filter((v) =>
-          RESIDENTS_LIST_SOURCE_VALUES.includes(v as ListSource)
-        ) as ListSource[])
-    : [];
-
-  // Always pass a source list so team is excluded even when no filter is selected.
-  const effectiveListSources: ListSource[] =
-    activeListSources.length > 0 ? activeListSources : RESIDENTS_LIST_SOURCE_VALUES;
 
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -178,8 +156,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         supportFilter,
         contactedAfter,
         customFieldFilters: activeCfFilters.length > 0 ? activeCfFilters : undefined,
-        listSource: effectiveListSources,
-        isOutOfDistrict: false,
+        wardIn: WARD_IN,
+        excludeAnonymized: true,
         page,
         missingAddress: activeMissing.includes("missing_address"),
         missingPhone: activeMissing.includes("missing_phone"),
@@ -188,20 +166,13 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         notGeocoded: activeMissing.includes("not_geocoded"),
         volunteerInterest: showVolunteer || undefined,
       }),
-      // Total count: all non-team, in-district residents.
+      // Total count: anyone living in the ward (inside or outside_accepted), not anonymized.
       db.person.count({
         where: {
           campaignId: activeCampaignId,
           deletedAt: null,
-          listSource: {
-            in: [
-              PrismaListSource.voters_list,
-              PrismaListSource.residents_list,
-              PrismaListSource.manual,
-              PrismaListSource.canvass,
-            ],
-          },
-          isOutOfDistrict: false,
+          wardStatus: { in: WARD_IN },
+          anonymizedAt: null,
         },
       }),
       getCampaignTags(activeCampaignId),
@@ -227,9 +198,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     !!contactedAfter ||
     activeCfFilters.length > 0 ||
     activeMissing.length > 0 ||
-    showVolunteer ||
-    (activeListSources.length > 0 &&
-      activeListSources.length < RESIDENTS_LIST_SOURCE_VALUES.length);
+    showVolunteer;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -309,7 +278,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 supportFilter: pill.value,
                 contactedAfter,
                 cfFilters: rawCfFilters,
-                listSource: rawListSource,
+
                 missing: rawMissing,
                 volunteer: rawVolunteer,
               })}
@@ -329,7 +298,6 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
           supportFilter={supportFilter}
           contactedAfter={contactedAfter}
           cfFilters={rawCfFilters}
-          listSource={rawListSource}
         />
       </div>
 
@@ -342,7 +310,6 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
             supportFilter,
             contactedAfter,
             cfFilters: rawCfFilters,
-            listSource: rawListSource,
             missing: rawMissing,
             volunteer: showVolunteer ? undefined : "true",
           })}
@@ -372,7 +339,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                   supportFilter,
                   contactedAfter,
                   cfFilters: nextCfFilters,
-                  listSource: rawListSource,
+  
                   missing: rawMissing,
                   volunteer: rawVolunteer,
                 })}
@@ -404,7 +371,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 supportFilter,
                 contactedAfter,
                 cfFilters: rawCfFilters,
-                listSource: rawListSource,
+
                 missing: next,
                 volunteer: rawVolunteer,
               })}
@@ -418,18 +385,6 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
             </Link>
           );
         })}
-      </div>
-
-      {/* List source filter */}
-      <div className="mb-5">
-        <ResidentsListSourceFilter
-          activeListSources={activeListSources}
-          q={q}
-          tag={tag}
-          supportFilter={supportFilter}
-          contactedAfter={contactedAfter}
-          cfFilters={rawCfFilters}
-        />
       </div>
 
       {/* Active tag filter */}
@@ -560,7 +515,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       supportFilter,
                       contactedAfter,
                       cfFilters: rawCfFilters,
-                      listSource: rawListSource,
+      
                       missing: rawMissing,
                       volunteer: rawVolunteer,
                       page: page - 1,
@@ -605,7 +560,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       supportFilter,
                       contactedAfter,
                       cfFilters: rawCfFilters,
-                      listSource: rawListSource,
+      
                       missing: rawMissing,
                       volunteer: rawVolunteer,
                       page: page + 1,
@@ -649,7 +604,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       supportFilter,
                       contactedAfter,
                       cfFilters: rawCfFilters,
-                      listSource: rawListSource,
+      
                       missing: rawMissing,
                       volunteer: rawVolunteer,
                       page: page - 1,
@@ -701,7 +656,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                         supportFilter,
                         contactedAfter,
                         cfFilters: rawCfFilters,
-                        listSource: rawListSource,
+        
                         missing: rawMissing,
                         volunteer: rawVolunteer,
                         page: pageNum,
@@ -726,7 +681,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                       supportFilter,
                       contactedAfter,
                       cfFilters: rawCfFilters,
-                      listSource: rawListSource,
+      
                       missing: rawMissing,
                       volunteer: rawVolunteer,
                       page: page + 1,

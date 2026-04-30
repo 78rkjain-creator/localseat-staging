@@ -15,7 +15,7 @@ export default async function SignatureConsentsPage() {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") redirect("/dashboard");
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
 
   const types = await db.signatureConsentType.findMany({
     where: { campaignId: activeCampaignId, deletedAt: null },

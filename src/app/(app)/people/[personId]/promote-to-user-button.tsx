@@ -8,6 +8,7 @@ const PROMOTABLE_ROLES = [
   { value: "volunteer_coordinator", label: "Volunteer Coordinator" },
   { value: "field_organizer", label: "Field Organizer" },
   { value: "campaign_manager", label: "Campaign Manager" },
+  { value: "data_manager", label: "Data Manager" },
   { value: "finance_lead", label: "Finance Lead" },
   { value: "sign_installer", label: "Sign Installer" },
 ];

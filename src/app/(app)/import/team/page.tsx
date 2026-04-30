@@ -8,11 +8,12 @@ import { BackLink } from "@/components/ui/back-link";
 
 export const metadata: Metadata = { title: "Import Team Members & Volunteers" };
 
-const PERMITTED_ROLES = ["candidate", "campaign_manager", "co_chair", "field_organizer"] as const;
+const PERMITTED_ROLES = ["candidate", "campaign_manager", "data_manager", "co_chair", "field_organizer"] as const;
 const FO_ALLOWED_NEW_ROLES = ["canvasser", "sign_installer"] as const;
 const ALL_NEW_ROLES = [
   "candidate",
   "campaign_manager",
+  "data_manager",
   "co_chair",
   "field_organizer",
   "canvasser",

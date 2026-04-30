@@ -22,6 +22,7 @@ export default async function FieldMessagesPage() {
   if (
     activeRole !== "candidate" &&
     activeRole !== "campaign_manager" &&
+    activeRole !== "data_manager" &&
     activeRole !== "field_organizer"
   ) {
     redirect("/dashboard");

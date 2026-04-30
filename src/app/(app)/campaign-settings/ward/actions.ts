@@ -9,7 +9,7 @@ import { createAuditLog } from "@/lib/audit";
 import type { Polygon, MultiPolygon } from "geojson";
 import type { Role } from "@/types";
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
 
 export async function saveWardBoundary(
   polygon: Polygon | MultiPolygon

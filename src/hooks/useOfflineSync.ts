@@ -105,6 +105,7 @@ export function useOfflineSync(syncFn: SyncFn): OfflineSyncState {
           notes: item.notes,
           needsFollowUp: item.needsFollowUp,
           competitorId: item.competitorId,
+          outcomeDetail: item.outcomeDetail ?? null,
           queuedAt: item.queuedAt,
         });
 

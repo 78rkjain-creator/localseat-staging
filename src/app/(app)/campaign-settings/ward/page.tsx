@@ -10,7 +10,7 @@ import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Ward boundary" };
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
 
 export default async function WardBoundaryPage() {
   const session = await getServerSession(authOptions);

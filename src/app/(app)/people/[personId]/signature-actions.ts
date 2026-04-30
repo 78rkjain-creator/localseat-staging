@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 
-const ALLOWED_ROLES = ["candidate", "campaign_manager", "field_organizer", "canvasser"] as const;
+const ALLOWED_ROLES = ["candidate", "campaign_manager", "data_manager", "field_organizer", "canvasser"] as const;
 
 export async function saveSignature(data: {
   personId: string;

@@ -15,6 +15,7 @@ export async function createFieldMessage(formData: FormData) {
   if (
     activeRole !== "candidate" &&
     activeRole !== "campaign_manager" &&
+    activeRole !== "data_manager" &&
     activeRole !== "field_organizer"
   ) {
     return;
@@ -52,6 +53,7 @@ export async function deleteFieldMessage(id: string) {
   if (
     activeRole !== "candidate" &&
     activeRole !== "campaign_manager" &&
+    activeRole !== "data_manager" &&
     activeRole !== "field_organizer"
   ) {
     return;

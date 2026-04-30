@@ -50,7 +50,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole && !canViewAllPeople(activeRole as import("@/types").Role)) redirect("/dashboard");
   const baseReadOnly = activeRole ? isReadOnly(activeRole as import("@/types").Role) : false;
-  const canAnonymize = activeRole === "candidate" || activeRole === "campaign_manager";
+  const canAnonymize = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
   const canToggleWalkList = activeRole
     ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
     : false;
@@ -61,9 +61,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
     ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
     : false;
   const canApproveOod =
-    activeRole === "candidate" || activeRole === "campaign_manager";
+    activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
 
   const canLinkTeamMember = canAnonymize; // candidate + campaign_manager only
+  const canEditFullPii = canAnonymize; // candidate/campaign_manager/data_manager
+  const canEditSupportLevel = canToggleWalkList; // field_organizer+
 
   const [person, campaign, listMemberships, campaignTags, signatures, consentTypes] = await Promise.all([
     getPersonDetail(personId, activeCampaignId),
@@ -136,6 +138,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const canSeeCustomFields =
     activeRole === "candidate" ||
     activeRole === "campaign_manager" ||
+    activeRole === "data_manager" ||
     activeRole === "co_chair" ||
     activeRole === "field_organizer";
 
@@ -346,6 +349,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 province: address.province,
                 postalCode: address.postalCode,
               } : undefined}
+              userId={person.userId ?? null}
+              isVolunteer={person.volunteerRecords.length > 0}
+              hasDonorInterest={person.linkedDonors.length > 0}
+              canEditFullPii={canEditFullPii}
+              canEditSupportLevel={canEditSupportLevel}
             />
             {(person.phoneHome || person.phoneMobile) && (
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">

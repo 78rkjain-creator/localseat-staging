@@ -15,7 +15,7 @@ export async function promoteVolunteerToUser(
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Only the candidate or campaign manager may promote volunteers." };
   }
 

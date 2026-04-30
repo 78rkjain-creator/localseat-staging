@@ -12,7 +12,7 @@ export async function acceptListMemberships(ids: string[]): Promise<void> {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
 
-  const allowed = ["candidate", "campaign_manager"];
+  const allowed = ["candidate", "campaign_manager", "data_manager"];
   if (!activeRole || !allowed.includes(activeRole)) {
     throw new Error("Insufficient permissions");
   }

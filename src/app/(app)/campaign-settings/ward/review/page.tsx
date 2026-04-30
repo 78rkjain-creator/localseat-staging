@@ -8,7 +8,7 @@ import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Ward boundary review" };
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
 
 export type FlaggedPerson = {
   id: string;

@@ -26,6 +26,7 @@ export interface AdminMemberEntry {
 const ROLE_ORDER: Role[] = [
   "candidate",
   "campaign_manager",
+  "data_manager",
   "co_chair",
   "field_organizer",
   "volunteer_coordinator",

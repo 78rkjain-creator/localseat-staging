@@ -16,7 +16,7 @@ export default async function PendingOutOfDistrictPage() {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
 
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     redirect("/people/out-of-district");
   }
 

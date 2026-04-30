@@ -4,6 +4,7 @@
 export type Role =
   | "candidate"
   | "campaign_manager"
+  | "data_manager"
   | "co_chair"
   | "field_organizer"
   | "canvasser"
@@ -26,14 +27,15 @@ export type CanvassOutcome =
   | "moved"
   | "unavailable"
   | "deceased"
-  | "other_candidate";
+  | "other_candidate"
+  | "language_barrier";
 
 export const SUPPORT_LEVEL_VALUES: SupportLevel[] = [
   "strong_yes", "soft_yes", "undecided", "soft_no", "strong_no", "not_home",
 ];
 
 export const CANVASS_OUTCOME_VALUES: CanvassOutcome[] = [
-  "contacted", "not_home", "refused", "moved", "unavailable", "deceased", "other_candidate",
+  "contacted", "not_home", "refused", "moved", "unavailable", "deceased", "other_candidate", "language_barrier",
 ];
 
 export type OutreachChannel =
@@ -70,6 +72,7 @@ export interface AppSession {
 export const ROLE_LABELS: Record<Role, string> = {
   candidate: "Candidate",
   campaign_manager: "Campaign Manager",
+  data_manager: "Data Manager",
   co_chair: "Co-Chair",
   field_organizer: "Field Organizer",
   canvasser: "Canvasser",
@@ -135,6 +138,7 @@ export const CANVASS_OUTCOME_LABELS: Record<CanvassOutcome, string> = {
   unavailable: "Unavailable",
   deceased: "Deceased",
   other_candidate: "Other candidate",
+  language_barrier: "Language barrier",
 };
 
 export type PlatformRole = "super_user" | "super_admin";

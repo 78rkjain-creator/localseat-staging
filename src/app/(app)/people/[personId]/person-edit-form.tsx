@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updatePerson, updatePersonAddress } from "./actions";
+import {
+  updatePerson,
+  updatePersonAddress,
+  updatePersonEmail,
+  toggleVolunteerInterest,
+  toggleDonorInterest,
+} from "./actions";
 import { AddressPicker } from "@/components/ui/address-picker";
 import type { AddressPickerResult } from "@/components/ui/address-picker";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
@@ -30,7 +36,15 @@ interface PersonEditFormProps {
   wardStatus?: string;
   readOnly?: boolean;
   address?: PersonAddress;
+  // new props
+  userId?: string | null;
+  isVolunteer?: boolean;
+  hasDonorInterest?: boolean;
+  canEditFullPii?: boolean;
+  canEditSupportLevel?: boolean;
 }
+
+type EmailTarget = "contact_only" | "login_only" | "both";
 
 export function PersonEditForm({
   personId,
@@ -45,11 +59,28 @@ export function PersonEditForm({
   wardStatus: _wardStatus,
   readOnly = false,
   address,
+  userId,
+  isVolunteer = false,
+  hasDonorInterest = false,
+  canEditFullPii = false,
+  canEditSupportLevel = false,
 }: PersonEditFormProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Email branching modal state
+  const [emailModal, setEmailModal] = useState<{
+    newEmail: string;
+    formData: FormData;
+  } | null>(null);
+
+  // Toggle pending states (for inline volunteer/donor toggles)
+  const [volPending, startVolTransition] = useTransition();
+  const [donorPending, startDonorTransition] = useTransition();
+  const [volError, setVolError] = useState<string | null>(null);
+  const [donorError, setDonorError] = useState<string | null>(null);
 
   // Address controlled state
   const [addrStreetNumber, setAddrStreetNumber] = useState(address?.streetNumber ?? "");
@@ -63,55 +94,46 @@ export function PersonEditForm({
 
   function handleAddressPick(result: AddressPickerResult | null) {
     if (!result) return;
-    if (result.type === "campaign") {
-      setAddrStreetNumber(result.streetNumber);
-      setAddrStreetName(result.streetName);
-      setAddrUnitNumber(result.unitNumber ?? "");
-      setAddrCity(result.city);
-      setAddrProvince(result.province);
-      setAddrPostalCode(result.postalCode);
-      setAddrLat(null); setAddrLng(null);
-    } else if (result.type === "mapbox") {
-      setAddrStreetNumber(result.streetNumber);
-      setAddrStreetName(result.streetName);
-      setAddrCity(result.city);
-      setAddrProvince(result.province);
-      setAddrPostalCode(result.postalCode);
-      setAddrLat(result.latitude); setAddrLng(result.longitude);
-    } else {
-      setAddrStreetNumber(result.streetNumber);
-      setAddrStreetName(result.streetName);
-      setAddrUnitNumber(result.unitNumber ?? "");
-      setAddrCity(result.city);
-      setAddrProvince(result.province);
-      setAddrPostalCode(result.postalCode);
-      setAddrLat(null); setAddrLng(null);
-    }
+    setAddrStreetNumber(result.streetNumber);
+    setAddrStreetName(result.streetName);
+    setAddrUnitNumber(result.type !== "mapbox" ? (result.unitNumber ?? "") : "");
+    setAddrCity(result.city);
+    setAddrProvince(result.province);
+    setAddrPostalCode(result.postalCode);
+    setAddrLat(result.type === "mapbox" ? result.latitude : null);
+    setAddrLng(result.type === "mapbox" ? result.longitude : null);
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
+  async function doSave(fd: FormData, emailTarget?: EmailTarget) {
+    const newEmail = (fd.get("email") as string) || "";
+    const emailChanged = newEmail.trim().toLowerCase() !== (email ?? "").toLowerCase();
 
-    const fd = new FormData(e.currentTarget);
+    // If email changed and person has a linked login account, branch
+    if (emailChanged && userId && !emailTarget) {
+      setEmailModal({ newEmail, formData: fd });
+      return;
+    }
 
-    startTransition(async () => {
+    // Handle email update for linked accounts
+    if (emailTarget) {
+      const emailResult = await updatePersonEmail(personId, newEmail, emailTarget);
+      if (emailResult.error) { setError(emailResult.error); return; }
+    }
+
+    if (canEditFullPii) {
       const personResult = await updatePerson({
         personId,
         firstName: fd.get("firstName") as string,
         lastName: fd.get("lastName") as string,
-        email: fd.get("email") as string,
+        // if email is being handled separately via modal, pass original to avoid double-update
+        email: emailTarget ? (email ?? "") : newEmail,
         phoneHome: fd.get("phoneHome") as string,
         phoneMobile: fd.get("phoneMobile") as string,
         birthDate: (fd.get("birthDate") as string) || null,
         supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
         pollNumber: (fd.get("pollNumber") as string) || null,
       });
-
-      if (personResult.error) {
-        setError(personResult.error);
-        return;
-      }
+      if (personResult.error) { setError(personResult.error); return; }
 
       const hasAddressInput = addrStreetNumber.trim() || addrStreetName.trim() || addrCity.trim();
       if (address || hasAddressInput) {
@@ -126,20 +148,52 @@ export function PersonEditForm({
           lat: addrLat,
           lng: addrLng,
         });
-        if (addrResult.error) {
-          setError(addrResult.error);
-          return;
-        }
+        if (addrResult.error) { setError(addrResult.error); return; }
       }
 
-      setEditing(false);
-      router.refresh();
-    });
+      // Handle volunteer/donor interest toggles from checkboxes
+      const newVolunteer = fd.get("volunteerInterest") === "on";
+      if (newVolunteer !== isVolunteer) {
+        const volResult = await toggleVolunteerInterest(personId, newVolunteer);
+        if (volResult.error) { setError(volResult.error); return; }
+      }
+      const newDonor = fd.get("donorInterest") === "on";
+      if (newDonor !== hasDonorInterest) {
+        const donorResult = await toggleDonorInterest(personId, newDonor);
+        if (donorResult.error) { setError(donorResult.error); return; }
+      }
+    } else if (canEditSupportLevel) {
+      // field_organizer: support level only
+      const personResult = await updatePerson({
+        personId,
+        firstName,
+        lastName,
+        supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
+      });
+      if (personResult.error) { setError(personResult.error); return; }
+    }
+
+    setEmailModal(null);
+    setEditing(false);
+    router.refresh();
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    startTransition(() => doSave(fd));
+  }
+
+  function handleEmailModalChoice(target: EmailTarget) {
+    if (!emailModal) return;
+    startTransition(() => doSave(emailModal.formData, target));
   }
 
   function handleCancel() {
     setError(null);
     setEditing(false);
+    setEmailModal(null);
     setAddrStreetNumber(address?.streetNumber ?? "");
     setAddrStreetName(address?.streetName ?? "");
     setAddrUnitNumber(address?.unitNumber ?? "");
@@ -150,6 +204,26 @@ export function PersonEditForm({
     setAddrLng(null);
   }
 
+  function handleVolunteerToggle(enable: boolean) {
+    setVolError(null);
+    startVolTransition(async () => {
+      const result = await toggleVolunteerInterest(personId, enable);
+      if (result.error) setVolError(result.error);
+      else router.refresh();
+    });
+  }
+
+  function handleDonorToggle(enable: boolean) {
+    setDonorError(null);
+    startDonorTransition(async () => {
+      const result = await toggleDonorInterest(personId, enable);
+      if (result.error) setDonorError(result.error);
+      else router.refresh();
+    });
+  }
+
+  const canEdit = !readOnly && (canEditFullPii || canEditSupportLevel);
+
   // ── Read-only view ──────────────────────────────────────────────────────────
 
   if (!editing) {
@@ -159,7 +233,7 @@ export function PersonEditForm({
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
             Contact
           </h2>
-          {!readOnly && (
+          {canEdit && (
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -203,11 +277,94 @@ export function PersonEditForm({
           />
           <ReadRow
             label="Birth date"
-            value={birthDate ? new Date(birthDate).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : null}
+            value={
+              birthDate
+                ? new Date(birthDate).toLocaleDateString("en-CA", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null
+            }
           />
           <ReadRow label="Support level" value={SUPPORT_LEVEL_LABELS[supportLevel as SupportLevel] ?? null} />
           {pollNumber && <ReadRow label="Poll number" value={pollNumber} />}
+          {canEditFullPii && (
+            <>
+              <ToggleRow
+                label="Volunteer interest"
+                value={isVolunteer}
+                pending={volPending}
+                onToggle={handleVolunteerToggle}
+              />
+              {volError && <p className="text-xs text-red-600">{volError}</p>}
+              <ToggleRow
+                label="Donor interest"
+                value={hasDonorInterest}
+                pending={donorPending}
+                onToggle={handleDonorToggle}
+              />
+              {donorError && <p className="text-xs text-red-600">{donorError}</p>}
+            </>
+          )}
         </dl>
+      </div>
+    );
+  }
+
+  // ── Email branching modal ───────────────────────────────────────────────────
+
+  if (emailModal) {
+    return (
+      <div>
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-4">
+          Update email
+        </h2>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3">
+          <p className="text-sm text-slate-700">
+            This person has a login account. What should be updated to{" "}
+            <strong>{emailModal.newEmail}</strong>?
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => handleEmailModalChoice("contact_only")}
+              className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 text-left"
+            >
+              Contact email only
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => handleEmailModalChoice("login_only")}
+              className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 text-left"
+            >
+              Login email only
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => handleEmailModalChoice("both")}
+              className="h-9 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 text-left"
+            >
+              Both
+            </button>
+          </div>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => { setEmailModal(null); setError(null); }}
+            disabled={pending}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -220,114 +377,119 @@ export function PersonEditForm({
         Contact
       </h2>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="First name" required>
-            <input
-              name="firstName"
-              defaultValue={firstName}
-              required
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Last name" required>
-            <input
-              name="lastName"
-              defaultValue={lastName}
-              required
-              className={inputCls}
-            />
-          </Field>
-        </div>
 
-        <Field label="Email">
-          <input
-            name="email"
-            type="email"
-            defaultValue={email ?? ""}
-            className={inputCls}
-          />
-        </Field>
+        {canEditFullPii && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="First name" required>
+                <input
+                  name="firstName"
+                  defaultValue={firstName}
+                  required
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Last name" required>
+                <input
+                  name="lastName"
+                  defaultValue={lastName}
+                  required
+                  className={inputCls}
+                />
+              </Field>
+            </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Home phone">
-            <input
-              name="phoneHome"
-              type="tel"
-              defaultValue={phoneHome ?? ""}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Mobile phone">
-            <input
-              name="phoneMobile"
-              type="tel"
-              defaultValue={phoneMobile ?? ""}
-              className={inputCls}
-            />
-          </Field>
-        </div>
-
-        <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Address</p>
-          <AddressPicker onSelect={handleAddressPick} compact />
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              value={addrStreetNumber}
-              onChange={(e) => { setAddrStreetNumber(e.target.value); setAddrLat(null); setAddrLng(null); }}
-              placeholder="No."
-              className={inputCls}
-            />
-            <div className="col-span-2">
+            <Field label="Email">
               <input
-                value={addrStreetName}
-                onChange={(e) => { setAddrStreetName(e.target.value); setAddrLat(null); setAddrLng(null); }}
-                placeholder="Street name"
+                name="email"
+                type="email"
+                defaultValue={email ?? ""}
                 className={inputCls}
               />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Home phone">
+                <input
+                  name="phoneHome"
+                  type="tel"
+                  defaultValue={phoneHome ?? ""}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Mobile phone">
+                <input
+                  name="phoneMobile"
+                  type="tel"
+                  defaultValue={phoneMobile ?? ""}
+                  className={inputCls}
+                />
+              </Field>
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              value={addrUnitNumber}
-              onChange={(e) => setAddrUnitNumber(e.target.value)}
-              placeholder="Unit"
-              className={inputCls}
-            />
-            <div className="col-span-2">
+
+            <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Address</p>
+              <AddressPicker onSelect={handleAddressPick} compact />
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  value={addrStreetNumber}
+                  onChange={(e) => { setAddrStreetNumber(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                  placeholder="No."
+                  className={inputCls}
+                />
+                <div className="col-span-2">
+                  <input
+                    value={addrStreetName}
+                    onChange={(e) => { setAddrStreetName(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                    placeholder="Street name"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  value={addrUnitNumber}
+                  onChange={(e) => setAddrUnitNumber(e.target.value)}
+                  placeholder="Unit"
+                  className={inputCls}
+                />
+                <div className="col-span-2">
+                  <input
+                    value={addrCity}
+                    onChange={(e) => { setAddrCity(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                    placeholder="City"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={addrProvince}
+                  onChange={(e) => setAddrProvince(e.target.value)}
+                  placeholder="Province"
+                  className={inputCls}
+                />
+                <input
+                  value={addrPostalCode}
+                  onChange={(e) => { setAddrPostalCode(e.target.value); setAddrLat(null); setAddrLng(null); }}
+                  placeholder="Postal code"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <Field label="Birth date">
               <input
-                value={addrCity}
-                onChange={(e) => { setAddrCity(e.target.value); setAddrLat(null); setAddrLng(null); }}
-                placeholder="City"
+                name="birthDate"
+                type="date"
+                defaultValue={birthDate ? new Date(birthDate).toISOString().slice(0, 10) : ""}
+                min="1900-01-01"
+                max={`${new Date().getFullYear()}-12-31`}
                 className={inputCls}
               />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              value={addrProvince}
-              onChange={(e) => setAddrProvince(e.target.value)}
-              placeholder="Province"
-              className={inputCls}
-            />
-            <input
-              value={addrPostalCode}
-              onChange={(e) => { setAddrPostalCode(e.target.value); setAddrLat(null); setAddrLng(null); }}
-              placeholder="Postal code"
-              className={inputCls}
-            />
-          </div>
-        </div>
-
-        <Field label="Birth date">
-          <input
-            name="birthDate"
-            type="date"
-            defaultValue={birthDate ? new Date(birthDate).toISOString().slice(0, 10) : ""}
-            min="1900-01-01"
-            max={`${new Date().getFullYear()}-12-31`}
-            className={inputCls}
-          />
-        </Field>
+            </Field>
+          </>
+        )}
 
         <Field label="Support level">
           <select name="supportLevel" defaultValue={supportLevel ?? ""} className={inputCls}>
@@ -340,14 +502,40 @@ export function PersonEditForm({
           </select>
         </Field>
 
-        <Field label="Poll number">
-          <input
-            name="pollNumber"
-            defaultValue={pollNumber ?? ""}
-            placeholder="e.g. 001A"
-            className={inputCls}
-          />
-        </Field>
+        {canEditFullPii && (
+          <>
+            <Field label="Poll number">
+              <input
+                name="pollNumber"
+                defaultValue={pollNumber ?? ""}
+                placeholder="e.g. 001A"
+                className={inputCls}
+              />
+            </Field>
+
+            <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Interest flags</p>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="volunteerInterest"
+                  defaultChecked={isVolunteer}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm text-slate-700">Volunteer interest</span>
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="donorInterest"
+                  defaultChecked={hasDonorInterest}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm text-slate-700">Donor interest</span>
+              </label>
+            </div>
+          </>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -394,6 +582,41 @@ function ReadRow({
       <dd className="text-sm text-slate-800 mt-0.5">
         {value ?? <span className="text-slate-300">Not recorded</span>}
       </dd>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  value,
+  pending,
+  onToggle,
+}: {
+  label: string;
+  value: boolean;
+  pending: boolean;
+  onToggle: (enable: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide">{label}</dt>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => onToggle(!value)}
+        className={[
+          "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50",
+          value ? "bg-brand-500" : "bg-slate-200",
+        ].join(" ")}
+        aria-pressed={value}
+      >
+        <span
+          className={[
+            "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform",
+            value ? "translate-x-4" : "translate-x-1",
+          ].join(" ")}
+        />
+      </button>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Role } from "@/types";
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
 
 export async function saveCanvassScript(
   script: string

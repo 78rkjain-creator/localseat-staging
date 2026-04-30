@@ -9,7 +9,7 @@ import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Custom Fields" };
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager"];
 
 export default async function CustomFieldsPage() {
   const session = await getServerSession(authOptions);

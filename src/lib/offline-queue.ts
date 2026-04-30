@@ -43,6 +43,8 @@ export interface QueuedResponse {
   needsFollowUp: boolean;
   notes: string;
   competitorId: string | null;
+  /** For support level 3 sub-options: wont_say | still_deciding | needs_info */
+  outcomeDetail?: string | null;
   /** Client-side timestamp in ms (Date.now()). */
   queuedAt: number;
   /** Lifetime retry attempts (persisted in IDB). */

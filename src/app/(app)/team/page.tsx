@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import type { Role } from "@/types";
 import { ROLE_LABELS } from "@/types";
@@ -14,6 +15,7 @@ import type { AddressPickerResult } from "@/components/ui/address-picker";
 
 interface TeamMember {
   membershipId: string;
+  personId: string | null;
   role: Role;
   joinedAt: string;
   user: {
@@ -46,6 +48,7 @@ interface RemovedMember {
 const ROLE_ORDER: Role[] = [
   "candidate",
   "campaign_manager",
+  "data_manager",
   "co_chair",
   "field_organizer",
   "volunteer_coordinator",
@@ -55,6 +58,7 @@ const ROLE_ORDER: Role[] = [
 ];
 
 const ALL_ASSIGNABLE_ROLES: Role[] = [
+  "data_manager",
   "co_chair",
   "field_organizer",
   "volunteer_coordinator",
@@ -68,6 +72,7 @@ const NON_CANDIDATE_ROLES: Role[] = ROLE_ORDER.filter((r) => r !== "candidate");
 const ROLE_BADGE: Record<Role, string> = {
   candidate:             "bg-brand-50 text-brand-700 border-brand-200",
   campaign_manager:      "bg-slate-800 text-white border-slate-800",
+  data_manager:          "bg-slate-700 text-white border-slate-700",
   co_chair:              "bg-purple-50 text-purple-700 border-purple-200",
   field_organizer:       "bg-emerald-50 text-emerald-700 border-emerald-200",
   volunteer_coordinator: "bg-teal-50 text-teal-700 border-teal-200",
@@ -98,25 +103,30 @@ export default function TeamPage() {
   const activeRole = session?.user?.activeRole as Role | undefined;
   const currentUserId = session?.user?.id;
 
-  const canManage = activeRole === "candidate" || activeRole === "campaign_manager";
+  const canManage = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
   const viewerIsCandidate = activeRole === "candidate";
   const isFieldOrganizer = activeRole === "field_organizer";
+  // Only candidate and campaign_manager can assign the data_manager role
+  const canAssignDataManager = activeRole === "candidate" || activeRole === "campaign_manager";
   // field_organizer can add canvasser and sign_installer but cannot remove or manage other roles
   const canAddMember = canManage || isFieldOrganizer;
 
-  // candidate sees all roles; field_organizer limited to canvasser/sign_installer; campaign_manager sees all except candidate
+  // candidate sees all roles; field_organizer limited to canvasser/sign_installer;
+  // campaign_manager/data_manager see all except candidate (data_manager cannot assign data_manager)
   const dropdownRoles: Role[] = viewerIsCandidate
     ? ROLE_ORDER
     : isFieldOrganizer
     ? (["canvasser", "sign_installer"] as Role[])
-    : ROLE_ORDER.filter((r) => r !== "candidate");
+    : ROLE_ORDER.filter((r) => r !== "candidate" && (canAssignDataManager || r !== "data_manager"));
 
   // roles usable in the "add member" form — never includes candidate
   const addableRoles: Role[] = viewerIsCandidate
     ? ["campaign_manager", ...ALL_ASSIGNABLE_ROLES]
     : isFieldOrganizer
     ? (["canvasser", "sign_installer"] as Role[])
-    : ALL_ASSIGNABLE_ROLES;
+    : canAssignDataManager
+    ? ALL_ASSIGNABLE_ROLES
+    : ALL_ASSIGNABLE_ROLES.filter((r) => r !== "data_manager");
 
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [removedMembers, setRemovedMembers] = useState<RemovedMember[]>([]);
@@ -680,6 +690,14 @@ function MemberRow({
             )}
             {member.user.phoneMobile && (
               <p className="text-xs text-slate-400">{member.user.phoneMobile}</p>
+            )}
+            {member.personId && (
+              <Link
+                href={`/people/${member.personId}`}
+                className="inline-block mt-0.5 text-xs text-brand-600 hover:underline"
+              >
+                View record
+              </Link>
             )}
           </div>
 

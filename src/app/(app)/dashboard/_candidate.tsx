@@ -46,7 +46,7 @@ async function getPeopleGeoStats(campaignId: string) {
 }
 
 export async function CandidateDashboard({ campaignId, role }: Props) {
-  const showGeoStats = role === "candidate" || role === "campaign_manager";
+  const showGeoStats = role === "candidate" || role === "campaign_manager" || role === "data_manager";
 
   const now = new Date();
   const todayStart = new Date(now);

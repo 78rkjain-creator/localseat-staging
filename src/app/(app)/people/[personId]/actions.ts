@@ -9,7 +9,7 @@ import { sanitizeEmail, sanitizePhone, sanitizeBirthDate, sanitizeEnum } from "@
 import { createAuditLog } from "@/lib/audit";
 import { geocodeAndClassifyAddress } from "@/lib/ward";
 import type { SupportLevel } from "@/types";
-import { Role } from "@prisma/client";
+import { Role, VolunteerStatus } from "@prisma/client";
 
 const SUPPORT_LEVEL_VALUES: SupportLevel[] = [
   "strong_yes", "soft_yes", "undecided", "soft_no", "strong_no", "not_home",
@@ -38,7 +38,13 @@ export async function updatePerson(
   }
 
   const { activeCampaignId, activeRole } = session.user;
-  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+  if (!activeRole) return { error: "Permission denied." };
+
+  const role = activeRole as Role;
+  const isFullAccess = canManageVoterList(role);
+  const isFieldOrg = role === Role.field_organizer;
+
+  if (!isFullAccess && !isFieldOrg) {
     return { error: "Permission denied." };
   }
 
@@ -46,9 +52,44 @@ export async function updatePerson(
 
   const existing = await db.person.findFirst({
     where: { id: input.personId, campaignId, deletedAt: null },
-    select: { id: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phoneHome: true,
+      phoneMobile: true,
+      birthDate: true,
+      supportLevel: true,
+      pollNumber: true,
+    },
   });
   if (!existing) return { error: "Person not found." };
+
+  if (isFieldOrg) {
+    // field_organizer: supportLevel only
+    const newSupportLevel = sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES);
+    if (existing.supportLevel !== newSupportLevel) {
+      await db.person.update({
+        where: { id: input.personId },
+        data: { supportLevel: newSupportLevel },
+      });
+      await createAuditLog({
+        campaignId,
+        userId: session.user.id,
+        action: "PERSON_UPDATED",
+        entityType: "person",
+        entityId: input.personId,
+        details: {
+          changes: {
+            supportLevel: { from: existing.supportLevel ?? null, to: newSupportLevel ?? null, source: "manual" },
+          },
+        },
+      });
+    }
+    revalidatePath(`/people/${input.personId}`);
+    return { success: true };
+  }
 
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
@@ -56,22 +97,213 @@ export async function updatePerson(
     return { error: "First name and last name are required." };
   }
 
+  const data = {
+    firstName,
+    lastName,
+    email: sanitizeEmail(input.email),
+    phoneHome: sanitizePhone(input.phoneHome),
+    phoneMobile: sanitizePhone(input.phoneMobile),
+    birthDate: sanitizeBirthDate(input.birthDate),
+    supportLevel: sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES),
+    pollNumber: input.pollNumber?.trim() || null,
+  };
+
   await db.person.update({
     where: { id: input.personId },
-    data: {
-      firstName,
-      lastName,
-      email: sanitizeEmail(input.email),
-      phoneHome: sanitizePhone(input.phoneHome),
-      phoneMobile: sanitizePhone(input.phoneMobile),
-      birthDate: sanitizeBirthDate(input.birthDate),
-      supportLevel: sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES),
-      pollNumber: input.pollNumber?.trim() || null,
-    },
+    data,
   });
+
+  // Build change log
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  const prev: Record<string, unknown> = {
+    firstName: existing.firstName,
+    lastName: existing.lastName,
+    email: existing.email ?? null,
+    phoneHome: existing.phoneHome ?? null,
+    phoneMobile: existing.phoneMobile ?? null,
+    birthDate: existing.birthDate ? existing.birthDate.toISOString() : null,
+    supportLevel: existing.supportLevel ?? null,
+    pollNumber: existing.pollNumber ?? null,
+  };
+  for (const key of Object.keys(data) as (keyof typeof data)[]) {
+    const from = prev[key];
+    const to = data[key] instanceof Date ? (data[key] as Date).toISOString() : (data[key] ?? null);
+    if (String(from ?? "") !== String(to ?? "")) {
+      changes[key] = { from, to };
+      if (key === "supportLevel") (changes[key] as Record<string, unknown>).source = "manual";
+    }
+  }
+  if (Object.keys(changes).length > 0) {
+    await createAuditLog({
+      campaignId,
+      userId: session.user.id,
+      action: "PERSON_UPDATED",
+      entityType: "person",
+      entityId: input.personId,
+      details: { changes },
+    });
+  }
 
   revalidatePath(`/people/${input.personId}`);
   return { success: true };
+}
+
+// ── Update person email (with login-account branching) ────────────────────────
+
+export async function updatePersonEmail(
+  personId: string,
+  newEmail: string,
+  target: "contact_only" | "login_only" | "both"
+): Promise<{ error?: string; success?: boolean }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "Permission denied." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, email: true, userId: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  const sanitized = sanitizeEmail(newEmail);
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+
+  if (target === "contact_only" || target === "both") {
+    await db.person.update({ where: { id: personId }, data: { email: sanitized } });
+    changes.contactEmail = { from: person.email ?? null, to: sanitized ?? null };
+  }
+
+  if ((target === "login_only" || target === "both") && person.userId) {
+    if (sanitized) {
+      const conflict = await db.user.findFirst({
+        where: { email: sanitized, id: { not: person.userId } },
+        select: { id: true },
+      });
+      if (conflict) return { error: "That email address is already in use by another account." };
+    }
+    const user = await db.user.findUnique({ where: { id: person.userId }, select: { email: true } });
+    await db.user.update({ where: { id: person.userId }, data: { email: sanitized ?? "" } });
+    changes.loginEmail = { from: user?.email ?? null, to: sanitized ?? null };
+  }
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "PERSON_EMAIL_UPDATED",
+    entityType: "person",
+    entityId: personId,
+    details: { target, changes },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return { success: true };
+}
+
+// ── Toggle volunteer interest ─────────────────────────────────────────────────
+
+export async function toggleVolunteerInterest(
+  personId: string,
+  enable: boolean
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "Permission denied." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  if (enable) {
+    await db.volunteerRecord.upsert({
+      where: { campaignId_personId: { campaignId: activeCampaignId, personId } },
+      create: { campaignId: activeCampaignId, personId, status: VolunteerStatus.interested },
+      update: { deletedAt: null, status: VolunteerStatus.interested },
+    });
+  } else {
+    await db.volunteerRecord.updateMany({
+      where: { campaignId: activeCampaignId, personId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "PERSON_VOLUNTEER_INTEREST_TOGGLED",
+    entityType: "person",
+    entityId: personId,
+    details: { enable },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
+}
+
+// ── Toggle donor interest ─────────────────────────────────────────────────────
+
+export async function toggleDonorInterest(
+  personId: string,
+  enable: boolean
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeRole || !canManageVoterList(activeRole as Role)) {
+    return { error: "Permission denied." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  if (enable) {
+    const existing = await db.donor.findFirst({
+      where: { campaignId: activeCampaignId, linkedPersonId: personId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      await db.donor.create({
+        data: {
+          campaignId: activeCampaignId,
+          firstName: person.firstName,
+          lastName: person.lastName,
+          linkedPersonId: personId,
+          status: "interested",
+          createdById: session.user.id,
+        },
+      });
+    }
+  } else {
+    await db.donor.updateMany({
+      where: { campaignId: activeCampaignId, linkedPersonId: personId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: "PERSON_DONOR_INTEREST_TOGGLED",
+    entityType: "person",
+    entityId: personId,
+    details: { enable },
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
 }
 
 // ── Update person address ─────────────────────────────────────────────────────
@@ -256,7 +488,7 @@ export async function linkPersonToUser(
   if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
 
   const { activeCampaignId, activeRole } = session.user;
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Permission denied." };
   }
 
@@ -298,7 +530,7 @@ export async function unlinkPersonFromUser(
   if (!session?.user?.activeCampaignId) return { error: "Not authenticated." };
 
   const { activeCampaignId, activeRole } = session.user;
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Permission denied." };
   }
 

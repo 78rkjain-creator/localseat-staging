@@ -10,14 +10,16 @@ import { authOptions } from "@/lib/auth";
 //
 //   candidate (100)
 //     └─ campaign_manager (90)
-//          └─ field_organizer (70)
-//               └─ volunteer_coordinator (60)
-//                    └─ canvasser (10)
-//                         └─ sign_installer (3) — signs section only
+//          └─ data_manager (90) — same permissions as campaign_manager
+//               └─ field_organizer (70)
+//                    └─ volunteer_coordinator (60)
+//                         └─ canvasser (10)
+//                              └─ sign_installer (3) — signs section only
 
 const ROLE_RANK: Record<Role, number> = {
   candidate:            100,
   campaign_manager:      90,
+  data_manager:          90,
   field_organizer:       70,
   volunteer_coordinator: 60,
   canvasser:             10,
@@ -34,7 +36,7 @@ export function hasMinimumRole(role: Role, minimum: Role): boolean {
 
 // ── Core groups (reused across helpers) ──────────────────────────────────────
 
-const FULL_ACCESS: Role[] = [Role.candidate, Role.campaign_manager];
+const FULL_ACCESS: Role[] = [Role.candidate, Role.campaign_manager, Role.data_manager];
 const FIELD_AND_ABOVE: Role[] = [...FULL_ACCESS, Role.field_organizer];
 const VOL_AND_ABOVE: Role[] = [...FIELD_AND_ABOVE, Role.volunteer_coordinator];
 
@@ -64,10 +66,11 @@ export function canManageRoles(role: Role): boolean {
   return role === Role.candidate;
 }
 
-// campaign_manager may change any role except candidate.
+// campaign_manager and data_manager may change any role except candidate.
 // candidate and super_user have full access — handled here and via isSuperUser().
+// Note: only candidate and campaign_manager may *assign* the data_manager role (enforced at call sites).
 export function canManageRolesExceptCandidate(role: Role): boolean {
-  return role === Role.candidate || role === Role.campaign_manager;
+  return FULL_ACCESS.includes(role);
 }
 
 // ── Donors ────────────────────────────────────────────────────────────────────
@@ -101,6 +104,7 @@ export function canCanvass(role: Role): boolean {
   return ([
     Role.candidate,
     Role.campaign_manager,
+    Role.data_manager,
     Role.field_organizer,
     Role.volunteer_coordinator,
     Role.canvasser,

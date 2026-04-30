@@ -191,7 +191,7 @@ export async function deleteEvent(eventId: string): Promise<{ error?: string }> 
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Permission denied." };
   }
 

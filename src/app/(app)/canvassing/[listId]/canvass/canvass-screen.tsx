@@ -51,6 +51,7 @@ type LocalEntry = CanvassingQueue["entries"][number] & {
 interface ResponseDraft {
   supportLevel: SupportLevel | null;
   otherOutcome: CanvassOutcome | null;
+  outcomeDetail: string | null;
   signRequest: boolean;
   volunteerInterest: boolean;
   donorInterest: boolean;
@@ -66,6 +67,7 @@ function emptyDraft(): ResponseDraft {
   return {
     supportLevel: null,
     otherOutcome: null,
+    outcomeDetail: null,
     signRequest: false,
     volunteerInterest: false,
     donorInterest: false,
@@ -156,12 +158,20 @@ const SCALE_BUTTONS: {
   { value: "strong_no",  numeral: 5, caption: "No−",  style: "border-red-200 bg-red-50 text-red-700" },
 ];
 
-// Level 3 quick-save outcomes
-const LEVEL_3_OUTCOMES: { value: CanvassOutcome; label: string }[] = [
-  { value: "refused",     label: "Refused" },
-  { value: "moved",       label: "Moved" },
-  { value: "unavailable", label: "Unavailable" },
-  { value: "deceased",    label: "Deceased" },
+// Not-home dropdown options — ordered by frequency
+const NOT_HOME_OUTCOMES: { value: CanvassOutcome; label: string }[] = [
+  { value: "not_home",        label: "Not home" },
+  { value: "moved",           label: "Moved" },
+  { value: "unavailable",     label: "Unavailable" },
+  { value: "language_barrier", label: "Language barrier" },
+  { value: "deceased",        label: "Deceased" },
+];
+
+// Support level 3 sub-options
+const UNDECIDED_SUB_OPTIONS: { value: string; label: string }[] = [
+  { value: "wont_say",       label: "Won't say" },
+  { value: "still_deciding", label: "Still deciding" },
+  { value: "needs_info",     label: "Needs more info" },
 ];
 
 // ── Main screen component ──────────────────────────────────────────────────
@@ -250,6 +260,7 @@ export function CanvassScreen({
     discardParked,
   } = useOfflineSync(saveCanvassResponse);
 
+  const [showNotHomeMenu, setShowNotHomeMenu] = useState(false);
   const [surveyAnswers, setSurveyAnswers] = useState<Record<string, unknown>>({});
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
@@ -319,73 +330,44 @@ export function CanvassScreen({
     setSelectedPersonId(prevEntry.person.id);
   }
 
-  async function handleNotHome() {
+  // Unified auto-save — fires for not-home options, support 1/2/4/5 taps, and sub-option taps.
+  // Captures current draft state (notes, toggles, follow-up) at call time.
+  async function handleAutoSave(params: {
+    outcome: CanvassOutcome;
+    supportLevel: SupportLevel | null;
+    outcomeDetail?: string | null;
+  }) {
     if (isPending) return;
     setError(null);
+    setShowNotHomeMenu(false);
+
     const capturedIndex = currentIndex;
     const capturedEntryPersonId = current.person.id;
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      try {
-        const { isDuplicate } = await enqueue({
-          assignmentId,
-          personId: capturedEntryPersonId,
-          outcome: "not_home",
-          supportLevel: "not_home",
-          wantsSign: false,
-          isVolunteer: false,
-          isDonorInterest: false,
-          notes: "",
-          competitorId: null,
-          needsFollowUp: false,
-        });
-        if (!isDuplicate) await refreshSyncCount();
-        markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
-      } catch (err) {
-        console.error("[CanvassScreen] IndexedDB enqueue failed:", err);
-        setError("Failed to save offline. Please try again.");
-      }
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await saveCanvassResponse({
-        assignmentId,
-        personId: capturedEntryPersonId,
-        outcome: "not_home",
-        supportLevel: "not_home",
-        signRequest: false,
-        volunteerInterest: false,
-        donorInterest: false,
-        notes: "",
-        needsFollowUp: false,
-      });
-      if (result.error) { setError(result.error); return; }
-      markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
-    });
-  }
-
-  // Level 3 (undecided) — tapping a button immediately saves and advances
-  async function handleQuickOutcomeSave(outcome: CanvassOutcome) {
-    if (isPending) return;
-    setError(null);
-    const capturedIndex = currentIndex;
     const capturedApiPersonId = selectedPersonId;
-    const capturedEntryPersonId = current.person.id;
+    const isContacted = params.outcome === "contacted";
+    const capturedNotes = draft.notes;
+    const capturedSign = isContacted ? draft.signRequest : false;
+    const capturedVolunteer = isContacted ? draft.volunteerInterest : false;
+    const capturedDonor = isContacted ? draft.donorInterest : false;
+    const capturedFollowUp = draft.needsFollowUp;
+    const capturedCompetitorId =
+      params.outcome === "other_candidate" ? (draft.competitorId ?? null) : null;
+    const capturedDetail = params.outcomeDetail ?? null;
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       try {
         const { isDuplicate } = await enqueue({
           assignmentId,
           personId: capturedApiPersonId,
-          outcome,
-          supportLevel: null,
-          wantsSign: false,
-          isVolunteer: false,
-          isDonorInterest: false,
-          notes: "",
-          competitorId: null,
-          needsFollowUp: false,
+          outcome: params.outcome,
+          supportLevel: params.supportLevel,
+          wantsSign: capturedSign,
+          isVolunteer: capturedVolunteer,
+          isDonorInterest: capturedDonor,
+          notes: capturedNotes,
+          competitorId: capturedCompetitorId,
+          needsFollowUp: capturedFollowUp,
+          outcomeDetail: capturedDetail,
         });
         if (!isDuplicate) await refreshSyncCount();
         markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
@@ -400,13 +382,17 @@ export function CanvassScreen({
       const result = await saveCanvassResponse({
         assignmentId,
         personId: capturedApiPersonId,
-        outcome,
-        supportLevel: null,
-        signRequest: false,
-        volunteerInterest: false,
-        donorInterest: false,
-        notes: "",
-        needsFollowUp: false,
+        outcome: params.outcome,
+        supportLevel: params.supportLevel,
+        signRequest: capturedSign,
+        volunteerInterest: capturedVolunteer,
+        donorInterest: capturedDonor,
+        notes: capturedNotes,
+        needsFollowUp: capturedFollowUp,
+        competitorId: capturedCompetitorId,
+        outcomeDetail: capturedDetail,
+        surveyId: activeSurvey?.id ?? null,
+        surveyAnswers: Object.keys(surveyAnswers).length > 0 ? surveyAnswers : null,
       });
       if (result.error) { setError(result.error); return; }
       markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
@@ -414,14 +400,13 @@ export function CanvassScreen({
   }
 
   async function handleSave() {
-    const { supportLevel, otherOutcome } = draft;
+    const { supportLevel, otherOutcome, outcomeDetail } = draft;
     if (!supportLevel && !otherOutcome) return;
     if (isPending) return;
     setError(null);
 
-    const outcome: CanvassOutcome = otherOutcome
-      ? otherOutcome
-      : supportLevel === "not_home" ? "not_home" : "contacted";
+    const outcome: CanvassOutcome = otherOutcome ?? "contacted";
+    const isContacted = outcome === "contacted";
 
     const capturedIndex = currentIndex;
     const capturedApiPersonId = selectedPersonId;
@@ -435,13 +420,14 @@ export function CanvassScreen({
           assignmentId,
           personId: capturedApiPersonId,
           outcome,
-          supportLevel: otherOutcome ? null : supportLevel,
-          wantsSign: otherOutcome ? false : draft.signRequest,
-          isVolunteer: otherOutcome ? false : draft.volunteerInterest,
-          isDonorInterest: otherOutcome ? false : draft.donorInterest,
+          supportLevel: isContacted ? supportLevel : null,
+          wantsSign: isContacted ? draft.signRequest : false,
+          isVolunteer: isContacted ? draft.volunteerInterest : false,
+          isDonorInterest: isContacted ? draft.donorInterest : false,
           notes: draft.notes,
           needsFollowUp: draft.needsFollowUp,
           competitorId,
+          outcomeDetail: isContacted ? (outcomeDetail ?? null) : null,
         });
         if (!isDuplicate) await refreshSyncCount();
         markSavedAndAdvance(capturedEntryPersonId, capturedIndex);
@@ -457,13 +443,14 @@ export function CanvassScreen({
         assignmentId,
         personId: capturedApiPersonId,
         outcome,
-        supportLevel: otherOutcome ? null : supportLevel,
-        signRequest: otherOutcome ? false : draft.signRequest,
-        volunteerInterest: otherOutcome ? false : draft.volunteerInterest,
-        donorInterest: otherOutcome ? false : draft.donorInterest,
+        supportLevel: isContacted ? supportLevel : null,
+        signRequest: isContacted ? draft.signRequest : false,
+        volunteerInterest: isContacted ? draft.volunteerInterest : false,
+        donorInterest: isContacted ? draft.donorInterest : false,
         notes: draft.notes,
         needsFollowUp: draft.needsFollowUp,
         competitorId,
+        outcomeDetail: isContacted ? (outcomeDetail ?? null) : null,
         appointmentDate: draft.scheduleAppointment ? draft.appointmentDate : null,
         appointmentTime: draft.scheduleAppointment ? draft.appointmentTime : null,
         surveyId: activeSurvey?.id ?? null,
@@ -476,15 +463,13 @@ export function CanvassScreen({
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  // Levels 1/2 — show Sign, Volunteer, Potential Donor chips
-  const isYesLevel = draft.supportLevel === "strong_yes" || draft.supportLevel === "soft_yes";
-  // Level 3 — show immediate-save outcome buttons
+  // Level 3 selected in draft — show sub-options
   const isUndecided = draft.supportLevel === "undecided";
   // Levels 4/5 — show Other Candidate button
   const isNoLevel = draft.supportLevel === "soft_no" || draft.supportLevel === "strong_no";
 
-  const showDetails = isYesLevel || isNoLevel;
-  const canSave = (!!draft.supportLevel || !!draft.otherOutcome) && !isPending;
+  // Save and next is valid when level 3 is selected (explicit commit) or other_candidate is set
+  const canSave = (draft.supportLevel === "undecided" || !!draft.otherOutcome) && !isPending;
 
   // ── Done screen ───────────────────────────────────────────────────────────
 
@@ -800,6 +785,57 @@ export function CanvassScreen({
             </div>
           )}
 
+          {/* ── Not home button + dropdown ── */}
+          <div className="relative mb-1.5">
+            {showNotHomeMenu && (
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setShowNotHomeMenu(false)}
+                aria-hidden="true"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => setShowNotHomeMenu((v) => !v)}
+              disabled={isPending}
+              className={[
+                "w-full h-12 flex items-center justify-between px-4 rounded-2xl border-2 font-semibold text-sm transition-all disabled:opacity-50",
+                showNotHomeMenu
+                  ? "border-slate-700 bg-slate-700 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:bg-slate-100",
+              ].join(" ")}
+            >
+              <span>Not home</span>
+              <svg
+                className={["h-4 w-4 transition-transform", showNotHomeMenu ? "rotate-180" : ""].join(" ")}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showNotHomeMenu && (
+              <div className="absolute top-full left-0 right-0 z-30 bg-white rounded-2xl border border-slate-200 shadow-lg mt-1 overflow-hidden">
+                {NOT_HOME_OUTCOMES.map((o, idx) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => handleAutoSave({ outcome: o.value, supportLevel: null })}
+                    className={[
+                      "w-full px-4 py-3.5 text-sm font-medium text-slate-700 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-50",
+                      idx < NOT_HOME_OUTCOMES.length - 1 ? "border-b border-slate-100" : "",
+                    ].join(" ")}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* ── Support scale 1–5 ── */}
           <div className="flex gap-1 mb-1.5">
             {SCALE_BUTTONS.map((s) => {
@@ -809,16 +845,26 @@ export function CanvassScreen({
                   key={s.value}
                   type="button"
                   aria-pressed={isActive}
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...emptyDraft(),
-                      needsFollowUp: d.needsFollowUp,
-                      notes: d.notes,
-                      supportLevel: isActive ? null : s.value,
-                    }))
-                  }
+                  disabled={isPending}
+                  onClick={() => {
+                    if (s.numeral === 3) {
+                      // Level 3: reveal sub-options, don't auto-save
+                      setDraft((d) => ({
+                        ...d,
+                        supportLevel: isActive ? null : s.value,
+                        outcomeDetail: null,
+                        otherOutcome: null,
+                      }));
+                    } else if (draft.otherOutcome === "other_candidate") {
+                      // Other candidate flow: just set level, use Save and next
+                      setDraft((d) => ({ ...d, supportLevel: isActive ? null : s.value }));
+                    } else {
+                      // Levels 1, 2, 4, 5: auto-save immediately
+                      void handleAutoSave({ outcome: "contacted", supportLevel: s.value });
+                    }
+                  }}
                   className={[
-                    "flex-1 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-2 transition-all",
+                    "flex-1 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-2 transition-all disabled:opacity-50",
                     s.style,
                     isActive ? "ring-2 ring-slate-900 ring-offset-1" : "",
                   ].join(" ")}
@@ -830,41 +876,18 @@ export function CanvassScreen({
             })}
           </div>
 
-          {/* ── Levels 1/2 — Sign, Volunteer, Potential Donor chips ── */}
-          {isYesLevel && (
-            <div className="flex gap-2 mb-1.5">
-              {[
-                { label: "Sign",            checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
-                { label: "Volunteer",       checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
-                { label: "Potential Donor", checked: draft.donorInterest,     toggle: () => setDraft((d) => ({ ...d, donorInterest: !d.donorInterest })) },
-              ].map(({ label, checked, toggle }) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={toggle}
-                  className={[
-                    "h-10 px-3 rounded-xl border-2 text-xs font-medium transition-all flex items-center justify-center flex-1",
-                    checked
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-600",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ── Level 3 — Refused / Moved / Unavailable / Deceased (immediate save) ── */}
+          {/* ── Level 3 sub-options: Won't say / Still deciding / Needs more info ── */}
           {isUndecided && (
-            <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-              {LEVEL_3_OUTCOMES.map((o) => (
+            <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+              {UNDECIDED_SUB_OPTIONS.map((o) => (
                 <button
                   key={o.value}
                   type="button"
-                  onClick={() => handleQuickOutcomeSave(o.value)}
                   disabled={isPending}
-                  className="h-11 rounded-xl border border-slate-200 bg-white font-medium text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+                  onClick={() =>
+                    handleAutoSave({ outcome: "contacted", supportLevel: "undecided", outcomeDetail: o.value })
+                  }
+                  className="h-11 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-700 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 transition-all"
                 >
                   {o.label}
                 </button>
@@ -872,7 +895,71 @@ export function CanvassScreen({
             </div>
           )}
 
-          {/* ── Levels 4/5 — Other Candidate ── */}
+          {/* ── Notes — always visible so canvasser can type before selecting outcome ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 mb-1.5">
+            <textarea
+              value={draft.notes}
+              onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+              placeholder="Note (optional)…"
+              rows={2}
+              className="w-full px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block rounded-2xl"
+            />
+          </div>
+
+          {/* ── Toggles — always visible so canvasser can set before selecting outcome ── */}
+          <div className="flex gap-2 mb-1.5">
+            {[
+              { label: "Sign",      checked: draft.signRequest,       toggle: () => setDraft((d) => ({ ...d, signRequest: !d.signRequest })) },
+              { label: "Volunteer", checked: draft.volunteerInterest, toggle: () => setDraft((d) => ({ ...d, volunteerInterest: !d.volunteerInterest })) },
+              { label: "Donor",     checked: draft.donorInterest,     toggle: () => setDraft((d) => ({ ...d, donorInterest: !d.donorInterest })) },
+            ].map(({ label, checked, toggle }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={toggle}
+                className={[
+                  "h-11 px-3 rounded-xl border-2 text-xs font-semibold transition-all flex items-center justify-center flex-1",
+                  checked
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Follow-up + appointment — always available ── */}
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 mb-1.5">
+            <CompactToggle
+              label="Needs follow-up"
+              checked={draft.needsFollowUp}
+              onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
+            />
+            <CompactToggle
+              label="Schedule appointment"
+              checked={draft.scheduleAppointment}
+              onChange={(v) => setDraft((d) => ({ ...d, scheduleAppointment: v }))}
+            />
+            {draft.scheduleAppointment && (
+              <div className="px-4 py-2 flex gap-2">
+                <input
+                  type="date"
+                  value={draft.appointmentDate}
+                  onChange={(e) => setDraft((d) => ({ ...d, appointmentDate: e.target.value }))}
+                  className="flex-1 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                <input
+                  type="time"
+                  value={draft.appointmentTime}
+                  onChange={(e) => setDraft((d) => ({ ...d, appointmentTime: e.target.value }))}
+                  className="w-28 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ── Other Candidate — only when 4/5 in draft (explicit commit via Save and next) ── */}
           {isNoLevel && (
             <div className="mb-1.5">
               <button
@@ -922,45 +1009,6 @@ export function CanvassScreen({
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ── Details panel — notes + follow-up + appointment ── */}
-          {showDetails && (
-            <div className="bg-white border-t-2 border-slate-200 divide-y divide-slate-100 mt-1.5">
-              <CompactToggle
-                label="Needs follow-up"
-                checked={draft.needsFollowUp}
-                onChange={(v) => setDraft((d) => ({ ...d, needsFollowUp: v }))}
-              />
-              <CompactToggle
-                label="Schedule appointment"
-                checked={draft.scheduleAppointment}
-                onChange={(v) => setDraft((d) => ({ ...d, scheduleAppointment: v }))}
-              />
-              {draft.scheduleAppointment && (
-                <div className="px-4 py-2 flex gap-2">
-                  <input
-                    type="date"
-                    value={draft.appointmentDate}
-                    onChange={(e) => setDraft((d) => ({ ...d, appointmentDate: e.target.value }))}
-                    className="flex-1 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                  <input
-                    type="time"
-                    value={draft.appointmentTime}
-                    onChange={(e) => setDraft((d) => ({ ...d, appointmentTime: e.target.value }))}
-                    className="w-28 h-9 px-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
-                </div>
-              )}
-              <textarea
-                value={draft.notes}
-                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-                placeholder="Note (optional)…"
-                rows={2}
-                className="w-full px-4 py-2 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block"
-              />
             </div>
           )}
 

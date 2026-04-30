@@ -15,7 +15,7 @@ export default async function ReviewQueuePage() {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
 
-  const allowed = ["candidate", "campaign_manager", "co_chair"];
+  const allowed = ["candidate", "campaign_manager", "data_manager", "co_chair"];
   if (!activeRole || !allowed.includes(activeRole)) redirect("/dashboard");
 
   const pendingMemberships = await db.personListMembership.findMany({

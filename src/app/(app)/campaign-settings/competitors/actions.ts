@@ -9,7 +9,7 @@ async function requireCampaignManager() {
   if (!session) return { error: "Not authenticated." } as const;
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." } as const;
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") {
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Forbidden." } as const;
   }
   return { campaignId: activeCampaignId } as const;

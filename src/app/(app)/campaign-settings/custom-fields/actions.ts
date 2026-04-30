@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import type { Role } from "@/types";
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager"];
 
 export interface CustomField {
   id: string;

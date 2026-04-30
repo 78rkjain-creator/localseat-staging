@@ -45,6 +45,7 @@ export interface TeamReviewRow {
 const VALID_ROLE_VALUES = new Set([
   "candidate",
   "campaign_manager",
+  "data_manager",
   "co_chair",
   "field_organizer",
   "canvasser",

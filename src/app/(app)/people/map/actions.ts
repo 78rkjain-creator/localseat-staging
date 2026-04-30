@@ -7,7 +7,7 @@ import { ListSource, WardStatus } from "@prisma/client";
 import type { Role } from "@/types";
 import { geocodeAndClassifyAddress } from "@/lib/ward";
 
-const CAN_CREATE: Role[] = ["candidate", "campaign_manager", "field_organizer"];
+const CAN_CREATE: Role[] = ["candidate", "campaign_manager", "data_manager", "field_organizer"];
 
 export interface PinDropInput {
   firstName: string;

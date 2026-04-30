@@ -34,7 +34,7 @@ function oodData(data: Record<string, unknown>): Prisma.PersonUpdateInput {
   return data as unknown as Prisma.PersonUpdateInput;
 }
 
-const FULL_ACCESS: Role[] = [Role.candidate, Role.campaign_manager];
+const FULL_ACCESS: Role[] = [Role.candidate, Role.campaign_manager, Role.data_manager];
 
 async function getSessionAndPerson(personId: string) {
   const session = await getServerSession(authOptions);

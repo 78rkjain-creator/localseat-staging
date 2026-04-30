@@ -14,7 +14,7 @@ export default async function GeneralSettingsPage() {
 
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
-  if (activeRole !== "candidate" && activeRole !== "campaign_manager") redirect("/dashboard");
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
 
   const campaign = await db.campaign.findUnique({
     where: { id: activeCampaignId },

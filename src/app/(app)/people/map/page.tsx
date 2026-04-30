@@ -8,8 +8,8 @@ import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Contact Map" };
 
-const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "co_chair", "field_organizer"];
-const CAN_CREATE_ROLES: Role[] = ["candidate", "campaign_manager", "field_organizer"];
+const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair", "field_organizer"];
+const CAN_CREATE_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "field_organizer"];
 
 export default async function ContactMapPage() {
   const session = await getServerSession(authOptions);

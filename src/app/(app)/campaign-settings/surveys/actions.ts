@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import type { SurveyQuestionType } from "@prisma/client";
 
-const ALLOWED_ROLES = ["candidate", "campaign_manager"] as const;
+const ALLOWED_ROLES = ["candidate", "campaign_manager", "data_manager"] as const;
 
 async function getSession() {
   const session = await getServerSession(authOptions);
