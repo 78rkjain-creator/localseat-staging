@@ -30,7 +30,7 @@ export async function createTag(
   if (!trimmedName) return { error: "Tag name is required (max 50 chars)." };
 
   const tagCount = await db.tag.count({ where: { campaignId, deletedAt: null } });
-  if (tagCount >= 18) return { error: "Campaign tag limit (18) reached." };
+  if (tagCount >= 100) return { error: "Maximum 100 tags per campaign reached." };
 
   const existing = await db.tag.findFirst({
     where: { campaignId, name: { equals: trimmedName, mode: "insensitive" }, deletedAt: null },

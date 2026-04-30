@@ -9,7 +9,7 @@ import { sanitizePhone, sanitizeEmail, sanitizeBirthDate } from "@/lib/sanitize"
 import { createAuditLog } from "@/lib/audit";
 import { canAddConstituent } from "@/lib/plan-limits";
 import { geocodeNewAddresses } from "@/lib/geocoding";
-import { isPointInWard, campaignHasWard } from "@/lib/ward";
+import { isPointInWard, campaignHasWard, geocodeAndClassifyAddress } from "@/lib/ward";
 import { normalizeFullAddress } from "@/lib/address-normalize";
 import { normaliseSupportLevel, parseImportBoolean, parseTagList } from "@/lib/csv-import";
 import { Prisma, WardStatus, ListSource } from "@prisma/client";
@@ -882,9 +882,45 @@ export async function importVoterRows(
     data: { matchedCount: matched, newCount: created, reviewCount },
   });
 
-  // Fire and forget — geocode newly created addresses in the background
+  // Fire and forget — geocode new addresses then classify affected persons
   if (newAddressIds.length > 0) {
-    geocodeNewAddresses(campaignId, newAddressIds).catch(console.error);
+    (async () => {
+      try {
+        await geocodeNewAddresses(campaignId, newAddressIds);
+      } catch (e) {
+        console.error("geocodeNewAddresses failed:", e);
+        return;
+      }
+      // Classify all newly created persons whose ward status is still not_checked
+      // (i.e. the address had no lat/lng at import time and was just geocoded above).
+      try {
+        const toClassify = await db.person.findMany({
+          where: {
+            campaignId,
+            deletedAt: null,
+            wardStatus: WardStatus.not_checked,
+            household: { address: { id: { in: newAddressIds } } },
+          },
+          select: { id: true, household: { select: { addressId: true } } },
+        });
+        const CLASSIFY_BATCH = 10;
+        for (let i = 0; i < toClassify.length; i += CLASSIFY_BATCH) {
+          const batch = toClassify.slice(i, i + CLASSIFY_BATCH);
+          await Promise.all(
+            batch.map(async (p) => {
+              if (!p.household?.addressId) return;
+              try {
+                await geocodeAndClassifyAddress(p.household.addressId, campaignId, p.id);
+              } catch (err) {
+                console.error(`Ward classification failed for person ${p.id}:`, err);
+              }
+            })
+          );
+        }
+      } catch (e) {
+        console.error("Post-import ward classification failed:", e);
+      }
+    })();
   }
 
   revalidatePath("/import/voters");

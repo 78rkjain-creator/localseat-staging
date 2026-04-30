@@ -9,7 +9,7 @@ import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Custom Tags" };
 
-const TAG_CAP = 18;
+const TAG_CAP = 100;
 
 export default async function TagsPage() {
   const session = await getServerSession(authOptions);

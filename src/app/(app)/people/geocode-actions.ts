@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { geocodeAndClassifyAddress } from "@/lib/ward";
 import { hasMinimumRole } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
-import { Role } from "@prisma/client";
+import { Role, WardStatus } from "@prisma/client";
 
 async function requireGeocodePermission() {
   const session = await getServerSession(authOptions);
@@ -33,7 +33,10 @@ export async function getPersonsNeedingGeocode(): Promise<{
       campaignId,
       deletedAt: null,
       householdId: { not: null },
-      household: { address: { lat: null } },
+      OR: [
+        { household: { address: { lat: null } } },
+        { wardStatus: WardStatus.not_checked },
+      ],
     },
     select: { id: true },
     orderBy: { lastName: "asc" },

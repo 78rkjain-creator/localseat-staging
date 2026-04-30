@@ -208,7 +208,10 @@ export async function getNeedsGeocodeCount(campaignId: string): Promise<number> 
       campaignId,
       deletedAt: null,
       householdId: { not: null },
-      household: { address: { lat: null } },
+      OR: [
+        { household: { address: { lat: null } } },
+        { wardStatus: WardStatus.not_checked },
+      ],
     },
   });
 }

@@ -39,7 +39,7 @@ export function BulkGeocodeButton({ initialCount }: Props) {
 
     const result = await getPersonsNeedingGeocode();
     if (result.error || !result.ids?.length) {
-      setError(result.error ?? "No records found to geocode.");
+      setError(result.error ?? "No records found to geocode or classify.");
       setRunning(false);
       return;
     }
@@ -85,10 +85,10 @@ export function BulkGeocodeButton({ initialCount }: Props) {
             d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
           />
         </svg>
-        Geocode {count} records
+        Geocode &amp; classify {count} records
       </button>
 
-      <Modal open={open} onClose={handleClose} title="Geocode records">
+      <Modal open={open} onClose={handleClose} title="Geocode &amp; classify records">
         {progress ? (
           <div className="flex flex-col items-center gap-4 py-2">
             <p className="text-sm text-slate-600">
@@ -107,9 +107,9 @@ export function BulkGeocodeButton({ initialCount }: Props) {
         ) : (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-slate-600">
-              This will geocode <strong>{count}</strong> record
-              {count !== 1 ? "s" : ""} that are missing location data. Large
-              sets may take several minutes.
+              This will geocode and classify <strong>{count}</strong> record
+              {count !== 1 ? "s" : ""} missing location data or ward
+              classification. Large sets may take several minutes.
             </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex items-center gap-3 pt-1">
@@ -126,7 +126,7 @@ export function BulkGeocodeButton({ initialCount }: Props) {
                 disabled={running}
                 className="flex-1 h-11 rounded-2xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
               >
-                Geocode now
+                Run now
               </button>
             </div>
           </div>
