@@ -136,6 +136,11 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
             { email: { contains: q.trim(), mode: "insensitive" } },
             { phoneHome: { contains: q.trim(), mode: "insensitive" } },
             { phoneMobile: { contains: q.trim(), mode: "insensitive" } },
+            { household: { address: { streetNumber: { contains: q.trim(), mode: "insensitive" } } } },
+            { household: { address: { streetName: { contains: q.trim(), mode: "insensitive" } } } },
+            { household: { address: { unitNumber: { contains: q.trim(), mode: "insensitive" } } } },
+            { household: { address: { city: { contains: q.trim(), mode: "insensitive" } } } },
+            { household: { address: { postalCode: { contains: q.trim(), mode: "insensitive" } } } },
           ],
         }
       : {}),
@@ -305,16 +310,6 @@ export async function getPersonDetail(personId: string, campaignId: string) {
   });
 
   return person;
-}
-
-export async function getPendingOutOfDistrictCount(campaignId: string): Promise<number> {
-  return db.person.count({
-    where: {
-      campaignId,
-      deletedAt: null,
-      outOfDistrictApprovalStatus: "pending",
-    },
-  });
 }
 
 // ── Voter list (paginated, management view) ────────────────────────────────

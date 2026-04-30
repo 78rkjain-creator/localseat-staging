@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { hasMinimumRole } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { sanitizeText } from "@/lib/sanitize";
-import { Role, OutOfDistrictApprovalStatus, ListSource } from "@prisma/client";
+import { Role, OutOfDistrictApprovalStatus } from "@prisma/client";
 
 // ── Shared input types ─────────────────────────────────────────────────────────
 
@@ -54,15 +54,11 @@ export async function classifyPerson(
   try {
     const person = await db.person.findFirst({
       where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
-      select: { id: true, listSource: true },
+      select: { id: true },
     });
     if (!person) return { error: "Person not found." };
 
-    const approvalStatus = isOutOfDistrict
-      ? (person.listSource === ListSource.team
-          ? OutOfDistrictApprovalStatus.approved
-          : OutOfDistrictApprovalStatus.pending)
-      : null;
+    const approvalStatus = isOutOfDistrict ? OutOfDistrictApprovalStatus.approved : null;
 
     await db.person.update({
       where: { id: personId },
@@ -157,7 +153,7 @@ export async function bulkClassifyTeamMembers(
   for (const item of items) {
     const person = await db.person.findFirst({
       where: { id: item.personId, campaignId: activeCampaignId, deletedAt: null },
-      select: { id: true, listSource: true },
+      select: { id: true },
     });
     if (!person) {
       itemErrors[item.personId] = "Person not found.";
@@ -219,11 +215,7 @@ export async function bulkClassifyTeamMembers(
       : undefined;
 
     const isOutOfDistrict = item.decision === "outside";
-    const approvalStatus = isOutOfDistrict
-      ? (person.listSource === ListSource.team
-          ? OutOfDistrictApprovalStatus.approved
-          : OutOfDistrictApprovalStatus.pending)
-      : null;
+    const approvalStatus = isOutOfDistrict ? OutOfDistrictApprovalStatus.approved : null;
 
     await db.person.update({
       where: { id: item.personId },

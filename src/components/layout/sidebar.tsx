@@ -25,7 +25,6 @@ interface SidebarProps {
   campaignName: string | null;
   campaignCount?: number;
   pendingDataCorrectionsCount?: number;
-  pendingOutOfDistrictCount?: number;
 }
 
 interface NavItem {
@@ -57,7 +56,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, pendingOutOfDistrictCount = 0 }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -501,13 +500,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                   { href: "/people/residents", label: "Residents" },
                   { href: "/people/voters", label: "Voter List" },
                   ...(role && canManageVoterList(role)
-                    ? [{
-                        href: pendingOutOfDistrictCount > 0
-                          ? "/people/out-of-district/pending"
-                          : "/people/out-of-district",
-                        label: "Out-of-District",
-                        badge: pendingOutOfDistrictCount > 0 ? pendingOutOfDistrictCount : undefined,
-                      }]
+                    ? [{ href: "/people/out-of-district", label: "Out-of-District" }]
                     : []),
                   { href: "/people/team", label: "Team" },
                   ...(role && canViewVolunteers(role)

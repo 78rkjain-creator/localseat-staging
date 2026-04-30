@@ -60,7 +60,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const canMarkOod = activeRole
     ? hasMinimumRole(activeRole as import("@/types").Role, "field_organizer" as import("@/types").Role)
     : false;
-  const canApproveOod =
+  const canRemoveOod =
     activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager";
 
   const canLinkTeamMember = canAnonymize; // candidate + campaign_manager only
@@ -182,14 +182,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const isVolunteer = person.volunteerRecords.length > 0;
   const canPromoteToUser = canAnonymize && isVolunteer && !isTeamMember && !!person.email;
 
-  // New OOD fields are present at runtime but not yet in the generated Prisma types.
-  // These casts can be removed after running `prisma generate`.
-  const p = person as typeof person & {
-    outOfDistrictRequestedAt: Date | null;
-    outOfDistrictRejectionReason: string | null;
-    outOfDistrictRequester: { firstName: string; lastName: string } | null;
-    anonymizedAt: Date | null;
-  };
+  const p = person as typeof person & { anonymizedAt: Date | null };
 
   const isAnonymized = !!p.anonymizedAt;
   const readOnly = baseReadOnly || isAnonymized;
@@ -402,16 +395,12 @@ export default async function PersonDetailPage({ params }: PageProps) {
                 initialValue={person.includeInWalkLists}
               />
             )}
-            {!isTeamMember && canMarkOod && (
+            {!isTeamMember && (canMarkOod || person.isOutOfDistrict) && (
               <OutOfDistrictControl
                 personId={person.id}
                 isOutOfDistrict={person.isOutOfDistrict}
-                approvalStatus={person.outOfDistrictApprovalStatus ?? null}
-                requestedBy={p.outOfDistrictRequester}
-                requestedAt={p.outOfDistrictRequestedAt ?? null}
-                rejectionReason={p.outOfDistrictRejectionReason ?? null}
                 canMark={canMarkOod}
-                canApprove={canApproveOod}
+                canRemove={canRemoveOod}
               />
             )}
           </Card>
@@ -718,10 +707,9 @@ function WardStatusBadge({ wardStatus }: { wardStatus: string }) {
   if (wardStatus === "not_checked") return null;
 
   const config: Record<string, { label: string; cls: string }> = {
-    inside:           { label: "In area",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    outside_accepted: { label: "In area",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    outside:          { label: "Out of area",   cls: "bg-rose-50 text-rose-700 border-rose-200" },
-    pending_review:   { label: "Pending review", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    inside:           { label: "In area",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    outside_accepted: { label: "In area",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    outside:          { label: "Out of area", cls: "bg-rose-50 text-rose-700 border-rose-200" },
   };
 
   const entry = config[wardStatus];

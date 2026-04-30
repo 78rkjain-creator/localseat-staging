@@ -100,6 +100,11 @@ export default async function VotersPage({ searchParams }: PageProps) {
           { lastName: { contains: q.trim(), mode: "insensitive" } },
           { email: { contains: q.trim(), mode: "insensitive" } },
           { phoneHome: { contains: q.trim(), mode: "insensitive" } },
+          { household: { address: { streetNumber: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { streetName: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { unitNumber: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { city: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { postalCode: { contains: q.trim(), mode: "insensitive" } } } },
         ],
       }
     : filterWhere;

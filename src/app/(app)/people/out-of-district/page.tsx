@@ -16,20 +16,6 @@ import { WardStatus, ListSource } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Out-of-District People" };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  rejected: "Rejected",
-  not_required: "Not required",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
-  not_required: "bg-slate-100 text-slate-500 border-slate-200",
-};
-
 const MISSING_FILTER_OPTIONS = [
   { label: "Missing address", value: "missing_address" },
   { label: "Missing phone", value: "missing_phone" },
@@ -46,11 +32,11 @@ function toggleMissingFilter(key: string, active: string[]): string | undefined 
 }
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; status?: string; missing?: string }>;
+  searchParams: Promise<{ q?: string; missing?: string }>;
 }
 
 export default async function OutOfDistrictPage({ searchParams }: PageProps) {
-  const { q, status: rawStatus, missing: rawMissing } = await searchParams;
+  const { q, missing: rawMissing } = await searchParams;
 
   const activeMissing: string[] = rawMissing
     ? rawMissing.split(",").filter(Boolean)
@@ -66,9 +52,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
   const canBulkGeocode = activeRole
     ? hasMinimumRole(activeRole as Role, "field_organizer" as Role)
     : false;
-
-  const validStatuses = ["pending", "approved", "rejected"];
-  const activeStatus = rawStatus && validStatuses.includes(rawStatus) ? rawStatus : undefined;
 
   const baseWhere: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
@@ -99,13 +82,8 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
     missingAnd.push({ householdId: { not: null }, household: { address: { lat: null } } });
   }
 
-  const statusWhere: Prisma.PersonWhereInput = activeStatus
-    ? { outOfDistrictApprovalStatus: activeStatus as "pending" | "approved" | "rejected" }
-    : {};
-
   const filterWhere: Prisma.PersonWhereInput = {
     ...baseWhere,
-    ...statusWhere,
     ...(missingAnd.length > 0 ? { AND: missingAnd } : {}),
   };
 
@@ -117,14 +95,18 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
           { lastName: { contains: q.trim(), mode: "insensitive" } },
           { email: { contains: q.trim(), mode: "insensitive" } },
           { phoneHome: { contains: q.trim(), mode: "insensitive" } },
+          { household: { address: { streetNumber: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { streetName: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { unitNumber: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { city: { contains: q.trim(), mode: "insensitive" } } } },
+          { household: { address: { postalCode: { contains: q.trim(), mode: "insensitive" } } } },
         ],
       }
     : filterWhere;
 
-  function buildUrl(params: { q?: string; status?: string; missing?: string }) {
+  function buildUrl(params: { q?: string; missing?: string }) {
     const p = new URLSearchParams();
     if (params.q) p.set("q", params.q);
-    if (params.status) p.set("status", params.status);
     if (params.missing) p.set("missing", params.missing);
     const s = p.toString();
     return `/people/out-of-district${s ? `?${s}` : ""}`;
@@ -137,7 +119,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
         id: true,
         firstName: true,
         lastName: true,
-        outOfDistrictApprovalStatus: true,
         listSource: true,
         household: {
           select: {
@@ -168,13 +149,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
   ]);
 
   const hasWardBoundary = campaign?.wardBoundary !== null && campaign?.wardBoundary !== undefined;
-
-  const STATUS_PILLS = [
-    { label: "All", value: undefined },
-    { label: "Pending", value: "pending" },
-    { label: "Approved", value: "approved" },
-    { label: "Rejected", value: "rejected" },
-  ];
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -213,26 +187,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
         <PeopleSearchBar defaultValue={q ?? ""} />
       </div>
 
-      {/* Status filter pills */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {STATUS_PILLS.map((pill) => {
-          const isActive = activeStatus === pill.value;
-          return (
-            <Link
-              key={pill.label}
-              href={buildUrl({ q, status: pill.value, missing: rawMissing })}
-              className={
-                isActive
-                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              }
-            >
-              {pill.label}
-            </Link>
-          );
-        })}
-      </div>
-
       {/* Missing data filter chips */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <span className="text-xs text-slate-400 font-medium">Missing:</span>
@@ -242,7 +196,7 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
           return (
             <Link
               key={opt.value}
-              href={buildUrl({ q, status: activeStatus, missing: next })}
+              href={buildUrl({ q, missing: next })}
               className={
                 isActive
                   ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
@@ -271,7 +225,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
                     address.unitNumber ? ` #${address.unitNumber}` : ""
                   }`
                 : null;
-              const status = person.outOfDistrictApprovalStatus ?? null;
               const latestResponse = person.canvassResponses[0];
 
               return (
@@ -301,15 +254,6 @@ export default async function OutOfDistrictPage({ searchParams }: PageProps) {
                         <SupportLevelBadge
                           level={latestResponse.supportLevel as SupportLevel}
                         />
-                      )}
-                      {status && (
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                            STATUS_COLORS[status] ?? "bg-slate-100 text-slate-500 border-slate-200"
-                          }`}
-                        >
-                          {STATUS_LABELS[status] ?? status}
-                        </span>
                       )}
                     </div>
 
