@@ -38,6 +38,13 @@ export async function createCampaign(
   const electionDate = input.electionDate ? new Date(input.electionDate) : null;
   const year = electionDate ? electionDate.getFullYear() : new Date().getFullYear();
 
+  // Users creating their first campaign are candidates; users adding a
+  // subsequent campaign (already have memberships) become campaign managers.
+  const membershipRole =
+    session.user.memberships && session.user.memberships.length > 0
+      ? Role.campaign_manager
+      : Role.candidate;
+
   const campaign = await db.campaign.create({
     data: {
       name,
@@ -51,7 +58,7 @@ export async function createCampaign(
       memberships: {
         create: {
           userId: session.user.id,
-          role: Role.candidate,
+          role: membershipRole,
         },
       },
     },

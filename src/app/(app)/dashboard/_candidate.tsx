@@ -105,6 +105,18 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
 
   void fundraisingGoal;
 
+  // Hero computed values
+  const nameSplit = campaignName ? splitCampaignName(campaignName) : null;
+  const nameLine1 = nameSplit?.line1 ?? null;
+  const nameLine2 = nameSplit?.line2 ?? null;
+  const nameLine1Len = nameLine1?.length ?? 0;
+  const nameLine1Size = nameLine1Len <= 14 ? "text-base" : "text-sm";
+  const nameLine1Truncate = nameLine1Len > 22;
+  const supportDelta =
+    supportRateSeries.length >= 2
+      ? supportRateSeries[supportRateSeries.length - 1].count - supportRateSeries[0].count
+      : null;
+
   const idTotal = forUs + againstUs + undecided;
   const leaderboard = canvassers.slice(0, 3);
   const lists = walkListProgress.slice(0, 4);
@@ -118,56 +130,111 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
         style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}
       >
         <div className="absolute bottom-0 right-0 w-32 h-32 rounded-full bg-orange-500/10 translate-x-12 translate-y-8 pointer-events-none" />
-        <div className="flex items-start justify-between gap-6">
-          {/* Left */}
-          <div>
-            <p className="text-[11px] font-semibold text-white/40 uppercase tracking-widest mb-1.5">
-              Campaign summary
-            </p>
-            <p className="text-[30px] font-extrabold text-white leading-none mb-2">
-              {supportRate}% support rate
-            </p>
-            {campaignName && (
-              <p className="text-sm text-white/60 mb-0.5">{campaignName}</p>
+
+        <div className="flex items-center relative z-10">
+
+          {/* 1 ── Campaign identity */}
+          <div className="w-48 flex-shrink-0 pr-5">
+            {nameLine1 && (
+              <p
+                className={[
+                  nameLine1Size,
+                  "font-medium text-white leading-tight",
+                  nameLine1Truncate ? "truncate" : "",
+                ].join(" ")}
+                style={nameLine1Truncate ? { maxWidth: "200px" } : undefined}
+              >
+                {nameLine1}
+              </p>
+            )}
+            {nameLine2 && (
+              <p className="text-[13px] font-normal text-white/70 leading-tight mt-0.5">
+                {nameLine2}
+              </p>
             )}
             {daysToElection !== null && (
-              <p className="text-sm text-white/40">
+              <p className={["text-[11px] font-normal text-white/50", nameLine2 ? "mt-3" : "mt-1"].join(" ")}>
                 {daysToElection > 0 ? `${daysToElection} days to election` : "Election day!"}
               </p>
             )}
           </div>
-          {/* Right — canvass coverage */}
-          <div className="flex-shrink-0 text-right">
-            <p className="text-[11px] text-white/40 uppercase tracking-widest mb-2">Coverage</p>
-            <div className="flex items-end gap-5 mb-2">
-              <div className="text-center">
-                <p className="text-xl font-bold text-white/40 tabular">{totalPeople.toLocaleString()}</p>
-                <p className="text-[10px] text-white/30 mt-0.5">total</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold tabular" style={{ color: "#93c5fd" }}>{contactedOnce.toLocaleString()}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: "#93c5fd" }}>once</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold tabular" style={{ color: "#60a5fa" }}>{contactedTwice.toLocaleString()}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: "#60a5fa" }}>twice</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold tabular" style={{ color: "#3b82f6" }}>{contactedThreePlus.toLocaleString()}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: "#3b82f6" }}>3+</p>
-              </div>
-            </div>
-            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden flex w-56 ml-auto">
-              {totalPeople > 0 && (
-                <>
-                  <div style={{ width: `${(contactedThreePlus / totalPeople) * 100}%`, background: "#3b82f6" }} className="h-full" />
-                  <div style={{ width: `${(contactedTwice / totalPeople) * 100}%`, background: "#60a5fa" }} className="h-full" />
-                  <div style={{ width: `${(contactedOnce / totalPeople) * 100}%`, background: "#93c5fd" }} className="h-full" />
-                </>
-              )}
-            </div>
-            <p className="text-[10px] text-white/30 mt-1">{reachedPct}% reached</p>
+
+          {/* divider */}
+          <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+
+          {/* 2 ── Support rate */}
+          <div className="flex flex-col items-center w-36 flex-shrink-0 px-5">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-white/50">Support rate</p>
+            <p className="text-[28px] font-medium text-white tabular-nums leading-none mt-1">
+              {supportRate}%
+            </p>
+            {supportDelta !== null ? (
+              <p
+                className="text-[11px] mt-1"
+                style={{
+                  color: supportDelta > 0 ? "#4ade80"
+                       : supportDelta < 0 ? "#fca5a5"
+                       : "rgba(255,255,255,0.35)",
+                }}
+              >
+                {supportDelta > 0 ? "+" : ""}{supportDelta} vs last week
+              </p>
+            ) : (
+              <p className="text-[11px] mt-1 text-white/35">—</p>
+            )}
           </div>
+
+          {/* divider */}
+          <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+
+          {/* 3 ── Coverage */}
+          <div className="flex flex-col items-center flex-1 px-5">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-white/50">Coverage</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <p className="text-[28px] font-medium text-white tabular-nums leading-none">
+                {totalPeople.toLocaleString()}
+              </p>
+              <p className="text-[11px] text-white/40">total</p>
+            </div>
+            <div className="flex justify-between w-full max-w-[360px] mt-1">
+              <span className="text-[11px]">
+                <span className="font-medium tabular-nums" style={{ color: "#93c5fd" }}>
+                  {contactedOnce.toLocaleString()}
+                </span>
+                <span className="text-white/45 ml-0.5">once</span>
+              </span>
+              <span className="text-[11px]">
+                <span className="font-medium tabular-nums text-white/45">
+                  {contactedTwice.toLocaleString()}
+                </span>
+                <span className="text-white/45 ml-0.5">twice</span>
+              </span>
+              <span className="text-[11px]">
+                <span className="font-medium tabular-nums text-white/45">
+                  {contactedThreePlus.toLocaleString()}
+                </span>
+                <span className="text-white/45 ml-0.5">3+</span>
+              </span>
+            </div>
+          </div>
+
+          {/* divider */}
+          <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+
+          {/* 4 ── Reached */}
+          <div className="flex flex-col items-center w-24 flex-shrink-0 pl-5">
+            <p className="text-[11px] uppercase tracking-[0.06em] text-white/50">Reached</p>
+            <p className="text-[28px] font-medium text-white tabular-nums leading-none mt-1">
+              {reachedPct}%
+            </p>
+            <div className="h-1 rounded-full bg-white/10 overflow-hidden w-full mt-1.5">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${reachedPct}%`, background: "#3b82f6" }}
+              />
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -249,9 +316,9 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
                 { label: "Not contacted", value: uncontacted, color: "#f1f5f9" },
               ].map(({ label, value, color }) => (
                 <div key={label}>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[11px] text-slate-500">{label}</span>
-                    <span className="text-[11px] font-semibold text-slate-700 tabular">{value.toLocaleString()}</span>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[11px] text-slate-500 flex-1 min-w-0 truncate">{label}</span>
+                    <span className="text-[11px] font-semibold text-slate-700 tabular-nums flex-shrink-0">{value.toLocaleString()}</span>
                   </div>
                   <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
                     <div
@@ -475,6 +542,20 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+function splitCampaignName(name: string): { line1: string; line2?: string } {
+  const separators = [" — ", " – ", " - ", ", "];
+  for (const sep of separators) {
+    const idx = name.indexOf(sep);
+    if (idx > 0) {
+      return {
+        line1: name.slice(0, idx).trim(),
+        line2: name.slice(idx + sep.length).trim(),
+      };
+    }
+  }
+  return { line1: name };
+}
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

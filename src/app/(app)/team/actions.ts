@@ -199,15 +199,14 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
     return { error: "email, firstName, lastName, and role are required." };
   }
 
-  const sn = input.streetNumber?.trim() || null;
-  const st = input.streetName?.trim() || null;
-  const ct = input.city?.trim() || null;
-  const pc = input.postalCode?.trim().replace(/\s/g, "").toUpperCase() || null;
+  const sn   = input.streetNumber?.trim() || null;
+  const st   = input.streetName?.trim() || null;
+  const ct   = input.city?.trim() || null;
+  const pc   = input.postalCode?.trim().replace(/\s/g, "").toUpperCase() || null;
+  const unit = input.unitNumber?.trim() || null;
+  const prov = input.province?.trim() || "ON";
   const hasAny = !!(sn || st || ct || pc);
   const hasAll = !!(sn && st && ct && pc);
-  if (hasAny && !hasAll) {
-    return { error: "Street number, street name, city, and postal code are all required when entering an address." };
-  }
 
   if (!Object.values(Role).includes(roleInput as Role)) {
     return { error: `Invalid role: ${roleInput}` };
@@ -350,23 +349,36 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
       });
     }
 
-    if (hasAll) {
-      const prov = input.province?.trim() || "ON";
-      const unit = input.unitNumber?.trim() || null;
-      let addr = await db.address.findFirst({
-        where: {
-          campaignId,
-          deletedAt: null,
-          streetNumber: { equals: sn!, mode: "insensitive" },
-          streetName: { equals: st!, mode: "insensitive" },
-          unitNumber: unit ? { equals: unit, mode: "insensitive" } : null,
-          postalCode: { equals: pc!, mode: "insensitive" },
-        },
-        select: { id: true },
-      });
+    if (hasAny) {
+      // For full addresses, try to reuse an existing Address row (dedup by all four fields).
+      // For partial addresses, skip dedup — matching on empty strings would produce false positives.
+      let addr: { id: string } | null = null;
+      if (hasAll) {
+        addr = await db.address.findFirst({
+          where: {
+            campaignId,
+            deletedAt: null,
+            streetNumber: { equals: sn!, mode: "insensitive" },
+            streetName:   { equals: st!, mode: "insensitive" },
+            unitNumber:   unit ? { equals: unit, mode: "insensitive" } : null,
+            postalCode:   { equals: pc!, mode: "insensitive" },
+          },
+          select: { id: true },
+        });
+      }
       if (!addr) {
         addr = await db.address.create({
-          data: { campaignId, streetNumber: sn!, streetName: st!, unitNumber: unit, city: ct!, province: prov, postalCode: pc!, lat: input.lat ?? null, lng: input.lng ?? null },
+          data: {
+            campaignId,
+            streetNumber: sn ?? "",
+            streetName:   st ?? "",
+            unitNumber:   unit,
+            city:         ct ?? "",
+            province:     prov,
+            postalCode:   pc ?? "",
+            lat: hasAll ? (input.lat ?? null) : null,
+            lng: hasAll ? (input.lng ?? null) : null,
+          },
           select: { id: true },
         });
       }

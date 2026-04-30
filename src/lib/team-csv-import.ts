@@ -164,9 +164,10 @@ export function classifyTeamRow(row: TeamReviewRow): "ready" | "incomplete" | "m
   const roleInvalid = Boolean(f.role) && !isValidRoleString(f.role);
   if (mandatoryMissing || !hasAnyPhone || roleInvalid) return "missing_required";
 
-  const hasAddress = Boolean(f.streetNumber && f.streetName && f.city && f.province && f.postalCode);
-  if (hasAddress) return "ready";
-  return "incomplete";
+  // Address is fully optional — partial or full address → ready.
+  // Only "no address at all" stays incomplete (surfaced as a warning in the UI, still imported).
+  const hasAnyAddress = Boolean(f.streetNumber || f.streetName || f.city || f.postalCode);
+  return hasAnyAddress ? "ready" : "incomplete";
 }
 
 export function listMissingTeamFields(row: TeamReviewRow): string[] {
@@ -178,7 +179,7 @@ export function listMissingTeamFields(row: TeamReviewRow): string[] {
   if (!f.role)                    out.push("Role");
   else if (!isValidRoleString(f.role)) out.push(`Role (invalid: "${f.role.trim()}")`);
   if (!f.phoneHome && !f.phoneMobile) out.push("Phone");
-  if (!f.streetNumber || !f.streetName) out.push("Address");
+  // Address is optional — no "Address" entry here.
   return out;
 }
 
