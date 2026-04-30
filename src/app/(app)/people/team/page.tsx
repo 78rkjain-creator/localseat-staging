@@ -12,6 +12,7 @@ import {
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pagination } from "@/components/ui/pagination";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
 import { RoleEditorCell } from "../role-editor-client";
@@ -69,20 +70,25 @@ function toggleMissingFilter(key: string, active: string[]): string | undefined 
   return next.length > 0 ? next.join(",") : undefined;
 }
 
-function buildUrl(params: { q?: string; missing?: string }) {
+const PAGE_SIZE = 100;
+
+function buildUrl(params: { q?: string; missing?: string; page?: number }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.missing) p.set("missing", params.missing);
+  if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people/team${s ? `?${s}` : ""}`;
 }
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; missing?: string }>;
+  searchParams: Promise<{ q?: string; missing?: string; page?: string }>;
 }
 
 export default async function TeamPage({ searchParams }: PageProps) {
-  const { q, missing: rawMissing } = await searchParams;
+  const { q, missing: rawMissing, page: rawPage } = await searchParams;
+
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
   const activeMissing: string[] = rawMissing
     ? rawMissing.split(",").filter(Boolean)
@@ -164,7 +170,7 @@ export default async function TeamPage({ searchParams }: PageProps) {
       }
     : filterWhere;
 
-  const [people, total, needsGeocodeCount] = await Promise.all([
+  const [people, total, filteredTotal, needsGeocodeCount] = await Promise.all([
     db.person.findMany({
       where: searchWhere,
       select: {
@@ -189,10 +195,15 @@ export default async function TeamPage({ searchParams }: PageProps) {
         },
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
     db.person.count({ where: baseWhere }),
+    db.person.count({ where: searchWhere }),
     getNeedsGeocodeCount(activeCampaignId),
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -342,6 +353,12 @@ export default async function TeamPage({ searchParams }: PageProps) {
               );
             })}
           </ul>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildPageUrl={(p) => buildUrl({ q, missing: rawMissing, page: p })}
+          />
         </div>
       )}
     </div>

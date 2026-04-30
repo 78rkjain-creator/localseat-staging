@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pagination } from "@/components/ui/pagination";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
 import type { Role, SupportLevel } from "@/types";
@@ -15,6 +16,8 @@ import type { Prisma } from "@prisma/client";
 import { WardStatus } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Voter List" };
+
+const PAGE_SIZE = 100;
 
 const MISSING_FILTER_OPTIONS = [
   { label: "Missing address", value: "missing_address" },
@@ -31,20 +34,23 @@ function toggleMissingFilter(key: string, active: string[]): string | undefined 
   return next.length > 0 ? next.join(",") : undefined;
 }
 
-function buildUrl(params: { q?: string; missing?: string }) {
+function buildUrl(params: { q?: string; missing?: string; page?: number }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.missing) p.set("missing", params.missing);
+  if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people/voters${s ? `?${s}` : ""}`;
 }
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; missing?: string }>;
+  searchParams: Promise<{ q?: string; missing?: string; page?: string }>;
 }
 
 export default async function VotersPage({ searchParams }: PageProps) {
-  const { q, missing: rawMissing } = await searchParams;
+  const { q, missing: rawMissing, page: rawPage } = await searchParams;
+
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
   const activeMissing: string[] = rawMissing
     ? rawMissing.split(",").filter(Boolean)
@@ -109,7 +115,7 @@ export default async function VotersPage({ searchParams }: PageProps) {
       }
     : filterWhere;
 
-  const [people, total, needsGeocodeCount] = await Promise.all([
+  const [people, total, filteredTotal, needsGeocodeCount] = await Promise.all([
     db.person.findMany({
       where: searchWhere,
       select: {
@@ -135,12 +141,15 @@ export default async function VotersPage({ searchParams }: PageProps) {
         },
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      take: 50,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
     db.person.count({ where: baseWhere }),
+    db.person.count({ where: searchWhere }),
     getNeedsGeocodeCount(activeCampaignId),
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
   const isFiltered = !!q?.trim() || activeMissing.length > 0;
 
   return (
@@ -150,12 +159,12 @@ export default async function VotersPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Voter List</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {total.toLocaleString()} confirmed voter{total !== 1 ? "s" : ""}
-            {isFiltered && people.length < total && (
+            {isFiltered ? (
               <>
-                {" "}
-                &mdash; showing {people.length} result{people.length !== 1 ? "s" : ""}
+                {filteredTotal.toLocaleString()} of {total.toLocaleString()} confirmed voter{total !== 1 ? "s" : ""}
               </>
+            ) : (
+              <>{total.toLocaleString()} confirmed voter{total !== 1 ? "s" : ""}</>
             )}
           </p>
         </div>
@@ -274,13 +283,11 @@ export default async function VotersPage({ searchParams }: PageProps) {
             })}
           </ul>
 
-          {people.length === 50 && (
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
-              <p className="text-sm text-slate-500 text-center">
-                Showing first 50 results &mdash; use search to narrow down
-              </p>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildPageUrl={(p) => buildUrl({ q, missing: rawMissing, page: p })}
+          />
         </div>
       )}
     </div>

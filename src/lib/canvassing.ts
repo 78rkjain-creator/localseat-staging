@@ -154,6 +154,7 @@ export async function getAvailableCanvassers(
 export interface PeopleFilterParams {
   campaignId: string;
   listId: string;
+  streetNumber?: string;
   streetName?: string;
   postalCode?: string;
   supportLevel?: SupportLevel | "";
@@ -168,6 +169,7 @@ export interface PeopleFilterParams {
 export async function previewPeopleFilter({
   campaignId,
   listId,
+  streetNumber,
   streetName,
   postalCode,
   supportLevel,
@@ -188,22 +190,18 @@ export async function previewPeopleFilter({
     id: existingIds.length > 0 ? { notIn: existingIds } : undefined,
   };
 
+  const addressFilter: Prisma.AddressWhereInput = {};
   if (streetName?.trim()) {
-    where.household = {
-      address: {
-        streetName: { contains: streetName.trim(), mode: "insensitive" },
-      },
-    };
+    addressFilter.streetName = { contains: streetName.trim(), mode: "insensitive" };
   }
-
+  if (streetNumber?.trim()) {
+    addressFilter.streetNumber = { contains: streetNumber.trim(), mode: "insensitive" };
+  }
   if (postalCode?.trim()) {
-    where.household = {
-      ...(where.household as object ?? {}),
-      address: {
-        ...((where.household as { address?: object })?.address ?? {}),
-        postalCode: { contains: postalCode.trim().replace(/\s/g, ""), mode: "insensitive" },
-      },
-    };
+    addressFilter.postalCode = { contains: postalCode.trim().replace(/\s/g, ""), mode: "insensitive" };
+  }
+  if (Object.keys(addressFilter).length > 0) {
+    where.household = { address: addressFilter };
   }
 
   if (supportLevel) {

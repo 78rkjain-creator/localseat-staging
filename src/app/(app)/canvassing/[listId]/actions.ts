@@ -35,6 +35,7 @@ async function requireListManager(listId: string) {
 // ── Method 1: Filter-based add ─────────────────────────────────────────────
 
 export interface FilterParams {
+  streetNumber?: string;
   streetName?: string;
   postalCode?: string;
   supportLevel?: SupportLevel | "";
@@ -63,25 +64,18 @@ export async function addFilteredPeople(
     id: existingIds.length > 0 ? { notIn: existingIds } : undefined,
   };
 
+  const addressFilter: Prisma.AddressWhereInput = {};
   if (filters.streetName?.trim()) {
-    where.household = {
-      address: {
-        streetName: { contains: filters.streetName.trim(), mode: "insensitive" },
-      },
-    };
+    addressFilter.streetName = { contains: filters.streetName.trim(), mode: "insensitive" };
   }
-
+  if (filters.streetNumber?.trim()) {
+    addressFilter.streetNumber = { contains: filters.streetNumber.trim(), mode: "insensitive" };
+  }
   if (filters.postalCode?.trim()) {
-    where.household = {
-      ...(where.household as object ?? {}),
-      address: {
-        ...((where.household as { address?: object })?.address ?? {}),
-        postalCode: {
-          contains: filters.postalCode.trim().replace(/\s/g, ""),
-          mode: "insensitive",
-        },
-      },
-    };
+    addressFilter.postalCode = { contains: filters.postalCode.trim().replace(/\s/g, ""), mode: "insensitive" };
+  }
+  if (Object.keys(addressFilter).length > 0) {
+    where.household = { address: addressFilter };
   }
 
   if (filters.supportLevel) {
@@ -299,6 +293,7 @@ export async function previewFilter(
   const result = await previewPeopleFilter({
     campaignId,
     listId,
+    streetNumber: filters.streetNumber,
     streetName: filters.streetName,
     postalCode: filters.postalCode,
     supportLevel: filters.supportLevel || undefined,

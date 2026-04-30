@@ -29,7 +29,7 @@ export interface PeopleListFilters {
   page?: number;
 }
 
-const PEOPLE_PAGE_SIZE = 50;
+const PEOPLE_PAGE_SIZE = 100;
 
 export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, wardIn, isOutOfDistrict, excludeAnonymized, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];

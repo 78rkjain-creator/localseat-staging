@@ -22,6 +22,7 @@ interface AddPeopleModalProps {
 }
 
 const EMPTY_FILTERS: FilterParams = {
+  streetNumber: "",
   streetName: "",
   postalCode: "",
   supportLevel: "",
@@ -130,6 +131,17 @@ export function AddPeopleModal({
               placeholder="e.g. Elm Street"
             />
             <Input
+              label="Street number (optional)"
+              value={filters.streetNumber ?? ""}
+              onChange={(e) =>
+                setFilters((f) => ({ ...f, streetNumber: e.target.value }))
+              }
+              placeholder="e.g. 123"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
               label="Postal code"
               value={filters.postalCode ?? ""}
               onChange={(e) =>
@@ -137,9 +149,7 @@ export function AddPeopleModal({
               }
               placeholder="e.g. K1A 0B1"
             />
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Support level */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-700">
@@ -165,28 +175,28 @@ export function AddPeopleModal({
                 )}
               </select>
             </div>
-
-            {/* Tag */}
-            {tags.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-slate-700">Tag</label>
-                <select
-                  value={filters.tagId ?? ""}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, tagId: e.target.value }))
-                  }
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors appearance-none"
-                >
-                  <option value="">Any tag</option>
-                  {tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
+
+          {/* Tag */}
+          {tags.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Tag</label>
+              <select
+                value={filters.tagId ?? ""}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, tagId: e.target.value }))
+                }
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors appearance-none"
+              >
+                <option value="">Any tag</option>
+                {tags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Not yet canvassed toggle */}
           <label className="flex items-center gap-3 cursor-pointer">

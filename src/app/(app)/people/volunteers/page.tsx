@@ -7,6 +7,7 @@ import { canViewVolunteers, canManageVolunteers, hasMinimumRole } from "@/lib/pe
 import { db } from "@/lib/db";
 import { getNeedsGeocodeCount } from "@/lib/people";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pagination } from "@/components/ui/pagination";
 import { PeopleSearchBar } from "../search-bar";
 import { BulkGeocodeButton } from "../bulk-geocode-button";
 import { AddVolunteerButton, RemoveVolunteerButton } from "./volunteer-client";
@@ -67,20 +68,25 @@ function toggleMissingFilter(key: string, active: string[]): string | undefined 
   return next.length > 0 ? next.join(",") : undefined;
 }
 
-function buildUrl(params: { q?: string; missing?: string }) {
+const PAGE_SIZE = 100;
+
+function buildUrl(params: { q?: string; missing?: string; page?: number }) {
   const p = new URLSearchParams();
   if (params.q) p.set("q", params.q);
   if (params.missing) p.set("missing", params.missing);
+  if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people/volunteers${s ? `?${s}` : ""}`;
 }
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; missing?: string }>;
+  searchParams: Promise<{ q?: string; missing?: string; page?: string }>;
 }
 
 export default async function VolunteersPage({ searchParams }: PageProps) {
-  const { q, missing: rawMissing } = await searchParams;
+  const { q, missing: rawMissing, page: rawPage } = await searchParams;
+
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
 
   const activeMissing: string[] = rawMissing
     ? rawMissing.split(",").filter(Boolean)
@@ -205,7 +211,7 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
   ]);
 
   // Sort: canvassers → sign_installers → volunteers, then alpha within each tier
-  const people = [...rawPeople].sort((a, b) => {
+  const sortedPeople = [...rawPeople].sort((a, b) => {
     const ta = TIER_ORDER[getTier(a.user?.memberships[0]?.role)];
     const tb = TIER_ORDER[getTier(b.user?.memberships[0]?.role)];
     if (ta !== tb) return ta - tb;
@@ -214,6 +220,10 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
     if (la !== lb) return la < lb ? -1 : 1;
     return a.firstName.toLowerCase() < b.firstName.toLowerCase() ? -1 : 1;
   });
+
+  const filteredTotal = sortedPeople.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const people = sortedPeople.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -365,6 +375,12 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
               );
             })}
           </ul>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildPageUrl={(p) => buildUrl({ q, missing: rawMissing, page: p })}
+          />
         </div>
       )}
     </div>

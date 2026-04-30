@@ -10,6 +10,7 @@ import { deriveSupportBadge } from "@/lib/support-badge";
 import { SupportLevelBadge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/tag-chip";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Pagination } from "@/components/ui/pagination";
 import { PeopleSearchBar } from "./search-bar";
 import { DistrictClassifyBanner } from "./classify-banner";
 import { BulkGeocodeButton } from "./bulk-geocode-button";
@@ -68,14 +69,6 @@ function buildUrl(params: {
   if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people${s ? `?${s}` : ""}`;
-}
-
-function getPageRange(current: number, total: number): (number | "...")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, "...", total];
-  if (current >= total - 3)
-    return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
-  return [1, "...", current - 1, current, current + 1, "...", total];
 }
 
 interface PageProps {
@@ -182,7 +175,7 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
     return { id: p.id, firstName: p.firstName, lastName: p.lastName, addressLine, role };
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / 100));
   const activeTagId = tag;
   const activeTag = allTags.find((t) => t.id === activeTagId);
   const isFiltered = !!q || !!activeTagId || !!supportFilter || activeMissing.length > 0 || showVolunteer;
@@ -445,170 +438,13 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
             })}
           </ul>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="border-t border-slate-100">
-              {/* Mobile */}
-              <div className="flex md:hidden items-center justify-between px-5 py-4">
-                {page > 1 ? (
-                  <Link
-                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page - 1 })}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Previous
-                  </Link>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-slate-300">
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Previous
-                  </span>
-                )}
-                <span className="text-sm text-slate-500">
-                  Page {page} of {totalPages}
-                </span>
-                {page < totalPages ? (
-                  <Link
-                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page + 1 })}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
-                  >
-                    Next
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-slate-300">
-                    Next
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-
-              {/* Desktop */}
-              <div className="hidden md:flex items-center justify-center gap-1 px-5 py-4">
-                {page > 1 ? (
-                  <Link
-                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page - 1 })}
-                    className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                    aria-label="Previous page"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Link>
-                ) : (
-                  <span
-                    className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-300"
-                    aria-hidden
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </span>
-                )}
-
-                {getPageRange(page, totalPages).map((pageNum, i) =>
-                  pageNum === "..." ? (
-                    <span
-                      key={`el-${i}`}
-                      className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm select-none"
-                    >
-                      …
-                    </span>
-                  ) : (
-                    <Link
-                      key={pageNum}
-                      href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: pageNum })}
-                      aria-current={pageNum === page ? "page" : undefined}
-                      className={
-                        pageNum === page
-                          ? "h-9 w-9 flex items-center justify-center rounded-xl bg-brand-500 text-white text-sm font-semibold"
-                          : "h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors"
-                      }
-                    >
-                      {pageNum}
-                    </Link>
-                  )
-                )}
-
-                {page < totalPages ? (
-                  <Link
-                    href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: page + 1 })}
-                    className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                    aria-label="Next page"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                ) : (
-                  <span
-                    className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-300"
-                    aria-hidden
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            buildPageUrl={(p) =>
+              buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, page: p })
+            }
+          />
         </div>
       )}
     </div>
