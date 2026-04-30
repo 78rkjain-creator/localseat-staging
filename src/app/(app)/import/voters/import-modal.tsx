@@ -62,6 +62,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     flaggedRows: FlaggedRow[];
     voterIdUpdated: number;
     voterIdUnchanged: number;
+    duplicateCount: number;
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
   const [birthYearWarningCount, setBirthYearWarningCount] = useState(0);
@@ -384,6 +385,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
           flaggedRows:      res.flaggedRows       ?? [],
           voterIdUpdated:   res.voterIdUpdated   ?? 0,
           voterIdUnchanged: res.voterIdUnchanged ?? 0,
+          duplicateCount:   res.duplicateCount   ?? 0,
         });
         setStep("done");
       }
@@ -786,6 +788,21 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
               >
                 Review and decide
               </a>
+            </div>
+          )}
+
+          {result.duplicateCount > 0 && (
+            <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-left flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <svg className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-sm text-amber-800">
+                  <strong>{result.duplicateCount}</strong>{" "}
+                  row{result.duplicateCount !== 1 ? "s" : ""} in your file pointed to the same person and{" "}
+                  {result.duplicateCount !== 1 ? "were" : "was"} skipped. Check your file for duplicate entries.
+                </p>
+              </div>
             </div>
           )}
 

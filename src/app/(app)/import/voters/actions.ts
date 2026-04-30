@@ -79,6 +79,8 @@ export interface VoterImportResult {
   voterIdUpdated?: number;
   /** Number of records matched by Voter ID with no field changes (already up to date). */
   voterIdUnchanged?: number;
+  /** Number of rows silently skipped because the same person appeared more than once in the imported file. */
+  duplicateCount?: number;
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────
@@ -260,6 +262,7 @@ export async function importVoterRows(
   let reviewCount = 0;
   let voterIdUpdated = 0;
   let voterIdUnchanged = 0;
+  let intraImportDuplicates = 0;
   const flaggedRows: FlaggedRow[] = [];
   const newAddressIds: string[] = [];
   let listImportId!: string;
@@ -829,7 +832,15 @@ export async function importVoterRows(
         await tx.person.createMany({ data: newPersonRows });
       }
       if (newMembershipRows.length > 0) {
-        await tx.personListMembership.createMany({ data: newMembershipRows });
+        // Count intra-batch duplicates (same person appearing more than once in the CSV)
+        const membershipPersonCounts = new Map<string, number>();
+        for (const r of newMembershipRows) {
+          membershipPersonCounts.set(r.personId, (membershipPersonCounts.get(r.personId) ?? 0) + 1);
+        }
+        for (const count of membershipPersonCounts.values()) {
+          if (count > 1) intraImportDuplicates += count - 1;
+        }
+        await tx.personListMembership.createMany({ data: newMembershipRows, skipDuplicates: true });
       }
       if (voterIdUpdateOps.length > 0) {
         await Promise.all(
@@ -888,5 +899,5 @@ export async function importVoterRows(
     });
   }
 
-  return { matched, created, skipped, reviewCount, flaggedRows, voterIdUpdated, voterIdUnchanged };
+  return { matched, created, skipped, reviewCount, flaggedRows, voterIdUpdated, voterIdUnchanged, duplicateCount: intraImportDuplicates };
 }
