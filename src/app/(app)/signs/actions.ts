@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { canManageSigns } from "@/lib/permissions";
 import { sanitizeText, sanitizeEnum } from "@/lib/sanitize";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 
 const SIGN_STATUS_VALUES = ["to_be_installed", "installed"] as const;
@@ -21,6 +22,9 @@ async function requireSignAccess() {
   if (!activeRole || !canManageSigns(activeRole as Role)) {
     return { error: "You don't have permission to manage signs." } as const;
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! } as const;
 
   return { session, campaignId: activeCampaignId } as const;
 }

@@ -11,11 +11,13 @@ import { CanvassActivityFeed } from "@/components/dashboard/canvass-activity-fee
 import { BarSparkline, LineSparkline } from "@/components/dashboard/sparkline-charts";
 import type { DonorStatus, Role } from "@/types";
 import { DONOR_STATUS_LABELS } from "@/types";
+import type { PlanTier } from "@/lib/plan-limits";
 
 interface Props {
   campaignId: string;
   firstName: string;
   role: Role;
+  plan?: PlanTier | null;
 }
 
 // Matches the EventType enum values in the Prisma schema
@@ -45,8 +47,9 @@ async function getPeopleGeoStats(campaignId: string) {
   return { activePeople, geocodedPeople, geocodedPct };
 }
 
-export async function CandidateDashboard({ campaignId, role }: Props) {
-  const showGeoStats = role === "candidate" || role === "campaign_manager" || role === "data_manager";
+export async function CandidateDashboard({ campaignId, role, plan }: Props) {
+  const isStarterPlan = plan === "starter";
+  const showGeoStats = !isStarterPlan && (role === "candidate" || role === "campaign_manager" || role === "data_manager");
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -239,7 +242,7 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
       </div>
 
       {/* ── KPI strip ── */}
-      <div className="grid grid-cols-4 gap-3 flex-shrink-0">
+      <div className={`grid gap-3 flex-shrink-0 ${isStarterPlan ? "grid-cols-3" : "grid-cols-4"}`}>
         <KpiCard
           label="Doors today"
           value={doorsToday}
@@ -264,14 +267,16 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
         >
           <BarSparkline data={signsSeries} />
         </KpiCard>
-        <KpiCard
-          label="Donors"
-          value={totalRaised}
-          badge={`+${raisedWeek} received`}
-          badgeColor={raisedWeek > 0 ? "green" : "amber"}
-        >
-          <LineSparkline data={donorsSeries} />
-        </KpiCard>
+        {!isStarterPlan && (
+          <KpiCard
+            label="Donors"
+            value={totalRaised}
+            badge={`+${raisedWeek} received`}
+            badgeColor={raisedWeek > 0 ? "green" : "amber"}
+          >
+            <LineSparkline data={donorsSeries} />
+          </KpiCard>
+        )}
       </div>
 
       {/* ── Geocoding coverage (candidate + campaign_manager only) ── */}
@@ -295,8 +300,85 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
         </div>
       )}
 
-      {/* ── Panel grid ── */}
-      <div className="grid grid-cols-12 grid-rows-2 gap-3 flex-1 min-h-0">
+      {/* ── Starter upgrade prompt ── */}
+      {isStarterPlan && (
+        <div className="grid grid-cols-2 gap-3 flex-shrink-0">
+          {/* Voter ID mix */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Voter ID mix</p>
+            {idTotal > 0 ? (
+              <div className="space-y-1.5">
+                {[
+                  { label: "For us",        value: forUs,       color: "#10b981" },
+                  { label: "Undecided",     value: undecided,   color: "#f59e0b" },
+                  { label: "Against",       value: againstUs,   color: "#ef4444" },
+                  { label: "Not contacted", value: uncontacted, color: "#f1f5f9" },
+                ].map(({ label, value, color }) => (
+                  <div key={label}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[11px] text-slate-500 flex-1">{label}</span>
+                      <span className="text-[11px] font-semibold text-slate-700 tabular-nums">{value.toLocaleString()}</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${totalPeople > 0 ? (value / totalPeople) * 100 : 0}%`, background: color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">No voter ID data yet.</p>
+            )}
+          </div>
+
+          {/* Field ops */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Field ops</p>
+              <Link href="/canvassing" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">all lists →</Link>
+            </div>
+            {lists.length === 0 ? (
+              <p className="text-xs text-slate-400">No walk lists created.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {lists.map((l) => {
+                  const pct = l.totalEntries > 0 ? Math.min(100, Math.round((l.totalResponses / l.totalEntries) * 100)) : 0;
+                  return (
+                    <div key={l.id}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <Link href={`/canvassing/${l.id}`} className="text-sm font-medium text-slate-800 hover:text-slate-600 truncate">{l.name}</Link>
+                        <span className="text-[11px] text-slate-500 flex-shrink-0 ml-2">{l.totalResponses}/{l.totalEntries}</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                        <div className={`h-full rounded-full ${pct >= 60 ? "bg-emerald-400" : pct >= 30 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isStarterPlan && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between flex-shrink-0">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Upgrade to Campaign for detailed analytics</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Unlock donor tracking, follow-up queue, live activity feed, and performance leaderboards.
+            </p>
+          </div>
+          <Link
+            href="/onboarding/choose-plan"
+            className="flex-shrink-0 ml-6 h-9 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-colors"
+          >
+            Upgrade
+          </Link>
+        </div>
+      )}
+
+      {/* ── Panel grid (Campaign+ plans only) ── */}
+      {!isStarterPlan && <div className="grid grid-cols-12 grid-rows-2 gap-3 flex-1 min-h-0">
 
         {/* ── Row 1 ── */}
 
@@ -536,7 +618,7 @@ export async function CandidateDashboard({ campaignId, role }: Props) {
             )}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

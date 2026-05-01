@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageTags } from "@/lib/permissions";
 import { sanitizeText } from "@/lib/sanitize";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 
 async function requireManager() {
@@ -15,6 +16,9 @@ async function requireManager() {
   if (!activeRole || !canManageTags(activeRole as Role)) {
     return { error: "Permission denied." } as const;
   }
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! } as const;
+
   return { campaignId: activeCampaignId } as const;
 }
 

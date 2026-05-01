@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { canViewAllPeople } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 import type { EventType, EventStatus } from "@prisma/client";
 
@@ -75,6 +76,9 @@ async function requireEventManager() {
   if (!activeCampaignId) return { error: "No active campaign." } as const;
   if (!activeRole || !canViewAllPeople(activeRole as Role))
     return { error: "Permission denied." } as const;
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! } as const;
 
   return { session, campaignId: activeCampaignId } as const;
 }
@@ -367,6 +371,9 @@ export async function deleteEvent(eventId: string): Promise<{ error?: string }> 
   if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
     return { error: "Permission denied." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   await db.event.updateMany({
     where: { id: eventId, campaignId: activeCampaignId },

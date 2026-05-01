@@ -407,6 +407,95 @@ export async function sendVerificationEmail(params: {
   }
 }
 
+// ── Support access request email ──────────────────────────────────────────────
+
+export async function sendSupportAccessRequestEmail(params: {
+  recipientEmail: string;
+  campaignName:   string;
+  requesterName:  string;
+  note:           string | null;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { recipientEmail, campaignName, requesterName, note } = params;
+  const settingsUrl = `${appUrl()}/campaign-settings/general`;
+
+  const noteBlock = note
+    ? `<div style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Note from support</p>
+        <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;">${note}</p>
+       </div>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>LocalSeat support is requesting access to your campaign</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#0f172a;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:8px 0 0;font-size:14px;font-weight:600;color:#fb923c;">Support access request</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;">Action required</h1>
+      <p style="margin:0 0 16px;color:#475569;line-height:1.6;">
+        <strong style="color:#1e293b;">${requesterName}</strong> from the LocalSeat support team has requested
+        temporary editing access to your campaign <strong style="color:#1e293b;">${campaignName}</strong>.
+      </p>
+      <p style="margin:0 0 20px;color:#475569;line-height:1.6;">
+        If approved, access will be limited to <strong>72 hours</strong> and all actions taken by the support team
+        will be recorded in your campaign audit log.
+      </p>
+
+      ${noteBlock}
+
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="background:#f97316;border-radius:10px;">
+            <a href="${settingsUrl}"
+               style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+              Review request in settings
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0;color:#64748b;font-size:13px;line-height:1.5;">
+        Log in to your campaign settings to approve or deny this request. You can also revoke access at any time after approval.
+        If you were not expecting this request, you can safely deny it.
+      </p>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from:    fromWelcome(),
+      to:      recipientEmail,
+      subject: "LocalSeat support is requesting access to your campaign",
+      html,
+    });
+    console.log(`[email] Support access request email sent to ${recipientEmail}`);
+  } catch (err) {
+    console.error("[email] Failed to send support access request email:", err);
+  }
+}
+
 // ── Contact notification email ────────────────────────────────────────────────
 
 export async function sendContactNotificationEmail(params: {

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 
 export interface GeneralSettingsState {
   error?: string;
@@ -21,6 +22,9 @@ export async function saveGeneralSettings(
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   if (!name) return { error: "Campaign name is required." };

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
+import { isSuperUser } from "@/lib/permissions";
 
 // ── Auth guard ─────────────────────────────────────────────────────────────
 
@@ -76,6 +77,33 @@ export async function updatePlatformSettings(
       details:    { changed },
     });
   }
+
+  return {};
+}
+
+// ── Force logout all users ─────────────────────────────────────────────────
+
+export async function forceLogoutAllUsers(): Promise<{ error?: string }> {
+  let auth: Awaited<ReturnType<typeof requireSuperAccess>>;
+  try {
+    auth = await requireSuperAccess();
+  } catch {
+    return { error: "Forbidden." };
+  }
+
+  if (!isSuperUser(auth.user.platformRole)) {
+    return { error: "Only super_user accounts can force logout all users." };
+  }
+
+  await db.$executeRaw`UPDATE users SET "sessionVersion" = "sessionVersion" + 1`;
+
+  await createAuditLog({
+    userId:     auth.user.id,
+    action:     "FORCE_LOGOUT_ALL",
+    entityType: "platform",
+    entityId:   "global",
+    details:    { triggeredBy: auth.user.id },
+  });
 
   return {};
 }

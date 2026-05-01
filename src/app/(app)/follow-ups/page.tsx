@@ -7,6 +7,7 @@ import {
   canManageFollowUps,
   isReadOnly,
 } from "@/lib/permissions";
+import { isFollowUpQueueEnabled } from "@/lib/plan-limits";
 import {
   getFullFollowUpQueue,
   getMyFollowUpTasks,
@@ -25,6 +26,8 @@ export default async function FollowUpsPage() {
 
   const { activeCampaignId, activeRole, id: userId } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
+
+  if (!await isFollowUpQueueEnabled(activeCampaignId)) redirect("/dashboard");
 
   const role = activeRole as Role;
   const isManager = canManageFollowUps(role);

@@ -63,11 +63,13 @@ function FieldRow({
 
 function EffectivePreview({ limits }: { limits: SerializableLimits }) {
   const rows = [
-    { label: "Constituent limit", value: formatLimit(limits.constituentLimit) },
-    { label: "Canvasser limit",   value: formatLimit(limits.canvasserLimit)   },
-    { label: "Co-Chair limit",    value: formatLimit(limits.coChairLimit)     },
+    { label: "Constituent limit",     value: formatLimit(limits.constituentLimit) },
+    { label: "Canvasser limit",       value: formatLimit(limits.canvasserLimit)   },
+    { label: "Co-Chair limit",        value: formatLimit(limits.coChairLimit)     },
     { label: "Field Organizer limit", value: formatLimit(limits.fieldOrganizerLimit) },
-    { label: "Donor tracking",    value: limits.donorTrackingEnabled ? "Enabled" : "Disabled" },
+    { label: "Donor tracking",        value: limits.donorTrackingEnabled ? "Enabled" : "Disabled" },
+    { label: "Follow-up queue",       value: limits.followUpQueueEnabled ? "Enabled" : "Disabled" },
+    { label: "Analytics",             value: limits.analyticsEnabled     ? "Enabled" : "Disabled" },
   ];
 
   return (
@@ -115,6 +117,14 @@ export function OverridePanel({
     initialOverride?.donorTrackingEnabled === true  ? "true"  :
     initialOverride?.donorTrackingEnabled === false ? "false" : "",
   );
+  const [followUpOverride,    setFollowUpOverride]    = useState<"" | "true" | "false">(
+    initialOverride?.followUpQueueEnabled === true  ? "true"  :
+    initialOverride?.followUpQueueEnabled === false ? "false" : "",
+  );
+  const [analyticsOverride,   setAnalyticsOverride]   = useState<"" | "true" | "false">(
+    initialOverride?.analyticsEnabled === true  ? "true"  :
+    initialOverride?.analyticsEnabled === false ? "false" : "",
+  );
   const [notes, setNotes] = useState(initialOverride?.notesInternal ?? "");
 
   const [saveState, setSaveState]     = useState<SaveState>("idle");
@@ -126,13 +136,15 @@ export function OverridePanel({
     setErrorMsg("");
 
     const result = await upsertCampaignOverride(campaignId, {
-      canvasserLimit:      parseNum(canvasserLimit),
-      extraCanvassers:     parseNum(extraCanvassers),
-      constituentLimit:    parseNum(constituentLimit),
-      coChairLimit:        parseNum(coChairLimit),
-      fieldOrganizerLimit: parseNum(fieldOrganizerLimit),
-      donorTrackingEnabled: donorOverride === "true" ? true : donorOverride === "false" ? false : null,
-      notesInternal:       notes.trim() || null,
+      canvasserLimit:       parseNum(canvasserLimit),
+      extraCanvassers:      parseNum(extraCanvassers),
+      constituentLimit:     parseNum(constituentLimit),
+      coChairLimit:         parseNum(coChairLimit),
+      fieldOrganizerLimit:  parseNum(fieldOrganizerLimit),
+      donorTrackingEnabled: donorOverride    === "true" ? true : donorOverride    === "false" ? false : null,
+      followUpQueueEnabled: followUpOverride === "true" ? true : followUpOverride === "false" ? false : null,
+      analyticsEnabled:     analyticsOverride === "true" ? true : analyticsOverride === "false" ? false : null,
+      notesInternal:        notes.trim() || null,
     });
 
     if (result.error) {
@@ -274,6 +286,30 @@ export function OverridePanel({
               <select
                 value={donorOverride}
                 onChange={(e) => setDonorOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Follow-up queue" helper="Override tier default">
+              <select
+                value={followUpOverride}
+                onChange={(e) => setFollowUpOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Analytics" helper="Override tier default">
+              <select
+                value={analyticsOverride}
+                onChange={(e) => setAnalyticsOverride(e.target.value as "" | "true" | "false")}
                 className={SELECT_CLASS}
               >
                 <option value="">Use tier default</option>

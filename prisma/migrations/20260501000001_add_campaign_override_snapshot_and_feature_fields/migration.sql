@@ -1,0 +1,21 @@
+-- AlterTable: add feature override fields + snapshot fields to campaign_overrides
+ALTER TABLE "campaign_overrides"
+    ADD COLUMN IF NOT EXISTS "followUpQueueEnabled" BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "analyticsEnabled"     BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotConstituentLimit"      INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotCanvasserLimit"        INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotCampaignManagerLimit"  INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotCoChairLimit"          INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotFieldOrganizerLimit"   INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotDonorTracking"         BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotFollowUpQueue"         BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotAnalytics"             BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotVolunteerCoord"        BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotFinanceLeadAccess"     BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotCoChairSeats"          BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotUnlimitedCanvassers"   BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotUnlimitedConstituents" BOOLEAN,
+    ADD COLUMN IF NOT EXISTS "snapshotPricePaid"             INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotRegularPrice"          INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotSalePrice"             INTEGER,
+    ADD COLUMN IF NOT EXISTS "snapshotedAt"                  TIMESTAMP(3);

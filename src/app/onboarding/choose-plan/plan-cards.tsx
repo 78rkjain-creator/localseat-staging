@@ -5,33 +5,50 @@ import type { TierPricing } from "./actions";
 import { selectPlanDev } from "./actions";
 import type { PlanTier } from "@/lib/plan-limits";
 
-// ── Feature lists ──────────────────────────────────────────────────────────
+// ── Feature list builder ───────────────────────────────────────────────────
 
-const TIER_FEATURES: Record<string, string[]> = {
-  starter: [
-    "Up to 2,500 constituent records",
-    "3 canvasser accounts",
-    "Walk lists and turf assignment",
-    "Mobile canvassing",
-    "CSV export",
-  ],
-  campaign: [
-    "Up to 15,000 constituent records",
-    "Unlimited canvassers",
-    "All Starter features",
-    "Donor prospect tracking",
-    "Follow-up queue",
-    "Dashboard analytics",
-  ],
-  election: [
-    "Unlimited constituent records",
-    "Unlimited canvassers",
+function constituentText(limit: number): string {
+  return limit === 0
+    ? "Unlimited constituent records"
+    : `Up to ${limit.toLocaleString()} constituent records`;
+}
+
+function canvasserText(limit: number): string {
+  if (limit === 0) return "Unlimited canvassers";
+  return `${limit.toLocaleString()} canvasser account${limit === 1 ? "" : "s"}`;
+}
+
+function getTierFeatures(tier: string, pricing: TierPricing): string[] {
+  const { constituentLimit, canvasserLimit } = pricing;
+  if (tier === "starter") {
+    return [
+      constituentText(constituentLimit),
+      canvasserText(canvasserLimit),
+      "Walk lists & turf assignment",
+      "Mobile canvassing",
+      "CSV export",
+    ];
+  }
+  if (tier === "campaign") {
+    return [
+      constituentText(constituentLimit),
+      canvasserText(canvasserLimit),
+      "All Starter features",
+      "Donor prospect tracking",
+      "Follow-up queue",
+      "Dashboard analytics",
+    ];
+  }
+  // election
+  return [
+    constituentText(constituentLimit),
+    canvasserText(canvasserLimit),
     "All Campaign features",
     "Priority support",
     "Onboarding call",
     "Data import assistance",
-  ],
-};
+  ];
+}
 
 const TIERS: { key: PlanTier; popular?: boolean }[] = [
   { key: "starter"  },
@@ -115,8 +132,8 @@ export function PlanCards({ campaignId, pricing, stripeEnabled }: Props) {
       {/* Tier cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {TIERS.map(({ key, popular }) => {
-          const info     = pricing[key] ?? { label: key, price: "—" };
-          const features = TIER_FEATURES[key] ?? [];
+          const info     = pricing[key] ?? { label: key, regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
+          const features = getTierFeatures(key, info);
           const isLoading = selecting === key;
           const isDisabled = selecting !== null;
 
@@ -139,17 +156,27 @@ export function PlanCards({ campaignId, pricing, stripeEnabled }: Props) {
                 </div>
               )}
 
-              {/* Tier name */}
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                {info.label}
-              </p>
+              {/* Tier name + launch badge */}
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  {info.label}
+                </p>
+                {info.salePrice && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
+                    Launch pricing
+                  </span>
+                )}
+              </div>
 
               {/* Price */}
               <div className="flex items-end gap-1.5 mb-1">
                 <span className="text-4xl font-bold text-slate-900 tracking-tight leading-none">
-                  ${info.price}
+                  ${info.salePrice ?? info.regularPrice}
                 </span>
               </div>
+              {info.salePrice && (
+                <p className="text-sm text-slate-400 line-through mb-0.5">${info.regularPrice}</p>
+              )}
               <p className="text-sm text-slate-400 mb-6">per campaign</p>
 
               {/* Feature list */}

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAnalyticsData } from "@/lib/analytics";
+import { isAnalyticsEnabled } from "@/lib/plan-limits";
 import { AnalyticsCharts } from "./analytics-charts";
 import type { Role } from "@/types";
 
@@ -20,6 +21,8 @@ export default async function AnalyticsPage() {
   if (!activeRole || !ALLOWED_ROLES.includes(activeRole as Role)) {
     redirect("/dashboard");
   }
+
+  if (!await isAnalyticsEnabled(activeCampaignId)) redirect("/dashboard");
 
   const data = await getAnalyticsData(activeCampaignId);
 

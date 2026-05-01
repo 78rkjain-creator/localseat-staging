@@ -8,6 +8,7 @@ import { canManageTeam, canAssignCampaignManager } from "@/lib/permissions";
 import { geocodeAndClassifyAddress } from "@/lib/ward";
 import { createAuditLog } from "@/lib/audit";
 import { canAddRole } from "@/lib/plan-limits";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import { sendWelcomeEmail, sendVerificationEmail } from "@/lib/email";
 import { generateVerificationToken } from "@/lib/verification";
 import bcrypt from "bcryptjs";
@@ -204,6 +205,9 @@ export async function addTeamMember(input: AddMemberInput): Promise<{
   if (!activeRole || (!canManageTeam(activeRole as AppRole) && !isRestricted)) {
     return { error: "Forbidden." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const { email, firstName, lastName, phoneHome, phoneMobile, role: roleInput, skipVerification = false } = input;
 
@@ -436,6 +440,9 @@ export async function removeTeamMember(userId: string): Promise<{ error?: string
     return { error: "Forbidden." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const callerId = session.user.id;
   if (userId === callerId) {
     return { error: "You cannot remove yourself from the campaign." };
@@ -486,6 +493,9 @@ export async function restoreTeamMember(userId: string): Promise<{ error?: strin
   if (!activeRole || !canManageTeam(activeRole as AppRole)) {
     return { error: "Forbidden." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   try {
     const membership = await db.campaignMembership.findFirst({

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 
 const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager"];
@@ -25,6 +26,9 @@ export async function saveCustomFields(
   if (!activeRole || !ALLOWED_ROLES.includes(activeRole as Role)) {
     return { error: "Forbidden" };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const cleaned = fields
     .map((f) => ({ id: f.id, label: f.label.trim() }))

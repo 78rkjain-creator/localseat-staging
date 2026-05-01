@@ -85,9 +85,10 @@ export default async function AdminAuditLogPage({
                     ? (log.after as Record<string, unknown>)
                     : null;
                 const description = formatAuditDescription(log.action, metadata, actorName);
+                const isSupportEntry = metadata?.supportAccess === true;
 
                 return (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={log.id} className={`hover:bg-slate-50 transition-colors ${isSupportEntry ? "bg-amber-50/40" : ""}`}>
                     <td className="px-5 py-3.5 text-slate-500 tabular-nums whitespace-nowrap align-top">
                       <p className="text-xs">
                         {new Date(log.createdAt).toLocaleDateString("en-CA", {
@@ -106,7 +107,14 @@ export default async function AdminAuditLogPage({
                       </p>
                     </td>
                     <td className="px-5 py-3.5 align-top">
-                      <p className="text-sm text-slate-800">{description}</p>
+                      <div className="flex items-start gap-2">
+                        <p className="text-sm text-slate-800">{description}</p>
+                        {isSupportEntry && (
+                          <span className="flex-shrink-0 mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700">
+                            Support
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 hidden md:table-cell align-top">
                       <span

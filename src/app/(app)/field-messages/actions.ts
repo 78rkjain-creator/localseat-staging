@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 
 export async function createFieldMessage(formData: FormData) {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,9 @@ export async function createFieldMessage(formData: FormData) {
   ) {
     return;
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return;
 
   const title = (formData.get("title") as string | null)?.trim() ?? "";
   const content = (formData.get("content") as string | null)?.trim() ?? "";
@@ -58,6 +62,9 @@ export async function deleteFieldMessage(id: string) {
   ) {
     return;
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return;
 
   await db.fieldMessage.updateMany({
     where: { id, campaignId: activeCampaignId },

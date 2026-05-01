@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 29, 2026 — Batch 12: Address edit fields always render, OOD detection on manual add + unified helper, geocoded/ward badges, team excluded from OOD queue, hybrid Mapbox+campaign autocomplete._
+_Last updated: April 30, 2026 — Batch 13: Volunteers tab restructure, OOD workflow removal, person edit, data_manager role, canvassing screen restructure, residents = ward, hybrid autocomplete fixes, walk list improvements, events recurring/copy, advance voting dates, +pagination, search, geocode-on-import classification fix._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -154,6 +154,7 @@ Seed creates 8 default tags per campaign: Volunteer, Donor, Endorser, Sign locat
 ```
 Candidate
   └── Campaign Manager
+        └── Data Manager
         └── Co-Chair
               └── Field Organizer
                     └── Canvasser
@@ -164,6 +165,7 @@ Candidate
 
 **Role permissions summary:**
 - candidate + campaign_manager: full access
+- data_manager: broad data access — edit people, manage imports, delete events, manage campaign settings; not in co_chair hierarchy
 - co_chair: read-only on most things, write on canvassing/ward/competitors/script
 - field_organizer: canvassing, follow-ups, outreach, volunteers, team (add canvasser/sign_installer only)
 - canvasser: canvassing only
@@ -241,6 +243,8 @@ Candidate
 20260427000011_add_surveys_and_signatures
 20260427000012_add_privacy_fields
 20260428000001_add_fundraising_goal
+20260430000001_add_data_manager_role
+20260430000004_event_series_advance_voting
 ```
 
 ---
@@ -254,13 +258,13 @@ Candidate
 - ListImport, PersonListMembership (list import tracking)
 - Sign (SignStatus: to_be_installed/installed; SignLocationType: residential/non_residential)
 - CampaignCompetitor, AddressChangeRequest, ContactSubmission
-- Event, EventAttendee (EventType: canvass_event/phone_bank/meeting/fundraiser/other; EventStatus: scheduled/in_progress/completed/cancelled)
+- Event, EventAttendee (EventType: campaign_event/fundraiser/town_hall/debate/canvass_kickoff/volunteer_training/other; EventStatus: upcoming/in_progress/completed/cancelled; seriesId String? links recurring series)
 - FieldMessage (FieldMessagePriority: normal/urgent)
 - Survey, SurveyQuestion (SurveyQuestionType: text/single_choice/multi_choice/rating/yes_no), SurveyResponse
 - SignatureRecord
 
 **Key enums:**
-- Role: candidate, campaign_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
+- Role: candidate, campaign_manager, data_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
 - PlatformRole (on User): super_user, super_admin
 - ListImportType: list, telephone_list, official_voters_list
 - PersonListMembershipStatus: matched, created, pending_review, accepted
@@ -303,6 +307,24 @@ Candidate
 - dataRetentionMonths (Int?) — policy setting (not enforced automatically)
 - electionDate (DateTime?) — stored on Campaign, shown/edited in General Settings
 - fundraisingGoal (Int?) — dollar goal shown in General Settings; added in migration 20260428000001
+- advanceVotingDates (DateTime[]) — list of advance poll open datetimes; sorted ascending on save; add/remove in General Settings
+
+---
+
+## Critical Operational Rules
+
+**Never run `prisma migrate dev` against staging or production.**  
+Use `prisma migrate deploy` — non-interactive, no shadow DB, safe for CI and remote:
+```powershell
+$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy
+```
+`migrate dev` prompts destructively on shared databases and can leave schema in an inconsistent state. Only run `migrate dev` locally against `localseat_dev`.
+
+**Always push both remotes on every deploy.**  
+`git push origin main && git push staging main` — forgetting the staging remote leaves Vercel behind silently.
+
+**Each database environment needs migrations applied separately.**  
+Local (`localseat_dev`), staging (Neon), demo (`localseat_demo`), and production (`localseat_prod`) are fully independent. After any `prisma migrate dev` locally, run the `migrate deploy` PowerShell command above against Neon before the Vercel deploy auto-triggers. Then SSH into the VPS and run `./deploy.sh` for prod and demo.
 
 ---
 
@@ -339,6 +361,18 @@ Any new manual address entry point (form, action, API handler) must call `geocod
 
 **Hybrid address picker**  
 `src/components/ui/address-picker.tsx` is the standard manual address input for all new forms. Returns an `AddressPickerResult` discriminated union (`type: "campaign" | "mapbox" | "manual"`). Campaign results include `addressId` (reuse existing address). Mapbox results include `latitude`/`longitude` (thread through to `db.address.create` so the geocode helper skips the redundant Mapbox API call). Manual results have no coordinates. CSV/bulk imports do not use this component — they go through the import pipeline directly.
+
+**Two-row action button layout (walk list detail)**  
+Action button containers use an outer `flex flex-col gap-2` with two inner `flex flex-wrap items-center gap-2 justify-end` rows. Row 1 = operational (Canvass, Optimize, Map, Assign). Row 2 = management (Edit, Archive, Print, Export CSV, Delete). `<Link>` and `<a>` have no native `disabled` attribute — when a button must be disabled, conditional-render a `<button type="button" disabled>` with identical styling + `disabled:opacity-50 disabled:cursor-not-allowed` instead of the link. This gives correct semantics (no click, tooltip, focus state) without client-side state.
+
+**Recurring events — generate all occurrences upfront**  
+Create every occurrence as an individual `Event` row sharing a `seriesId` UUID at creation time. Do not use a "series definition + lazy generation" model — individual rows are simpler to query, delete, display, and edit independently. `db.event.createMany()` for bulk insert. Max 52 occurrences per series (hard cap in `generateRecurringDates` in `events/actions.ts`). Weekday convention: 0=Mon…6=Sun (JS `getDay()` returns 0=Sun…6=Sat; convert with `const monDay = jsDay === 0 ? 6 : jsDay - 1`).
+
+**Cross-tier role permissions (data_manager)**  
+`data_manager` sits between `campaign_manager` and `co_chair` for data-heavy operations (edit people, manage imports, delete events). Permission checks that already allow `candidate` + `campaign_manager` should explicitly enumerate `data_manager` as well — it is not automatically inherited from any other role. Check `canViewAllPeople`, `requireEventManager`, and all settings guards when adding new restricted actions.
+
+**Per-campaign signature consent types**  
+`SignatureRecord.purpose` uses a string enum (`lawn_sign_consent`, `volunteer_consent`, `petition`, `other`). Purpose labels are display-only — do not add new enum values to the schema unless a new consent workflow requires server-side branching. New consent contexts can reuse `other` or extend the display labels in the UI layer without a migration.
 
 ---
 
@@ -688,6 +722,8 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 **April 28, 2026 (Batch 10)** — 1 migration applied (`20260428000001_add_fundraising_goal`): added fundraisingGoal (Int?) to Campaign. Configurable duplicate finder, person–team-member linking, team badge using userId+role, General Settings save feedback, and duplicate team member fix deployed.
 
 **April 29, 2026 (Batch 11)** — Import & Data Management hub + voter-list expansion + team CSV/XLSX import + review UX overhaul. No schema migrations. New dependency: exceljs ^4.4.0.
+
+**April 30, 2026 (Batch 13)** — 2 migrations applied (`20260430000001_add_data_manager_role`, `20260430000004_event_series_advance_voting`): added data_manager Role enum value; added seriesId to events + advanceVotingDates to campaigns. Walk list button layout restructured (two rows, always-rendered, disabled when empty). Events system overhauled: updated EventType/EventStatus enums, copy event modal, recurring event series, advance voting dates in general settings. NewEventForm extracted to client component (useActionState). Vercel EventAttendeeStatus import build error fixed.
 - Voter-list import expanded to capture supportLevel, tags, notes, gender, voter ID, and confirmedVoter status. Row cap raised to 10,000 (was 2,000). XLSX template alongside CSV.
 - Smart address parser (`src/lib/address-parser.ts`) handles common Canadian address formats — hyphen-prefix unit numbers, letter-prefix units, comma-separated, trailing annotation suffixes. Combined "Address" column auto-split into StreetNumber/StreetName/UnitNumber.
 - Review screen redesigned with four collapsible groups (Ready, Importable but incomplete, Possible duplicates, Missing required). Per-row "Missing: \<fields\>" annotation on status badge. "Export rows to fix" modal auto-skips to direct download when only one group has content.
@@ -764,6 +800,16 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Geocoded + ward status badges on person detail header — three ward states (In area / Out of area / Pending review); `outside_accepted` treated as In area; Geocoded badge green when lat/lng present, amber "Not geocoded" when address exists without coords; no badges on anonymized records | April 29, 2026 |
 | Team excluded from OOD queue — `listSource: { not: "team" }` filter on both `/people/out-of-district/page.tsx` and `/people/out-of-district/pending/page.tsx`; helper still sets accurate `wardStatus` on team members | April 29, 2026 |
 | Hybrid address autocomplete — `/api/addresses/search` returns `{ campaign, mapbox }` with resident counts and server-side dedup; `address-picker.tsx` rewritten with two grouped sections, `AddressPickerResult` discriminated union, AbortController, 300ms debounce, 3-char minimum, session cache; wired into `/people/new`, person detail edit, and `/team` add; Mapbox lat/lng threaded through actions to `db.address.create`; classify-modal updated with `toAddressValue` adapter | April 29, 2026 |
+| data_manager role — new Role enum value between campaign_manager and co_chair; has full data access (edit people, manage imports, delete events, manage settings); explicitly enumerated in all permission checks (canViewAllPeople, requireEventManager, settings guards); migration 20260430000001 | April 30, 2026 |
+| Walk list detail — two-row action button layout: Row 1 = operational (Canvass this list, Optimize route, View on map, Assign canvasser); Row 2 = management (Edit, Archive, Print, Export CSV, Delete); flex-col outer + flex-wrap inner rows; gap-y-2 for clean wrap at narrow widths | April 30, 2026 |
+| Walk list detail — all action buttons always rendered regardless of entry count; Canvass, Optimize, Map, Print, Export CSV disabled (disabled attr + opacity-50 + cursor-not-allowed + tooltip) when list has no entries; Edit, Archive, Assign, Delete always enabled; `<Link>` buttons swap to `<button disabled>` (conditional render) since Link has no native disabled | April 30, 2026 |
+| Events EventType updated — campaign_event, town_hall, debate, canvass_kickoff, volunteer_training added; old canvass_event/phone_bank/meeting removed; EventStatus: upcoming replaces scheduled; labels updated in UI | April 30, 2026 |
+| Copy event — CopyEventModal on /events/[eventId]: floating trigger button, pre-filled form (name prefixed "Copy of…", date/startTime/endTime/location/type all pre-filled), no attendees copied, redirects to new event detail on success, audit log action "event_copied" with sourceEventId; useTransition + router.push | April 30, 2026 |
+| Recurring events — toggle on new event form; weekday multi-select Mon–Sun (0=Mon…6=Sun convention); end after N occurrences (max 52) or by end date (max 1 year from start); generates individual Event rows all sharing a seriesId UUID via db.event.createMany(); redirect to /events on save; audit log action "event_series_created" | April 30, 2026 |
+| NewEventForm client component — new event form moved to client component (src/app/(app)/events/new/new-event-form.tsx) using useActionState; createEvent action signature changed to (_prev, formData) to support useActionState; recurring UI state (toggle, weekday checkboxes, endType radios) managed locally | April 30, 2026 |
+| Advance voting dates — Campaign.advanceVotingDates DateTime[] field; add/remove section in /campaign-settings/general; date + time inputs per entry; submitted via indexed hidden inputs (advanceDateCount, advanceDate_N, advanceTime_N); sorted ascending on save; loaded sorted on page render | April 30, 2026 |
+| Migration 20260430000004_event_series_advance_voting — adds seriesId TEXT (nullable) to events table, events_seriesId_idx index, advanceVotingDates TIMESTAMP(3)[] NOT NULL DEFAULT ARRAY[] to campaigns table; applied via prisma migrate deploy (non-interactive) | April 30, 2026 |
+| EventAttendeeStatus import fix — removed spurious export type \{ EventAttendeeStatus \} from events/actions.ts that caused Vercel build failure; status type now imported directly from @prisma/client in attendee-panel.tsx | April 30, 2026 |
 
 ### High Priority
 | Item | Effort |
@@ -790,8 +836,6 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 |---|---|
 | Demo instance isolation (unique DB per visitor) | Large, deferred |
 | Update HANDOFF.md each session | Ongoing |
-| BackLink router.back() — verify it works in all entry-path scenarios (direct URL load, hub → page, other page → import page) | Needs manual verification |
-| Export modal single-group auto-collapse — verify with mixed test data that direct-download fires correctly and the modal still appears for 2+ groups | Needs manual verification |
 
 ---
 
@@ -820,8 +864,8 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
 6. All new dev → localseat-staging repo first
-7. Test on staging before production deploy
-8. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh`
-9. If staging DB schema out of sync: `$env:DATABASE_URL='<neon-url>' ; npx prisma migrate deploy`
+7. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
+8. Test on staging before production deploy
+9. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh`
 10. Run `npx prisma generate` after any migration
 11. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)

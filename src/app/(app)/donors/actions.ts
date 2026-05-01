@@ -8,6 +8,7 @@ import { canViewDonorAmounts, canViewDonors } from "@/lib/permissions";
 import { sanitizeEmail, sanitizePhone, sanitizeAmount, sanitizeDate, sanitizeEnum } from "@/lib/sanitize";
 import { createAuditLog } from "@/lib/audit";
 import { isDonorTrackingEnabled } from "@/lib/plan-limits";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { DonorStatus, PaymentMethod, Role } from "@/types";
 
 const DONOR_STATUS_VALUES: DonorStatus[] = ["interested", "pledged", "received"];
@@ -24,6 +25,9 @@ async function requireDonorAccess() {
   if (!activeRole || !canViewDonors(activeRole as Role)) {
     return { error: "You don't have permission to manage donors." } as const;
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! } as const;
 
   return { session, campaignId: activeCampaignId, role: activeRole as Role } as const;
 }

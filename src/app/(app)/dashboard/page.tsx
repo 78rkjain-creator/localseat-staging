@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import type { Role } from "@/types";
+import type { PlanTier } from "@/lib/plan-limits";
 
 import { CandidateDashboard } from "./_candidate";
 import { FieldOrganizerDashboard } from "./_field-organizer";
@@ -23,11 +25,18 @@ export default async function DashboardPage() {
 
   if (!role) redirect("/select-campaign");
 
+  const campaignRow = await db.campaign.findUnique({
+    where: { id: activeCampaignId },
+    select: { plan: true },
+  });
+  const plan = (campaignRow?.plan as PlanTier) ?? null;
+
   switch (role) {
     case "candidate":
     case "campaign_manager":
+    case "data_manager":
     case "co_chair":
-      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} />;
+      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
 
     case "field_organizer":
       return <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} userId={userId} />;
@@ -43,6 +52,6 @@ export default async function DashboardPage() {
 
     default:
       // Fallback: show candidate-style dashboard for unknown roles
-      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} />;
+      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
   }
 }

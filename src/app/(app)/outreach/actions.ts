@@ -8,6 +8,7 @@ import { canManageFollowUps } from "@/lib/permissions";
 import { OUTREACH_CHANNEL_VALUES } from "@/types";
 import type { OutreachChannel, Role } from "@/types";
 import { sanitizeText, sanitizeEnum } from "@/lib/sanitize";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 
 // ── Auth guard ─────────────────────────────────────────────────────────────
 
@@ -20,6 +21,9 @@ async function requireOutreachManager() {
   if (!activeRole || !canManageFollowUps(activeRole as Role)) {
     return { error: "You don't have permission to manage outreach logs." } as const;
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! } as const;
 
   return { session, campaignId: activeCampaignId } as const;
 }

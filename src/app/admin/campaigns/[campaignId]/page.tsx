@@ -13,9 +13,11 @@ import {
   restoreCampaign,
   getCampaignOverride,
   getCampaignEffectiveLimits,
+  getAdminSupportAccessStatus,
 } from "./actions";
 import { OverridePanel } from "./override-panel";
 import { MembersPanel } from "./members-panel";
+import { SupportAccessCard } from "./support-access-card";
 
 async function getCampaignDetail(campaignId: string) {
   const [campaign, voterCount, responseCount, donorCount, listCount] =
@@ -106,12 +108,11 @@ export default async function AdminCampaignDetailPage({
   const callerIsSuperAdmin = isSuperAdmin(session.user.platformRole);
 
   // Load override data only for admins — both actions guard internally
-  const [initialOverride, initialEffectiveLimits] = callerIsSuperAdmin
-    ? await Promise.all([
-        getCampaignOverride(campaignId),
-        getCampaignEffectiveLimits(campaignId),
-      ])
-    : [null, null];
+  const [initialOverride, initialEffectiveLimits, supportAccessStatus] = await Promise.all([
+    callerIsSuperAdmin ? getCampaignOverride(campaignId) : Promise.resolve(null),
+    callerIsSuperAdmin ? getCampaignEffectiveLimits(campaignId) : Promise.resolve(null),
+    callerIsSuperUser  ? getAdminSupportAccessStatus(campaignId) : Promise.resolve(null),
+  ]);
 
   const deactivateAction = deactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
   const reactivateAction = reactivateCampaign.bind(null, campaignId) as unknown as () => Promise<void>;
@@ -272,6 +273,15 @@ export default async function AdminCampaignDetailPage({
               ))}
             </div>
           </div>
+
+          {/* Support Access */}
+          {callerIsSuperUser && supportAccessStatus && (
+            <SupportAccessCard
+              campaignId={campaignId}
+              campaignName={campaign.name}
+              initialStatus={supportAccessStatus}
+            />
+          )}
 
           {/* Actions */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 
 const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager", "co_chair"];
@@ -19,6 +20,9 @@ export async function saveCanvassScript(
   if (!activeRole || !ALLOWED_ROLES.includes(activeRole as Role)) {
     return { error: "Forbidden" };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   await db.campaign.update({
     where: { id: activeCampaignId },

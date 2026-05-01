@@ -11,18 +11,31 @@ import type { PlanTier } from "@/lib/plan-limits";
 // No auth required — this is public-facing pricing data.
 
 export interface TierPricing {
-  label: string;
-  price: string;
+  label:            string;
+  price:            string;  // effective price (sale if available, else regular)
+  regularPrice:     string;
+  salePrice:        string | null;
+  constituentLimit: number;
+  canvasserLimit:   number;
 }
+
+const LIMIT_DEFAULTS: Record<string, { constituentLimit: number; canvasserLimit: number }> = {
+  starter:  { constituentLimit: 5000,  canvasserLimit: 3 },
+  campaign: { constituentLimit: 15000, canvasserLimit: 0 },
+  election: { constituentLimit: 0,     canvasserLimit: 0 },
+};
 
 export async function getTierPricing(): Promise<Record<string, TierPricing>> {
   const rows = await db.platformSettings.findMany({
     where: {
       key: {
         in: [
-          "starter_label",  "starter_price",
-          "campaign_label", "campaign_price",
-          "election_label", "election_price",
+          "starter_label",  "starter_regular_price",  "starter_sale_price",
+          "campaign_label", "campaign_regular_price", "campaign_sale_price",
+          "election_label", "election_regular_price", "election_sale_price",
+          "starter_constituent_limit",  "starter_canvasser_limit",
+          "campaign_constituent_limit", "campaign_canvasser_limit",
+          "election_constituent_limit", "election_canvasser_limit",
         ],
       },
     },
@@ -30,10 +43,27 @@ export async function getTierPricing(): Promise<Record<string, TierPricing>> {
 
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
+  function parseLimit(raw: string | undefined, fallback: number): number {
+    if (raw === undefined) return fallback;
+    const n = parseInt(raw, 10);
+    return isNaN(n) ? fallback : n;
+  }
+
+  function tierPricing(tier: string, defaultRegular: string, defaultSale: string | null): TierPricing {
+    const label        = map[`${tier}_label`]         ?? tier.charAt(0).toUpperCase() + tier.slice(1);
+    const regularPrice = map[`${tier}_regular_price`] ?? defaultRegular;
+    const salePrice    = map[`${tier}_sale_price`]    ?? defaultSale;
+    const price        = salePrice ?? regularPrice;
+    const defaults     = LIMIT_DEFAULTS[tier] ?? { constituentLimit: 0, canvasserLimit: 0 };
+    const constituentLimit = parseLimit(map[`${tier}_constituent_limit`], defaults.constituentLimit);
+    const canvasserLimit   = parseLimit(map[`${tier}_canvasser_limit`],   defaults.canvasserLimit);
+    return { label, price, regularPrice, salePrice: salePrice ?? null, constituentLimit, canvasserLimit };
+  }
+
   return {
-    starter:  { label: map["starter_label"]  ?? "Starter",  price: map["starter_price"]  ?? "149" },
-    campaign: { label: map["campaign_label"] ?? "Campaign", price: map["campaign_price"] ?? "349" },
-    election: { label: map["election_label"] ?? "Election", price: map["election_price"] ?? "699" },
+    starter:  tierPricing("starter",  "249", "149"),
+    campaign: tierPricing("campaign", "499", "349"),
+    election: tierPricing("election", "999", "699"),
   };
 }
 
@@ -52,7 +82,6 @@ export async function selectPlanDev(
     return { error: "Invalid plan." };
   }
 
-  // Verify the user is a member of this campaign with an eligible role
   const membership = await db.campaignMembership.findFirst({
     where: {
       campaignId,
@@ -71,8 +100,49 @@ export async function selectPlanDev(
     where: { id: campaignId },
     select: { id: true },
   });
-
   if (!campaign) return { error: "Campaign not found." };
+
+  // Read current tier pricing + settings for snapshot
+  const settingsRows = await db.platformSettings.findMany();
+  const settings = new Map(settingsRows.map((r) => [r.key, r.value]));
+
+  const regularPrice = parseInt(settings.get(`${plan}_regular_price`) ?? "0", 10);
+  const salePriceRaw = settings.get(`${plan}_sale_price`);
+  const salePrice    = salePriceRaw ? parseInt(salePriceRaw, 10) : null;
+  const amountPaid   = salePrice ?? regularPrice;
+
+  function numSetting(key: string): number | null {
+    const raw = settings.get(key);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return isNaN(n) ? null : n;
+  }
+
+  function boolSetting(key: string): boolean | null {
+    const raw = settings.get(key);
+    if (raw === undefined) return null;
+    return raw === "true";
+  }
+
+  const snapshotData = {
+    snapshotConstituentLimit:      numSetting(`${plan}_constituent_limit`),
+    snapshotCanvasserLimit:        numSetting(`${plan}_canvasser_limit`),
+    snapshotCampaignManagerLimit:  numSetting(`${plan}_campaign_manager_limit`),
+    snapshotCoChairLimit:          numSetting(`${plan}_cochair_limit`),
+    snapshotFieldOrganizerLimit:   numSetting(`${plan}_field_organizer_limit`),
+    snapshotDonorTracking:         boolSetting(`${plan}_feature_donor_tracking`),
+    snapshotFollowUpQueue:         boolSetting(`${plan}_feature_follow_up_queue`),
+    snapshotAnalytics:             boolSetting(`${plan}_feature_analytics`),
+    snapshotVolunteerCoord:        boolSetting(`${plan}_feature_volunteer_coordination`),
+    snapshotFinanceLeadAccess:     boolSetting(`${plan}_feature_finance_lead_access`),
+    snapshotCoChairSeats:          boolSetting(`${plan}_feature_co_chair_seats`),
+    snapshotUnlimitedCanvassers:   boolSetting(`${plan}_feature_unlimited_canvassers`),
+    snapshotUnlimitedConstituents: boolSetting(`${plan}_feature_unlimited_constituents`),
+    snapshotPricePaid:             amountPaid || null,
+    snapshotRegularPrice:          regularPrice || null,
+    snapshotSalePrice:             salePrice,
+    snapshotedAt:                  new Date(),
+  };
 
   await db.campaign.update({
     where: { id: campaignId },
@@ -80,8 +150,15 @@ export async function selectPlanDev(
       plan,
       planActivated: true,
       planLockedAt:  new Date(),
-      amountPaid:    0,
+      amountPaid,
     },
+  });
+
+  // Upsert override record with snapshot — preserves any existing manual overrides
+  await db.campaignOverride.upsert({
+    where:  { campaignId },
+    create: { campaignId, ...snapshotData },
+    update: snapshotData,
   });
 
   await createAuditLog({
@@ -90,7 +167,7 @@ export async function selectPlanDev(
     action:     "PLAN_SELECTED_DEV",
     entityType: "campaign",
     entityId:   campaignId,
-    details:    { plan, devMode: true },
+    details:    { plan, devMode: true, amountPaid, snapshotedAt: snapshotData.snapshotedAt },
   });
 
   revalidatePath("/dashboard");

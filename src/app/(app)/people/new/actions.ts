@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canAddResident } from "@/lib/permissions";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import { createAuditLog } from "@/lib/audit";
 import { sanitizeText, sanitizePhone, sanitizeEmail, sanitizeBirthDate } from "@/lib/sanitize";
 import { ListSource } from "@prisma/client";
@@ -47,6 +48,9 @@ export async function addResident(
   if (!activeRole || !canAddResident(activeRole as Role)) {
     return { error: "You don't have permission to add residents." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const firstName = sanitizeText(input.firstName, 100);
   const lastName = sanitizeText(input.lastName, 100);

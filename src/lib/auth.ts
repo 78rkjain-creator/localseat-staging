@@ -19,6 +19,9 @@ declare module "next-auth" {
       activeCampaignId: string | null;
       activeRole: string | null;
       platformRole: string | null;
+      supportMode: "readonly" | "full" | null;
+      supportOriginalCampaignId: string | null;
+      supportCampaignName: string | null;
     };
   }
   interface User {
@@ -46,6 +49,9 @@ declare module "next-auth/jwt" {
     verificationTokenExpiry: string | null;
     sessionExpiresAt?: number; // Unix seconds — enforced per-role in proxy.ts
     sessionVersion?: number;   // bumped on role change / removal; mismatch forces re-auth
+    supportMode: "readonly" | "full" | null;
+    supportOriginalCampaignId: string | null;
+    supportCampaignName: string | null;
   }
 }
 
@@ -190,6 +196,33 @@ export const authOptions: NextAuthOptions = {
         token.sessionExpiresAt = nowSec + (token.activeRole === "canvasser" ? 14400 : 28800);
       }
 
+      // Handle support mode entry
+      if (trigger === "update" && session?.enterSupportMode) {
+        const { campaignId, mode, campaignName } = session.enterSupportMode as {
+          campaignId: string;
+          mode: "readonly" | "full";
+          campaignName: string;
+        };
+        token.supportOriginalCampaignId = token.activeCampaignId;
+        token.supportCampaignName = campaignName;
+        token.supportMode = mode;
+        token.activeCampaignId = campaignId;
+        token.activeRole = "campaign_manager";
+      }
+
+      // Handle support mode exit
+      if (trigger === "update" && session?.exitSupportMode) {
+        const originalCampaignId = token.supportOriginalCampaignId ?? null;
+        const originalMembership = token.memberships?.find(
+          (m) => m.campaignId === originalCampaignId
+        );
+        token.activeCampaignId = originalCampaignId;
+        token.activeRole = originalMembership?.role ?? null;
+        token.supportMode = null;
+        token.supportOriginalCampaignId = null;
+        token.supportCampaignName = null;
+      }
+
       // Handle campaign switching via session update
       if (trigger === "update" && session?.activeCampaignId && !session?.refreshMemberships) {
         const membership = token.memberships?.find(
@@ -276,6 +309,9 @@ export const authOptions: NextAuthOptions = {
       session.user.activeCampaignId = token.activeCampaignId ?? null;
       session.user.activeRole = token.activeRole ?? null;
       session.user.platformRole = token.platformRole ?? null;
+      session.user.supportMode = token.supportMode ?? null;
+      session.user.supportOriginalCampaignId = token.supportOriginalCampaignId ?? null;
+      session.user.supportCampaignName = token.supportCampaignName ?? null;
       return session;
     },
   },

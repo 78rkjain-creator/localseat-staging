@@ -25,6 +25,10 @@ interface SidebarProps {
   campaignName: string | null;
   campaignCount?: number;
   pendingDataCorrectionsCount?: number;
+  donorTrackingEnabled?: boolean;
+  followUpQueueEnabled?: boolean;
+  analyticsEnabled?: boolean;
+  constituentUsage?: { count: number; limit: number } | null;
 }
 
 interface NavItem {
@@ -56,7 +60,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0 }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, constituentUsage = null }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -307,7 +311,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           </svg>
         ),
       },
-      ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
+      ...((role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair") && analyticsEnabled
         ? [
             {
               href: "/analytics",
@@ -360,15 +364,17 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 </svg>
               ),
             },
-            {
-              href: "/follow-ups",
-              label: "Follow-ups",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              ),
-            },
+            ...(followUpQueueEnabled
+              ? [{
+                  href: "/follow-ups",
+                  label: "Follow-ups",
+                  icon: (
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  ),
+                }]
+              : []),
             {
               href: "/outreach",
               label: "Outreach",
@@ -396,7 +402,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     ],
     // Group 3 — Operations
     [
-      ...(role && canViewDonors(role) && role !== "field_organizer"
+      ...(role && canViewDonors(role) && role !== "field_organizer" && donorTrackingEnabled
         ? [
             {
               href: "/donors",
@@ -613,6 +619,31 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           </>
         )}
       </nav>
+
+      {/* Constituent usage indicator — Starter plans only */}
+      {constituentUsage && (
+        <div className="px-3 py-2 mx-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-slate-400">Records</span>
+            <span className="text-[10px] font-medium text-slate-500 tabular-nums">
+              {constituentUsage.count.toLocaleString()} / {constituentUsage.limit.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className={[
+                "h-full rounded-full transition-all",
+                constituentUsage.count / constituentUsage.limit >= 0.9
+                  ? "bg-red-400"
+                  : constituentUsage.count / constituentUsage.limit >= 0.75
+                  ? "bg-amber-400"
+                  : "bg-slate-400",
+              ].join(" ")}
+              style={{ width: `${Math.min(100, Math.round((constituentUsage.count / constituentUsage.limit) * 100))}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* User */}
       <div className="border-t border-slate-100 pt-3 mt-3 relative" ref={accountRef}>

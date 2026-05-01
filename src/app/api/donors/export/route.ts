@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewDonors, canViewDonorAmounts } from "@/lib/permissions";
+import { isDonorTrackingEnabled } from "@/lib/plan-limits";
 import { getAllDonorsForExport } from "@/lib/donors";
 import { createAuditLog } from "@/lib/audit";
 import { DONOR_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/types";
@@ -17,6 +18,11 @@ export async function GET() {
   if (!activeCampaignId) return new Response("No active campaign", { status: 400 });
   if (!activeRole || !canViewDonors(activeRole as Role)) {
     return new Response("Forbidden", { status: 403 });
+  }
+
+  const donorEnabled = await isDonorTrackingEnabled(activeCampaignId);
+  if (!donorEnabled) {
+    return new Response("Donor tracking is not available on your current plan.", { status: 403 });
   }
 
   // Re-verify the user still has an active membership in this campaign.

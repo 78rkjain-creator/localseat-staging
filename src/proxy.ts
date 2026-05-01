@@ -5,7 +5,44 @@
 // Renaming this file will break authentication and all route protection silently.
 
 import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+
+// ── Maintenance mode cache ─────────────────────────────────────────────────
+// Prisma cannot be imported in middleware, so we fetch the DB flag from an
+// internal route and cache the result for 10 seconds to avoid a round-trip
+// on every single request.
+let _maintenanceCache: { value: boolean; expiresAt: number } | null = null;
+
+async function isMaintenanceModeActive(req: NextRequest): Promise<boolean> {
+  // ENV var takes immediate precedence — no network call needed.
+  if (process.env.MAINTENANCE_MODE === "true") return true;
+
+  const now = Date.now();
+  if (_maintenanceCache && now < _maintenanceCache.expiresAt) {
+    return _maintenanceCache.value;
+  }
+
+  try {
+    const url = new URL("/api/maintenance-status", req.nextUrl.origin);
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    const data = (await res.json()) as { maintenance?: boolean };
+    const value = data.maintenance === true;
+    _maintenanceCache = { value, expiresAt: now + 10_000 };
+    return value;
+  } catch {
+    // If the check fails, don't block the app.
+    return false;
+  }
+}
+
+// Paths that must stay accessible during maintenance mode.
+const MAINTENANCE_ALLOW_PREFIXES = [
+  "/maintenance",
+  "/admin",            // super_users need to be able to turn maintenance off
+  "/api/auth",         // NextAuth must work for admin sign-in
+  "/api/maintenance-status", // the endpoint that serves the cache
+  "/api/pricing",      // marketing site must keep working
+];
 
 // Canvassers are restricted to these route prefixes — everything else redirects
 // to /canvassing so they can't access voter data, donors, team, etc.
@@ -33,9 +70,18 @@ const SIGN_INSTALLER_ALLOW_PREFIXES = [
 ];
 
 export default withAuth(
-  function middleware(req) {
+  async function middleware(req) {
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
+
+    // ── Maintenance mode — checked before everything else ──────────────────
+    const inMaintenance = await isMaintenanceModeActive(req);
+    if (inMaintenance) {
+      const exempt = MAINTENANCE_ALLOW_PREFIXES.some((p) => pathname.startsWith(p));
+      if (!exempt) {
+        return NextResponse.redirect(new URL("/maintenance", req.url));
+      }
+    }
 
     // Demo site: redirect root to /demo (works for both authed and unauthed visitors).
     if (process.env.DEMO_MODE === "true" && pathname === "/") {
@@ -154,6 +200,7 @@ export default withAuth(
           pathname === "/login" ||
           pathname === "/register" ||
           pathname === "/demo" ||
+          pathname === "/maintenance" ||
           pathname === "/verify-email" ||
           pathname === "/resend-verification" ||
           pathname === "/account-expired" ||
@@ -162,6 +209,7 @@ export default withAuth(
           pathname === "/manifest.json" ||
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
+          pathname.startsWith("/api/maintenance-status") ||
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
           pathname.startsWith("/icons")

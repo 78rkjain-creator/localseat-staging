@@ -1308,14 +1308,94 @@ async function main() {
   console.log("  canvasser             → tom.okonkwo@example.com");
   console.log("  sign_installer        → mike.davidson@example.com");
 
+  // ── Starter test campaign ─────────────────────────────────────────────────
+  // Lightweight second campaign for testing plan-gating restrictions.
+  if (process.env.DEMO_MODE !== "true") {
+    const starterCampaign = await db.campaign.create({
+      data: {
+        name:          "Jordan Lee for Ward 2 — 2026",
+        description:   "Test campaign on the Starter plan. Used to verify plan-gating for donors, follow-ups, and analytics.",
+        city:          "Owen Sound",
+        province:      "ON",
+        year:          2026,
+        plan:          "starter",
+        planActivated: true,
+        amountPaid:    149,
+      },
+    });
+
+    const [starterCandidate, starterCanvasser] = await Promise.all([
+      db.user.upsert({
+        where:  { email: "starter.candidate@example.com" },
+        create: { email: "starter.candidate@example.com", passwordHash: HASH, firstName: "Jordan", lastName: "Lee",   phoneHome: "613-555-0120", emailVerified: VERIFIED },
+        update: { passwordHash: HASH, emailVerified: VERIFIED },
+      }),
+      db.user.upsert({
+        where:  { email: "starter.canvasser@example.com" },
+        create: { email: "starter.canvasser@example.com", passwordHash: HASH, firstName: "Casey",  lastName: "Park",  phoneHome: "613-555-0121", emailVerified: VERIFIED },
+        update: { passwordHash: HASH, emailVerified: VERIFIED },
+      }),
+    ]);
+
+    await db.campaignMembership.createMany({
+      data: [
+        { userId: starterCandidate.id, campaignId: starterCampaign.id, role: "candidate"  },
+        { userId: starterCanvasser.id, campaignId: starterCampaign.id, role: "canvasser" },
+      ],
+    });
+
+    // 25 addresses on King Street W
+    const starterAddrs = await db.address.createManyAndReturn({
+      data: Array.from({ length: 25 }, (_, i) => ({
+        campaignId:   starterCampaign.id,
+        streetNumber: String((i + 1) * 2),
+        streetName:   "King Street W",
+        city:         "Owen Sound",
+        province:     "ON",
+        postalCode:   "N4K 1N4",
+        lat:          44.5680 + i * 0.0002,
+        lng:          -80.9430 + i * 0.0001,
+      })),
+    });
+
+    const starterHouseholds = await db.household.createManyAndReturn({
+      data: starterAddrs.map((a) => ({ campaignId: starterCampaign.id, addressId: a.id })),
+    });
+
+    // ~30 people across 25 households (first 5 get 2, rest get 1)
+    const starterPeople: { campaignId: string; householdId: string; firstName: string; lastName: string; listSource: ListSource }[] = [];
+    starterHouseholds.forEach((hh, i) => {
+      const count = i < 5 ? 2 : 1;
+      for (let p = 0; p < count; p++) {
+        const { firstName, lastName } = PEOPLE[(i * 2 + p) % PEOPLE.length];
+        starterPeople.push({ campaignId: starterCampaign.id, householdId: hh.id, firstName, lastName, listSource: "residents_list" });
+      }
+    });
+    await db.person.createMany({ data: starterPeople });
+
+    console.log(`  ✓ Starter campaign: ${starterCampaign.name} (${starterPeople.length} people)`);
+    console.log("\n--- Starter plan test credentials ---");
+    console.log("  candidate  → starter.candidate@example.com");
+    console.log("  canvasser  → starter.canvasser@example.com");
+    console.log("  (password: 'password')");
+    console.log("  Donors, Follow-ups, Analytics should all be gated.");
+    console.log("-------------------------------------");
+  }
+
   // ── Platform Settings ─────────────────────────────────────────────────────
   const SETTINGS: { key: string; value: string }[] = [
-    { key: "starter_price",                   value: "149"      },
-    { key: "campaign_price",                  value: "349"      },
-    { key: "election_price",                  value: "699"      },
+    // Pricing
     { key: "starter_label",                   value: "Starter"  },
+    { key: "starter_regular_price",           value: "249"      },
+    { key: "starter_sale_price",              value: "149"      },
     { key: "campaign_label",                  value: "Campaign" },
+    { key: "campaign_regular_price",          value: "499"      },
+    { key: "campaign_sale_price",             value: "349"      },
     { key: "election_label",                  value: "Election" },
+    { key: "election_regular_price",          value: "999"      },
+    { key: "election_sale_price",             value: "699"      },
+
+    // Numeric limits
     { key: "starter_constituent_limit",       value: "2500"     },
     { key: "campaign_constituent_limit",      value: "15000"    },
     { key: "election_constituent_limit",      value: "0"        },
@@ -1331,6 +1411,39 @@ async function main() {
     { key: "starter_field_organizer_limit",   value: "1"        },
     { key: "campaign_field_organizer_limit",  value: "0"        },
     { key: "election_field_organizer_limit",  value: "0"        },
+
+    // Feature flags — Starter (all off)
+    { key: "starter_feature_donor_tracking",          value: "false" },
+    { key: "starter_feature_follow_up_queue",         value: "false" },
+    { key: "starter_feature_analytics",               value: "false" },
+    { key: "starter_feature_volunteer_coordination",  value: "false" },
+    { key: "starter_feature_finance_lead_access",     value: "false" },
+    { key: "starter_feature_co_chair_seats",          value: "false" },
+    { key: "starter_feature_unlimited_canvassers",    value: "false" },
+    { key: "starter_feature_unlimited_constituents",  value: "false" },
+
+    // Feature flags — Campaign (all on, except unlimited constituents)
+    { key: "campaign_feature_donor_tracking",         value: "true"  },
+    { key: "campaign_feature_follow_up_queue",        value: "true"  },
+    { key: "campaign_feature_analytics",              value: "true"  },
+    { key: "campaign_feature_volunteer_coordination", value: "true"  },
+    { key: "campaign_feature_finance_lead_access",    value: "true"  },
+    { key: "campaign_feature_co_chair_seats",         value: "true"  },
+    { key: "campaign_feature_unlimited_canvassers",   value: "true"  },
+    { key: "campaign_feature_unlimited_constituents", value: "false" },
+
+    // Feature flags — Election (all on)
+    { key: "election_feature_donor_tracking",         value: "true"  },
+    { key: "election_feature_follow_up_queue",        value: "true"  },
+    { key: "election_feature_analytics",              value: "true"  },
+    { key: "election_feature_volunteer_coordination", value: "true"  },
+    { key: "election_feature_finance_lead_access",    value: "true"  },
+    { key: "election_feature_co_chair_seats",         value: "true"  },
+    { key: "election_feature_unlimited_canvassers",   value: "true"  },
+    { key: "election_feature_unlimited_constituents", value: "true"  },
+
+    // System
+    { key: "maintenance_mode", value: "false" },
   ];
 
   for (let i = 0; i < SETTINGS.length; i++) {
@@ -1342,6 +1455,72 @@ async function main() {
     });
   }
   console.log(`  ✓ Platform settings: ${SETTINGS.length} entries`);
+
+  // ── Campaign override snapshots ───────────────────────────────────────────
+  // Simulate "plan was selected on seed date" so getEffectiveLimits can apply
+  // best-of(snapshot, current) logic correctly for the seed campaigns.
+  const snapshotedAt = new Date();
+
+  // Election campaign snapshot
+  await db.campaignOverride.upsert({
+    where:  { campaignId: campaign.id },
+    create: {
+      campaignId:                    campaign.id,
+      snapshotConstituentLimit:      0,
+      snapshotCanvasserLimit:        0,
+      snapshotCampaignManagerLimit:  0,
+      snapshotCoChairLimit:          0,
+      snapshotFieldOrganizerLimit:   0,
+      snapshotDonorTracking:         true,
+      snapshotFollowUpQueue:         true,
+      snapshotAnalytics:             true,
+      snapshotVolunteerCoord:        true,
+      snapshotFinanceLeadAccess:     true,
+      snapshotCoChairSeats:          true,
+      snapshotUnlimitedCanvassers:   true,
+      snapshotUnlimitedConstituents: true,
+      snapshotRegularPrice:          999,
+      snapshotSalePrice:             699,
+      snapshotPricePaid:             699,
+      snapshotedAt,
+    },
+    update: {},
+  });
+
+  if (process.env.DEMO_MODE !== "true") {
+    // Starter campaign snapshot — fetch the campaign created above
+    const starterCampaignRow = await db.campaign.findFirst({
+      where: { name: "Jordan Lee for Ward 2 — 2026" },
+      select: { id: true },
+    });
+    if (starterCampaignRow) {
+      await db.campaignOverride.upsert({
+        where:  { campaignId: starterCampaignRow.id },
+        create: {
+          campaignId:                    starterCampaignRow.id,
+          snapshotConstituentLimit:      2500,
+          snapshotCanvasserLimit:        3,
+          snapshotCampaignManagerLimit:  1,
+          snapshotCoChairLimit:          0,
+          snapshotFieldOrganizerLimit:   1,
+          snapshotDonorTracking:         false,
+          snapshotFollowUpQueue:         false,
+          snapshotAnalytics:             false,
+          snapshotVolunteerCoord:        false,
+          snapshotFinanceLeadAccess:     false,
+          snapshotCoChairSeats:          false,
+          snapshotUnlimitedCanvassers:   false,
+          snapshotUnlimitedConstituents: false,
+          snapshotRegularPrice:          249,
+          snapshotSalePrice:             149,
+          snapshotPricePaid:             149,
+          snapshotedAt,
+        },
+        update: {},
+      });
+    }
+  }
+  console.log("  ✓ Campaign override snapshots written");
 }
 
 main()

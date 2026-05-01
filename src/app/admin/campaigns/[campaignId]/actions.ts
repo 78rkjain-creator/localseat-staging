@@ -7,8 +7,16 @@ import { db } from "@/lib/db";
 import { requireSuperUser, requirePlatformAdmin, isSuperUser, isSuperAdmin } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { getEffectiveLimits } from "@/lib/plan-limits";
+import {
+  requestSupportAccess,
+  cancelSupportAccessRequest,
+  revokeSupportAccess,
+  hasActiveFullAccess,
+  getSupportAccessStatus,
+} from "@/lib/support-access";
 import type { CampaignOverride } from "@prisma/client";
 import { Role } from "@prisma/client";
+import type { SupportAccessStatusResult } from "@/lib/support-access";
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +98,6 @@ export async function restoreCampaign(
   const auth = await requirePlatformAdmin();
   if ("error" in auth) return auth;
 
-  // Restore is super_user only
   if (!isSuperUser(auth.session.user.platformRole)) {
     return { error: "Super user access required to restore a campaign." };
   }
@@ -130,6 +137,8 @@ export interface SerializableLimits {
   coChairLimit:         number;
   fieldOrganizerLimit:  number;
   donorTrackingEnabled: boolean;
+  followUpQueueEnabled: boolean;
+  analyticsEnabled:     boolean;
 }
 
 export async function getCampaignEffectiveLimits(
@@ -145,6 +154,8 @@ export async function getCampaignEffectiveLimits(
     coChairLimit:         limits.coChairLimit,
     fieldOrganizerLimit:  limits.fieldOrganizerLimit,
     donorTrackingEnabled: limits.donorTrackingEnabled,
+    followUpQueueEnabled: limits.followUpQueueEnabled,
+    analyticsEnabled:     limits.analyticsEnabled,
   };
 }
 
@@ -155,6 +166,8 @@ export interface OverrideData {
   coChairLimit?:         number | null;
   fieldOrganizerLimit?:  number | null;
   donorTrackingEnabled?: boolean | null;
+  followUpQueueEnabled?: boolean | null;
+  analyticsEnabled?:     boolean | null;
   notesInternal?:        string | null;
 }
 
@@ -170,19 +183,20 @@ export async function upsertCampaignOverride(
 
   const userId = session.user.id;
 
-  // Capture existing values for audit diff
   const existing = await db.campaignOverride.findUnique({ where: { campaignId } });
   const isNew = !existing;
 
   const writeData = {
-    canvasserLimit:      data.canvasserLimit      ?? null,
-    extraCanvassers:     data.extraCanvassers      ?? null,
-    constituentLimit:    data.constituentLimit     ?? null,
-    coChairLimit:        data.coChairLimit         ?? null,
-    fieldOrganizerLimit: data.fieldOrganizerLimit  ?? null,
-    donorTrackingEnabled: data.donorTrackingEnabled ?? null,
-    notesInternal:       data.notesInternal?.trim() || null,
-    grantedBy:           userId,
+    canvasserLimit:       data.canvasserLimit       ?? null,
+    extraCanvassers:      data.extraCanvassers       ?? null,
+    constituentLimit:     data.constituentLimit      ?? null,
+    coChairLimit:         data.coChairLimit          ?? null,
+    fieldOrganizerLimit:  data.fieldOrganizerLimit   ?? null,
+    donorTrackingEnabled: data.donorTrackingEnabled  ?? null,
+    followUpQueueEnabled: data.followUpQueueEnabled  ?? null,
+    analyticsEnabled:     data.analyticsEnabled      ?? null,
+    notesInternal:        data.notesInternal?.trim() || null,
+    grantedBy:            userId,
     ...(isNew && { grantedAt: new Date() }),
   };
 
@@ -192,7 +206,6 @@ export async function upsertCampaignOverride(
     update: writeData,
   });
 
-  // Build audit diff
   const changed: Record<string, { from: unknown; to: unknown }> = {};
   const fields = Object.keys(data) as (keyof OverrideData)[];
   for (const field of fields) {
@@ -232,12 +245,10 @@ export async function adminChangeUserRole(
   });
   if (!membership) return { error: "Membership not found." };
 
-  // Reassigning away from candidate requires the transfer flow
   if (membership.role === Role.candidate) {
     return { error: "Use transfer to reassign the candidate role." };
   }
 
-  // Assigning to candidate only allowed when no existing candidate
   if (newRole === Role.candidate) {
     const existingCandidate = await db.campaignMembership.findFirst({
       where: { campaignId, role: Role.candidate, deletedAt: null, id: { not: membershipId } },
@@ -339,4 +350,84 @@ export async function adminTransferCandidateRole(
 
   revalidatePath(`/admin/campaigns/${campaignId}`);
   return {};
+}
+
+// ── Support access admin actions ──────────────────────────────────────────────
+
+export async function getAdminSupportAccessStatus(
+  campaignId: string
+): Promise<SupportAccessStatusResult> {
+  return getSupportAccessStatus(campaignId);
+}
+
+export async function requestSupportAccessAction(
+  campaignId: string,
+  note: string
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const result = await requestSupportAccess(campaignId, auth.session.user.id, note);
+  if (result.error) return result;
+
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+export async function cancelSupportAccessRequestAction(
+  campaignId: string
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const result = await cancelSupportAccessRequest(campaignId, auth.session.user.id);
+  if (result.error) return result;
+
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+export async function revokeSupportAccessAdminAction(
+  campaignId: string
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const result = await revokeSupportAccess(campaignId, auth.session.user.id);
+  if (result.error) return result;
+
+  revalidatePath(`/admin/campaigns/${campaignId}`);
+  return {};
+}
+
+export async function validateSupportEntry(
+  campaignId: string,
+  mode: "readonly" | "full"
+): Promise<{ error?: string; campaignName?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  if (mode === "full") {
+    const hasAccess = await hasActiveFullAccess(campaignId);
+    if (!hasAccess) {
+      return { error: "No active full-access grant for this campaign. Request and await approval first." };
+    }
+  }
+
+  const campaign = await db.campaign.findUnique({
+    where: { id: campaignId },
+    select: { name: true },
+  });
+  if (!campaign) return { error: "Campaign not found." };
+
+  await createAuditLog({
+    campaignId,
+    userId: auth.session.user.id,
+    action: mode === "full" ? "SUPPORT_SESSION_ENTERED_FULL" : "SUPPORT_SESSION_ENTERED_READONLY",
+    entityType: "campaign",
+    entityId: campaignId,
+    details: { mode },
+  });
+
+  return { campaignName: campaign.name };
 }

@@ -13,6 +13,8 @@ export type TierLimits = {
   donorTrackingEnabled:  boolean;
   volunteerCoordEnabled: boolean;
   financeLeadEnabled:    boolean;
+  followUpQueueEnabled:  boolean;
+  analyticsEnabled:      boolean;
 };
 
 export type EffectiveLimits = TierLimits & {
@@ -32,6 +34,8 @@ const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
     donorTrackingEnabled:  false,
     volunteerCoordEnabled: false,
     financeLeadEnabled:    false,
+    followUpQueueEnabled:  false,
+    analyticsEnabled:      false,
   },
   campaign: {
     constituentLimit:      15000,
@@ -42,6 +46,8 @@ const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
     donorTrackingEnabled:  true,
     volunteerCoordEnabled: true,
     financeLeadEnabled:    true,
+    followUpQueueEnabled:  true,
+    analyticsEnabled:      true,
   },
   election: {
     constituentLimit:      0,
@@ -52,6 +58,8 @@ const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
     donorTrackingEnabled:  true,
     volunteerCoordEnabled: true,
     financeLeadEnabled:    true,
+    followUpQueueEnabled:  true,
+    analyticsEnabled:      true,
   },
 };
 
@@ -64,6 +72,8 @@ const UNLIMITED: EffectiveLimits = {
   donorTrackingEnabled:  true,
   volunteerCoordEnabled: true,
   financeLeadEnabled:    true,
+  followUpQueueEnabled:  true,
+  analyticsEnabled:      true,
   isUnlimited:           () => true,
 };
 
@@ -73,6 +83,8 @@ function parseSettings(
   tier: Exclude<PlanTier, "demo">,
   settings: Map<string, string>,
 ): TierLimits {
+  const fb = FALLBACKS[tier];
+
   function num(key: string, fallback: number): number {
     const raw = settings.get(`${tier}_${key}`);
     if (raw === undefined) {
@@ -83,7 +95,11 @@ function parseSettings(
     return isNaN(parsed) ? fallback : parsed;
   }
 
-  const fb = FALLBACKS[tier];
+  function feat(key: string, fallback: boolean): boolean {
+    const raw = settings.get(`${tier}_feature_${key}`);
+    if (raw === undefined) return fallback;
+    return raw === "true";
+  }
 
   return {
     constituentLimit:      num("constituent_limit",      fb.constituentLimit),
@@ -91,24 +107,41 @@ function parseSettings(
     campaignManagerLimit:  num("campaign_manager_limit",  fb.campaignManagerLimit),
     coChairLimit:          num("cochair_limit",           fb.coChairLimit),
     fieldOrganizerLimit:   num("field_organizer_limit",   fb.fieldOrganizerLimit),
-    // Feature flags derived from limits: 0 canvasserLimit means features are on
-    // Donor/volunteer/finance features enabled on campaign and above
-    donorTrackingEnabled:  tier !== "starter",
-    volunteerCoordEnabled: tier !== "starter",
-    financeLeadEnabled:    tier !== "starter",
+    donorTrackingEnabled:  feat("donor_tracking",         fb.donorTrackingEnabled),
+    volunteerCoordEnabled: feat("volunteer_coordination", fb.volunteerCoordEnabled),
+    financeLeadEnabled:    feat("finance_lead_access",    fb.financeLeadEnabled),
+    followUpQueueEnabled:  feat("follow_up_queue",        fb.followUpQueueEnabled),
+    analyticsEnabled:      feat("analytics",              fb.analyticsEnabled),
   };
+}
+
+// ── "Best of" helpers ──────────────────────────────────────────────────────────
+// Snapshot protects campaigns from having limits reduced after they sign up.
+
+function bestNumeric(snapshot: number | null | undefined, current: number): number {
+  if (snapshot === null || snapshot === undefined) return current;
+  if (snapshot === 0 || current === 0) return 0; // unlimited wins
+  return Math.max(snapshot, current);             // more generous wins
+}
+
+function bestBoolean(snapshot: boolean | null | undefined, current: boolean): boolean {
+  if (snapshot === null || snapshot === undefined) return current;
+  return snapshot || current; // enabled if either is true
 }
 
 // ── Main resolver ──────────────────────────────────────────────────────────────
 
 export async function getEffectiveLimits(campaignId: string): Promise<EffectiveLimits> {
-  // 1. Load campaign plan
-  const campaign = await db.campaign.findUnique({
-    where:  { id: campaignId },
-    select: { plan: true, planActivated: true },
-  });
+  // 1. Load campaign plan + override (snapshot fields included)
+  const [campaign, override] = await Promise.all([
+    db.campaign.findUnique({
+      where:  { id: campaignId },
+      select: { plan: true, planActivated: true },
+    }),
+    db.campaignOverride.findUnique({ where: { campaignId } }),
+  ]);
 
-  // 2. Demo plan or inactive (not yet paid / still in setup) → fully unlimited
+  // 2. Demo plan or inactive → fully unlimited
   if (!campaign || campaign.plan === "demo" || !campaign.planActivated) {
     return UNLIMITED;
   }
@@ -119,24 +152,40 @@ export async function getEffectiveLimits(campaignId: string): Promise<EffectiveL
   const rows = await db.platformSettings.findMany();
   const settings = new Map(rows.map((r) => [r.key, r.value]));
 
-  // 4. Build tier defaults from settings (with fallback)
+  // 4. Build current tier defaults from settings (with fallback)
   const tierLimits = parseSettings(tier, settings);
 
-  // 5. Load per-campaign override
-  const override = await db.campaignOverride.findUnique({
-    where: { campaignId },
-  });
+  // 5. Merge: priority chain is
+  //    manual override (explicit) → best(snapshot, current default) → hardcoded fallback
+  function resolveNum(
+    manualOverride: number | null | undefined,
+    snapshot: number | null | undefined,
+    current: number,
+  ): number {
+    if (manualOverride !== null && manualOverride !== undefined) return manualOverride;
+    return bestNumeric(snapshot, current);
+  }
 
-  // 6. Merge: override values take precedence (only when explicitly set)
+  function resolveBool(
+    manualOverride: boolean | null | undefined,
+    snapshot: boolean | null | undefined,
+    current: boolean,
+  ): boolean {
+    if (manualOverride !== null && manualOverride !== undefined) return manualOverride;
+    return bestBoolean(snapshot, current);
+  }
+
   const merged: TierLimits = {
-    constituentLimit:      override?.constituentLimit      ?? tierLimits.constituentLimit,
-    canvasserLimit:        override?.canvasserLimit        ?? tierLimits.canvasserLimit,
-    campaignManagerLimit:  tierLimits.campaignManagerLimit, // no override field for this
-    coChairLimit:          override?.coChairLimit          ?? tierLimits.coChairLimit,
-    fieldOrganizerLimit:   override?.fieldOrganizerLimit   ?? tierLimits.fieldOrganizerLimit,
-    donorTrackingEnabled:  override?.donorTrackingEnabled  ?? tierLimits.donorTrackingEnabled,
-    volunteerCoordEnabled: tierLimits.volunteerCoordEnabled,
-    financeLeadEnabled:    tierLimits.financeLeadEnabled,
+    constituentLimit:      resolveNum(override?.constituentLimit,     override?.snapshotConstituentLimit,    tierLimits.constituentLimit),
+    canvasserLimit:        resolveNum(override?.canvasserLimit,       override?.snapshotCanvasserLimit,      tierLimits.canvasserLimit),
+    campaignManagerLimit:  resolveNum(null,                           override?.snapshotCampaignManagerLimit, tierLimits.campaignManagerLimit),
+    coChairLimit:          resolveNum(override?.coChairLimit,         override?.snapshotCoChairLimit,        tierLimits.coChairLimit),
+    fieldOrganizerLimit:   resolveNum(override?.fieldOrganizerLimit,  override?.snapshotFieldOrganizerLimit, tierLimits.fieldOrganizerLimit),
+    donorTrackingEnabled:  resolveBool(override?.donorTrackingEnabled, override?.snapshotDonorTracking,     tierLimits.donorTrackingEnabled),
+    volunteerCoordEnabled: resolveBool(null,                           override?.snapshotVolunteerCoord,     tierLimits.volunteerCoordEnabled),
+    financeLeadEnabled:    resolveBool(null,                           override?.snapshotFinanceLeadAccess,  tierLimits.financeLeadEnabled),
+    followUpQueueEnabled:  resolveBool(override?.followUpQueueEnabled, override?.snapshotFollowUpQueue,     tierLimits.followUpQueueEnabled),
+    analyticsEnabled:      resolveBool(override?.analyticsEnabled,     override?.snapshotAnalytics,         tierLimits.analyticsEnabled),
   };
 
   return {
@@ -182,7 +231,6 @@ export async function canAddRole(
       return limits.isUnlimited("coChairLimit") || currentCount < limits.coChairLimit;
     case "field_organizer":
       return limits.isUnlimited("fieldOrganizerLimit") || currentCount < limits.fieldOrganizerLimit;
-    // candidate, volunteer_coordinator, finance_lead have no numeric seat limit
     default:
       return true;
   }
@@ -196,4 +244,14 @@ export async function isDonorTrackingEnabled(campaignId: string): Promise<boolea
 export async function isVolunteerCoordEnabled(campaignId: string): Promise<boolean> {
   const limits = await getEffectiveLimits(campaignId);
   return limits.volunteerCoordEnabled;
+}
+
+export async function isFollowUpQueueEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.followUpQueueEnabled;
+}
+
+export async function isAnalyticsEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.analyticsEnabled;
 }

@@ -241,6 +241,79 @@ export function formatAuditDescription(
       return `${actor} reactivated a user`;
     }
 
+    // ── Support access ──────────────────────────────────────────────────────
+    case "SUPPORT_ACCESS_REQUESTED":
+      return `${actor} requested temporary support access to the campaign`;
+
+    case "SUPPORT_ACCESS_APPROVED": {
+      const expires = str(m.expiresAt);
+      if (expires) return `${actor} approved support access (expires ${new Date(expires).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })})`;
+      return `${actor} approved support access`;
+    }
+
+    case "SUPPORT_ACCESS_DENIED":
+      return `${actor} denied the support access request`;
+
+    case "SUPPORT_ACCESS_REVOKED":
+      return `${actor} revoked active support access`;
+
+    case "SUPPORT_ACCESS_CANCELLED":
+      return `${actor} cancelled the support access request`;
+
+    case "SUPPORT_SESSION_ENTERED_READONLY":
+      return `${actor} viewed the campaign in read-only support mode`;
+
+    case "SUPPORT_SESSION_ENTERED_FULL":
+      return `${actor} entered the campaign with full support access`;
+
+    case "CANDIDATE_ROLE_TRANSFERRED": {
+      const newRole = str(m.newRole);
+      return newRole === "candidate"
+        ? `${actor} received the candidate role (admin transfer)`
+        : `${actor} relinquished the candidate role — reassigned to ${formatRole(newRole)}`;
+    }
+
+    case "CANDIDATE_ROLE_RELINQUISHED": {
+      const newRole = str(m.newRole);
+      if (newRole) return `${actor} had the candidate role transferred — now ${formatRole(newRole)}`;
+      return `${actor} had the candidate role transferred`;
+    }
+
+    case "CAMPAIGN_OVERRIDE_UPDATED":
+      return `${actor} updated the campaign plan override`;
+
+    case "CAMPAIGN_DEACTIVATED":
+      return `${actor} deactivated the campaign`;
+
+    case "CAMPAIGN_REACTIVATED":
+      return `${actor} reactivated the campaign`;
+
+    case "CAMPAIGN_DELETED":
+      return `${actor} soft-deleted the campaign`;
+
+    case "CAMPAIGN_RESTORED":
+      return `${actor} restored the deleted campaign`;
+
+    case "FORCE_LOGOUT_ALL":
+      return `${actor} force-logged out all users (session version bumped globally)`;
+
+    case "PLATFORM_SETTINGS_UPDATED": {
+      const changed = m.changed;
+      if (changed && typeof changed === "object") {
+        const keys = Object.keys(changed as Record<string, unknown>);
+        if (keys.length === 1 && keys[0] === "maintenance_mode") {
+          const to = (changed as Record<string, { to: string }>)["maintenance_mode"]?.to;
+          return to === "true"
+            ? `${actor} enabled maintenance mode`
+            : `${actor} disabled maintenance mode`;
+        }
+        if (keys.length > 0) {
+          return `${actor} updated platform settings (${keys.slice(0, 3).join(", ")}${keys.length > 3 ? "…" : ""})`;
+        }
+      }
+      return `${actor} updated platform settings`;
+    }
+
     // ── Fallback ────────────────────────────────────────────────────────────
     default:
       return formatActionCode(action);

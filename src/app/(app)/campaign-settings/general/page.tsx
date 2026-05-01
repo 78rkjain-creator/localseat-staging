@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { GeneralSettingsForm } from "./general-settings-form";
+import { SupportAccessSection } from "../support-access/support-access-section";
 
 export const metadata: Metadata = { title: "General Settings" };
 
@@ -59,6 +60,12 @@ export default async function GeneralSettingsPage() {
         fundraisingGoal={campaign.fundraisingGoal}
         advanceVotingDates={advanceVotingDates}
       />
+
+      {(activeRole === "candidate" || activeRole === "campaign_manager") && (
+        <div className="mt-8">
+          <SupportAccessSection campaignId={activeCampaignId} />
+        </div>
+      )}
     </div>
   );
 }

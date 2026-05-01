@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageFollowUps } from "@/lib/permissions";
+import { isFollowUpQueueEnabled } from "@/lib/plan-limits";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import type { Role } from "@/types";
 
 // ── Assign a task to a team member ─────────────────────────────────────────
@@ -21,6 +23,12 @@ export async function assignTask(
   if (!activeRole || !canManageFollowUps(activeRole as Role)) {
     return { error: "You don't have permission to assign tasks." };
   }
+  if (!await isFollowUpQueueEnabled(activeCampaignId)) {
+    return { error: "Follow-up queue is not available on the Starter plan." };
+  }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   try {
     const task = await db.task.findFirst({
@@ -58,6 +66,9 @@ export async function completeTask(
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const whereClause =
     activeRole === "canvasser"
       ? { id: taskId, campaignId: activeCampaignId, assignedTo: session.user.id, deletedAt: null }
@@ -93,6 +104,12 @@ export async function unassignTask(
   if (!activeRole || !canManageFollowUps(activeRole as Role)) {
     return { error: "You don't have permission to unassign tasks." };
   }
+  if (!await isFollowUpQueueEnabled(activeCampaignId)) {
+    return { error: "Follow-up queue is not available on the Starter plan." };
+  }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   try {
     const task = await db.task.findFirst({

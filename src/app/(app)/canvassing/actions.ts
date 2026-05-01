@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { canManageWalkLists, canAssignCanvassers } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { geocodeAddressesForCanvassList } from "@/lib/geocoding";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 import { ListSource, WardStatus, CanvassListStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { Role } from "@/types";
@@ -36,6 +37,9 @@ export async function createCanvassList(
   if (!activeRole || !canManageWalkLists(activeRole as Role)) {
     return { error: "You don't have permission to create walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const name = (formData.get("name") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim() || null;
@@ -104,6 +108,9 @@ export async function createTurfCanvassList(data: {
   if (!activeRole || !canManageWalkLists(activeRole as Role)) {
     return { error: "You don't have permission to create walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const name = data.name.trim();
   if (!name) return { error: "Name is required." };
@@ -324,6 +331,9 @@ export async function refreshDynamicList(
     return { error: "You don't have permission to manage walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
     select: { dynamicFilters: true },
@@ -349,6 +359,9 @@ export async function approveList(
   if (!activeRole || !APPROVER_ROLES.includes(activeRole as Role)) {
     return { error: "You don't have permission to approve walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
@@ -390,6 +403,9 @@ export async function rejectList(
   if (!activeRole || !APPROVER_ROLES.includes(activeRole as Role)) {
     return { error: "You don't have permission to reject walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
@@ -447,6 +463,9 @@ export async function optimizeRoute(
   if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
     return { error: "You don't have permission to optimize routes." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
@@ -544,6 +563,9 @@ export async function archiveList(listId: string): Promise<{ error?: string }> {
     return { error: "You don't have permission to archive walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true, status: true, name: true },
@@ -580,6 +602,9 @@ export async function unarchiveList(listId: string): Promise<{ error?: string }>
     return { error: "You don't have permission to manage walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true, status: true, name: true },
@@ -615,6 +640,9 @@ export async function deleteList(listId: string): Promise<{ error?: string }> {
   if (!activeRole || !["candidate", "campaign_manager", "data_manager"].includes(activeRole)) {
     return { error: "You don't have permission to delete walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
@@ -664,6 +692,9 @@ export async function updateListName(
     return { error: "You don't have permission to edit walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const trimmed = name.trim();
   if (!trimmed) return { error: "Name is required." };
   if (trimmed.length > 120) return { error: "Name is too long." };
@@ -703,6 +734,9 @@ export async function updateListFilters(
     return { error: "You don't have permission to edit walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const list = await db.canvassList.findFirst({
     where: { id: listId, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true, dynamicFilters: true },
@@ -733,6 +767,9 @@ export async function removePersonFromList(
   if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
     return { error: "You don't have permission to edit walk lists." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const entry = await db.canvassListEntry.findFirst({
     where: {
@@ -845,6 +882,9 @@ export async function addPersonToList(
     return { error: "You don't have permission to edit walk lists." };
   }
 
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
+
   const [person, list] = await Promise.all([
     db.person.findFirst({ where: { id: personId, campaignId: activeCampaignId, deletedAt: null }, select: { id: true } }),
     db.canvassList.findFirst({ where: { id: listId, campaignId: activeCampaignId, deletedAt: null }, select: { id: true } }),
@@ -944,6 +984,9 @@ export async function assignCanvasser(
   if (!activeRole || !canAssignCanvassers(activeRole as Role)) {
     return { error: "You don't have permission to assign canvassers." };
   }
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const canvasserId = (formData.get("canvasserId") as string | null)?.trim();
   const notes = (formData.get("notes") as string | null)?.trim() || null;

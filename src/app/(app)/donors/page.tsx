@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewDonors, canViewDonorAmounts, isReadOnly } from "@/lib/permissions";
+import { isDonorTrackingEnabled } from "@/lib/plan-limits";
 import { getDonors } from "@/lib/donors";
 import { Card } from "@/components/ui/card";
 import { AddDonorModal } from "./add-donor-modal";
@@ -23,6 +24,8 @@ export default async function DonorsPage({ searchParams }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewDonors(activeRole as Role)) redirect("/dashboard");
+
+  if (!await isDonorTrackingEnabled(activeCampaignId)) redirect("/dashboard");
 
   const params = await searchParams;
   const status = (params.status as DonorStatus | "") || "";

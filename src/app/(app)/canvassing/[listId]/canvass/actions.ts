@@ -11,6 +11,7 @@ import type { Polygon, MultiPolygon } from "geojson";
 import { CANVASS_OUTCOME_VALUES, SUPPORT_LEVEL_VALUES } from "@/types";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 import { sanitizeText, sanitizeEnum } from "@/lib/sanitize";
+import { checkSupportWriteAccess } from "@/lib/support-access";
 
 // ── Save canvass response ─────────────────────────────────────────────────
 
@@ -47,6 +48,9 @@ export async function saveCanvassResponse(
 
   const { activeCampaignId } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error!, permanent: true };
 
   const assignment = await db.canvassAssignment.findFirst({
     where: {
@@ -333,6 +337,9 @@ export async function addPersonAtDoor(input: {
 
   const { activeCampaignId } = session.user;
   if (!activeCampaignId) return { error: "No active campaign." };
+
+  const supportCheck = await checkSupportWriteAccess();
+  if (!supportCheck.allowed) return { error: supportCheck.error! };
 
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
