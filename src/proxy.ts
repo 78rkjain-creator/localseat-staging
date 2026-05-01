@@ -138,10 +138,10 @@ export default withAuth(
     }
 
     // Platform users (super_user, super_admin) bypass campaign onboarding
-    // and go straight to /admin.
+    // and go straight to /admin. API routes always pass through regardless.
     const { platformRole } = token;
     if (platformRole === "super_user" || platformRole === "super_admin") {
-      if (!pathname.startsWith("/admin")) {
+      if (!pathname.startsWith("/admin") && !pathname.startsWith("/api/")) {
         return redirect("/admin");
       }
       return NextResponse.next();
@@ -210,6 +210,7 @@ export default withAuth(
           pathname.startsWith("/_next") ||
           pathname.startsWith("/api/auth") ||
           pathname.startsWith("/api/maintenance-status") ||
+          pathname.startsWith("/api/pricing") ||
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
           pathname.startsWith("/icons")
