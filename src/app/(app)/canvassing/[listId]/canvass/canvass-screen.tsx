@@ -151,11 +151,11 @@ const SCALE_BUTTONS: {
   caption: string;
   style: string;
 }[] = [
-  { value: "strong_yes", numeral: 1, caption: "Yes+", style: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  { value: "soft_yes",   numeral: 2, caption: "Yes",  style: "border-emerald-100 bg-white text-emerald-600" },
+  { value: "strong_yes", numeral: 5, caption: "Yes+", style: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  { value: "soft_yes",   numeral: 4, caption: "Yes",  style: "border-emerald-100 bg-white text-emerald-600" },
   { value: "undecided",  numeral: 3, caption: "?",    style: "border-amber-200 bg-amber-50 text-amber-700" },
-  { value: "soft_no",    numeral: 4, caption: "No",   style: "border-orange-200 bg-orange-50 text-orange-700" },
-  { value: "strong_no",  numeral: 5, caption: "No−",  style: "border-red-200 bg-red-50 text-red-700" },
+  { value: "soft_no",    numeral: 2, caption: "No",   style: "border-orange-200 bg-orange-50 text-orange-700" },
+  { value: "strong_no",  numeral: 1, caption: "No−",  style: "border-red-200 bg-red-50 text-red-700" },
 ];
 
 // Not-home dropdown options — ordered by frequency
@@ -268,16 +268,16 @@ export function CanvassScreen({
   const [swFailure, setSwFailure] = useState(false);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then((reg) => {
-        console.log("[CanvassScreen] SW registered:", reg.scope);
-      })
-      .catch((err) => {
-        console.error("[CanvassScreen] SW registration failed:", err.message, err);
-        setSwFailure(true);
-      });
+    if (!("serviceWorker" in navigator)) {
+      setSwFailure(true);
+      return;
+    }
+    // Registration happens globally in layout. Here we just check whether a SW
+    // becomes active within 4 s so we can warn if offline caching is unavailable.
+    const t = setTimeout(() => setSwFailure(true), 4000);
+    navigator.serviceWorker.ready
+      .then(() => clearTimeout(t))
+      .catch(() => { clearTimeout(t); setSwFailure(true); });
   }, []);
 
   const current = entries[currentIndex];

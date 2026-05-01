@@ -20,9 +20,9 @@ const CACHE_NAME = "localseat-1777475043907";
 
 const PRECACHE_URLS = [
   "/manifest.json",
-  "/icons/icon.svg",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/logo.svg",
+  "/icon-192.png",
+  "/icon-512.png",
 ];
 
 // ── Install ───────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { register } from "./actions";
+import { Logo } from "@/components/brand/Logo";
 import { TERMS_V1_3_HTML } from "@/lib/terms";
 
 export default function RegisterPage() {
@@ -91,26 +92,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-12">
       {/* Brand mark */}
       <div className="mb-8 flex flex-col items-center gap-3">
-        <div className="h-12 w-12 rounded-2xl bg-brand-500 flex items-center justify-center shadow-soft">
-          <svg
-            className="h-7 w-7 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-        </div>
+        <Logo size={48} tone="ink" />
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             LocalSeat

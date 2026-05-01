@@ -12,6 +12,7 @@ import { getPendingAddressChangeCount } from "@/lib/address-changes";
 import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import { hasPendingRequest } from "@/lib/support-access";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -153,6 +154,7 @@ export default async function AppLayout({
         </main>
       </div>
       <MobileNav />
+      <PwaInstallPrompt />
     </div>
   );
 }

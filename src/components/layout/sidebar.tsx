@@ -16,6 +16,7 @@ import {
 } from "@/lib/permissions";
 import { ClipboardList, ShieldCheck, Settings } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
+import { Wordmark } from "@/components/brand/Wordmark";
 
 
 interface SidebarProps {
@@ -252,18 +253,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     ];
     return (
       <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
-        <div className="flex items-center gap-2.5 px-3 mb-6">
-          <div className="h-8 w-8 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0">
-            <svg className="h-4.5 w-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-slate-900 text-sm">LocalSeat</p>
-            {campaignName && (
-              <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
-            )}
-          </div>
+        <div className="flex flex-col gap-1 px-3 mb-6">
+          <Wordmark size={28} tone="ink" />
+          {campaignName && (
+            <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
+          )}
         </div>
         <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
           {signsOnlyGroups.flatMap((group) =>
@@ -461,18 +455,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   return (
     <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-3 mb-6">
-        <div className="h-8 w-8 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0">
-          <svg className="h-4.5 w-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-slate-900 text-sm">LocalSeat</p>
-          {campaignName && (
-            <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
-          )}
-        </div>
+      <div className="flex flex-col gap-1 px-3 mb-6">
+        <Wordmark size={28} tone="ink" />
+        {campaignName && (
+          <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
+        )}
       </div>
 
       {/* Nav */}

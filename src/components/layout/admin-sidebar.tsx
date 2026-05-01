@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { PLATFORM_ROLE_LABELS } from "@/types";
 import type { PlatformRole } from "@/types";
+import { Wordmark } from "@/components/brand/Wordmark";
 
 interface AdminSidebarProps {
   firstName: string;
@@ -152,18 +153,11 @@ export function AdminSidebar({ firstName, lastName, platformRole }: AdminSidebar
   const sidebarContent = (
     <div className="flex flex-col h-full px-3 py-5">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-3 mb-6">
-        <div className="h-8 w-8 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0">
-          <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <p className="font-semibold text-slate-900 text-sm leading-tight">LocalSeat.io</p>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide bg-slate-800 text-white uppercase leading-none">
-            Admin
-          </span>
-        </div>
+      <div className="flex flex-col gap-1 px-3 mb-6">
+        <Wordmark size={28} tone="ink" />
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide bg-slate-800 text-white uppercase leading-none w-fit">
+          Admin
+        </span>
       </div>
 
       {/* Nav */}
