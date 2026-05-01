@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: May 1, 2026 — Batch 14: Plan tier enforcement, feature gating (16 toggles), support access system, maintenance mode, upgrade cards, 404 handling, PWA install prompt, logo refresh, dynamic pricing API, marketing site integration._
+_Last updated: May 1, 2026 — Batch 14: Plan tier enforcement, feature gating (16 toggles), support access system, maintenance mode, upgrade cards, 404 handling, PWA install prompt, logo refresh, dynamic pricing API, marketing site integration, Stripe Checkout integration._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -21,7 +21,7 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 - **Auth:** NextAuth.js v4, credentials provider
 - **Email:** Nodemailer v8, Hostinger SMTP
 - **SMS:** Telnyx (decided, not built)
-- **Payments:** Stripe (decided, not built)
+- **Payments:** Stripe (test mode deployed, go-live blocked on bank account activation)
 - **Maps:** Mapbox GL JS
 - **Production:** Hostinger VPS (app.localseat.io)
 - **Demo:** Hostinger VPS (demo.localseat.io)
@@ -390,6 +390,76 @@ All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 
 ---
 
+## Stripe Integration
+
+### Status
+- Code deployed, webhook configured, test keys active
+- `NEXT_PUBLIC_STRIPE_ENABLED=false` on production — payments not live yet
+- Blocked on bank account activation → then switch to live keys
+
+### How it works
+1. User registers → creates campaign (`planActivated: false`)
+2. Layout gate redirects unpaid campaigns to `/onboarding/choose-plan`
+3. User selects a plan → app creates a Stripe Checkout Session with dynamic pricing from PlatformSettings
+4. User pays on Stripe's hosted checkout page (test card: `4242 4242 4242 4242`)
+5. Stripe webhook (`checkout.session.completed`) fires → app activates campaign, snapshots limits/features, sets amountPaid
+6. User redirected to success page → session refreshed → dashboard accessible
+
+### Dynamic pricing
+- No pre-created Stripe prices — amount is set at checkout time from `{tier}_sale_price` (or `{tier}_regular_price` if no sale)
+- Three Stripe products exist (test mode): Starter `prod_UREJUkGMu182BI`, Campaign `prod_URELmxFyywN5r7`, Election `prod_URELAaHM1dfYNA`
+- Product IDs stored in `src/lib/stripe.ts` — must be updated when switching to live mode
+
+### Upgrades
+- Upgrade cost = target plan price − amountPaid (campaigns pay the difference only)
+- Webhook handles both fresh purchases and upgrades
+- `buildPlanSnapshot` shared between dev mode (`selectPlanDev`) and webhook
+
+### Key files
+- `src/lib/stripe.ts` — Stripe client + product ID mapping
+- `src/app/api/stripe/checkout/route.ts` — creates Checkout Session (auth required)
+- `src/app/api/stripe/webhook/route.ts` — handles `checkout.session.completed` (no auth, signature verified)
+- `src/app/onboarding/choose-plan/success/page.tsx` — post-payment success page
+- `src/app/onboarding/choose-plan/plan-cards.tsx` — unified button (Stripe or dev mode)
+- `src/app/onboarding/choose-plan/actions.ts` — `buildPlanSnapshot` extracted as shared function
+
+### Payment gate
+- New campaigns created with `planActivated: false`
+- `src/app/(app)/layout.tsx` redirects unpaid campaigns to `/onboarding/choose-plan` when `NEXT_PUBLIC_STRIPE_ENABLED=true`
+- Dev mode (`NEXT_PUBLIC_STRIPE_ENABLED=false`): `selectPlanDev` activates instantly, no payment
+- Demo campaigns bypass the gate
+- Super_users in support mode bypass the gate
+
+### Environment variables (production)
+```
+STRIPE_SECRET_KEY=sk_test_...          # swap to sk_live_... when ready
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...  # swap to pk_live_... when ready
+STRIPE_WEBHOOK_SECRET=whsec_...        # production webhook signing secret
+NEXT_PUBLIC_STRIPE_ENABLED=false       # set to true when ready to accept payments
+```
+
+### Webhook
+- Endpoint: `https://app.localseat.io/api/stripe/webhook`
+- Events: `checkout.session.completed`
+- Configured in Stripe dashboard (test mode)
+- Signing secret in production `.env`
+- Route added to proxy public paths and maintenance-exempt paths
+
+### Go-live checklist (when bank account is activated)
+1. Get live keys from Stripe dashboard (`sk_live_...`, `pk_live_...`)
+2. Create three products in Stripe live mode (Starter, Campaign, Election) — copy new product IDs
+3. Create webhook endpoint in live mode → `https://app.localseat.io/api/stripe/webhook` → get new signing secret
+4. Update `src/lib/stripe.ts` with live product IDs
+5. SSH into VPS, update `/var/www/localseat/.env`:
+   - Replace `sk_test_...` with `sk_live_...`
+   - Replace `pk_test_...` with `pk_live_...`
+   - Replace `STRIPE_WEBHOOK_SECRET` with live signing secret
+   - Change `NEXT_PUBLIC_STRIPE_ENABLED=false` to `true`
+6. Deploy: `./deploy.sh`
+7. Test with a real card — verify webhook fires, campaign activates, dashboard accessible
+
+---
+
 ## Support Access System
 
 Super_users can view any campaign's data through the normal app UI.
@@ -426,14 +496,18 @@ Super_users can view any campaign's data through the normal app UI.
 
 ## Maintenance Mode
 
+### Two-layer model
+- **ENV `MAINTENANCE_MODE=true`** → proxy blocks all non-exempt requests immediately (synchronous ENV check, no DB, no network call)
+- **PlatformSettings `maintenance_mode=true`** → `(app)/layout.tsx` catches authenticated app users; admins and support mode users exempt
+- The proxy does NOT fetch `/api/maintenance-status` internally — that caused a 4-minute request cascade (self-referential fetch loop). The route exists for external health checks only.
+
 ### Activation
-- **ENV var**: `MAINTENANCE_MODE=true` in `.env` — immediate, no DB needed (for hard lockouts during deploys)
-- **Admin panel**: toggle at `/admin/settings` → saves `maintenance_mode` key to PlatformSettings
-- Proxy checks ENV first, then DB (cached 10 seconds via `/api/maintenance-status`)
+- **ENV var**: `MAINTENANCE_MODE=true` in `.env` — immediate hard lockout, no DB needed (use for deploys)
+- **Admin panel**: toggle at `/admin/settings` → saves `maintenance_mode` key to PlatformSettings → layout catches it
 
 ### Behavior when active
 - All non-admin traffic redirected to `/maintenance` page
-- Allowed during maintenance: `/admin/*`, `/api/auth/*`, `/api/pricing`, `/api/maintenance-status`, static assets
+- Allowed during maintenance: `/admin/*`, `/api/auth/*`, `/api/pricing`, `/api/maintenance-status`, `/api/stripe/webhook`, static assets
 - Maintenance page: branded, "We'll be right back", try-again link, no auth required
 
 ### Force logout
@@ -998,6 +1072,11 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Seed cleanup: signatureConsent, signatureConsentType, supportAccessGrant added to delete order | May 1, 2026 |
 | Proxy fix: /api/pricing added to public paths, /api/* routes skip admin redirect | May 1, 2026 |
 | Migration fix: support_access_grants column names corrected from snake_case to camelCase | May 1, 2026 |
+| Stripe Checkout integration — dynamic pricing from PlatformSettings, webhook activation, upgrade support (pay the difference) | May 1, 2026 |
+| Payment gate — new campaigns start with planActivated=false, layout redirects to plan selection until paid | May 1, 2026 |
+| Maintenance mode fix — removed self-referential fetch from proxy, two-layer model (ENV for proxy, DB for layout) | May 1, 2026 |
+| advanceVotingDates fix — explicit empty array on campaign creation to avoid null constraint | May 1, 2026 |
+| Proxy support mode bypass — super_users with supportMode set can access regular app routes | May 1, 2026 |
 
 ### High Priority
 _(none)_
@@ -1006,7 +1085,7 @@ _(none)_
 | Item | Effort |
 |---|---|
 | CSV splitter + multi-batch session UI (Prompt C) — client-side splitter for >10k row imports, batches of ~9k rows, session at /import/voters/sessions/[id] with progress tracking. Currently the row cap rejects oversized files — splitter would offer to chunk automatically | Medium — ~5.5h est. |
-| Stripe payment integration — plan selector done, upgrade cards done, Stripe Checkout wiring remaining (blocked on bank account activation) | Medium |
+| Stripe go-live — test mode fully deployed; blocked on bank account activation. When ready: swap to live keys, create live products/webhook, set NEXT_PUBLIC_STRIPE_ENABLED=true | Small (config only) |
 | Two-factor authentication (2FA) | Medium |
 | UI/layout polish pass | Medium |
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, field-level merge, manual review, audit trail | Large |
@@ -1026,7 +1105,7 @@ _(none)_
 ---
 
 ## Roadmap
-1. Stripe payment integration — plan selector + upgrade cards done; Stripe Checkout wiring remaining (blocked on bank account activation)
+1. Stripe go-live (bank account activation → swap to live keys → enable payments)
 2. Marketing site redesign (deferred — ship current, revisit after customer feedback)
 3. Two-factor authentication (2FA)
 4. Simple automation rules (soft yes → auto follow-up)
@@ -1051,10 +1130,11 @@ Online donations, mass texting, email broadcasts, predictive scoring, advanced a
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
 6. Starter test: starter.candidate@example.com / password (Starter plan restrictions)
-7. All new dev → localseat-staging repo first
-8. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
-9. Test on staging before production deploy
-10. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh` → `cd /var/www/demo && ./deploy.sh`
-11. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/`
-12. Run `npx prisma generate` after any migration
-13. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)
+7. Stripe local testing: ensure `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_ENABLED=true`, and `STRIPE_WEBHOOK_SECRET` are in `.env`, then run `C:\stripe\stripe.exe listen --forward-to localhost:3000/api/stripe/webhook` in a separate terminal
+8. All new dev → localseat-staging repo first
+9. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
+10. Test on staging before production deploy
+11. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh` → `cd /var/www/demo && ./deploy.sh`
+12. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/`
+13. Run `npx prisma generate` after any migration
+14. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)
