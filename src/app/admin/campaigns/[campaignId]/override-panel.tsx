@@ -67,9 +67,17 @@ function EffectivePreview({ limits }: { limits: SerializableLimits }) {
     { label: "Canvasser limit",       value: formatLimit(limits.canvasserLimit)   },
     { label: "Co-Chair limit",        value: formatLimit(limits.coChairLimit)     },
     { label: "Field Organizer limit", value: formatLimit(limits.fieldOrganizerLimit) },
-    { label: "Donor tracking",        value: limits.donorTrackingEnabled ? "Enabled" : "Disabled" },
-    { label: "Follow-up queue",       value: limits.followUpQueueEnabled ? "Enabled" : "Disabled" },
-    { label: "Analytics",             value: limits.analyticsEnabled     ? "Enabled" : "Disabled" },
+    { label: "Donor tracking",        value: limits.donorTrackingEnabled     ? "Enabled" : "Disabled" },
+    { label: "Follow-up queue",       value: limits.followUpQueueEnabled     ? "Enabled" : "Disabled" },
+    { label: "Analytics",             value: limits.analyticsEnabled         ? "Enabled" : "Disabled" },
+    { label: "Events",                value: limits.eventsEnabled            ? "Enabled" : "Disabled" },
+    { label: "Surveys",               value: limits.surveysEnabled           ? "Enabled" : "Disabled" },
+    { label: "Digital signatures",    value: limits.digitalSignaturesEnabled ? "Enabled" : "Disabled" },
+    { label: "Custom fields",         value: limits.customFieldsEnabled      ? "Enabled" : "Disabled" },
+    { label: "Sign tracking",         value: limits.signTrackingEnabled      ? "Enabled" : "Disabled" },
+    { label: "Contact map",           value: limits.contactMapEnabled        ? "Enabled" : "Disabled" },
+    { label: "Reports",               value: limits.reportsEnabled           ? "Enabled" : "Disabled" },
+    { label: "Canvassing script",     value: limits.canvassScriptEnabled     ? "Enabled" : "Disabled" },
   ];
 
   return (
@@ -121,9 +129,41 @@ export function OverridePanel({
     initialOverride?.followUpQueueEnabled === true  ? "true"  :
     initialOverride?.followUpQueueEnabled === false ? "false" : "",
   );
-  const [analyticsOverride,   setAnalyticsOverride]   = useState<"" | "true" | "false">(
+  const [analyticsOverride,          setAnalyticsOverride]          = useState<"" | "true" | "false">(
     initialOverride?.analyticsEnabled === true  ? "true"  :
     initialOverride?.analyticsEnabled === false ? "false" : "",
+  );
+  const [eventsOverride,             setEventsOverride]             = useState<"" | "true" | "false">(
+    initialOverride?.eventsEnabled === true  ? "true"  :
+    initialOverride?.eventsEnabled === false ? "false" : "",
+  );
+  const [surveysOverride,            setSurveysOverride]            = useState<"" | "true" | "false">(
+    initialOverride?.surveysEnabled === true  ? "true"  :
+    initialOverride?.surveysEnabled === false ? "false" : "",
+  );
+  const [digitalSigOverride,         setDigitalSigOverride]         = useState<"" | "true" | "false">(
+    initialOverride?.digitalSignaturesEnabled === true  ? "true"  :
+    initialOverride?.digitalSignaturesEnabled === false ? "false" : "",
+  );
+  const [customFieldsOverride,       setCustomFieldsOverride]       = useState<"" | "true" | "false">(
+    initialOverride?.customFieldsEnabled === true  ? "true"  :
+    initialOverride?.customFieldsEnabled === false ? "false" : "",
+  );
+  const [signTrackingOverride,       setSignTrackingOverride]       = useState<"" | "true" | "false">(
+    initialOverride?.signTrackingEnabled === true  ? "true"  :
+    initialOverride?.signTrackingEnabled === false ? "false" : "",
+  );
+  const [contactMapOverride,         setContactMapOverride]         = useState<"" | "true" | "false">(
+    initialOverride?.contactMapEnabled === true  ? "true"  :
+    initialOverride?.contactMapEnabled === false ? "false" : "",
+  );
+  const [reportsOverride,            setReportsOverride]            = useState<"" | "true" | "false">(
+    initialOverride?.reportsEnabled === true  ? "true"  :
+    initialOverride?.reportsEnabled === false ? "false" : "",
+  );
+  const [canvassScriptOverride,      setCanvassScriptOverride]      = useState<"" | "true" | "false">(
+    initialOverride?.canvassScriptEnabled === true  ? "true"  :
+    initialOverride?.canvassScriptEnabled === false ? "false" : "",
   );
   const [notes, setNotes] = useState(initialOverride?.notesInternal ?? "");
 
@@ -141,10 +181,18 @@ export function OverridePanel({
       constituentLimit:     parseNum(constituentLimit),
       coChairLimit:         parseNum(coChairLimit),
       fieldOrganizerLimit:  parseNum(fieldOrganizerLimit),
-      donorTrackingEnabled: donorOverride    === "true" ? true : donorOverride    === "false" ? false : null,
-      followUpQueueEnabled: followUpOverride === "true" ? true : followUpOverride === "false" ? false : null,
-      analyticsEnabled:     analyticsOverride === "true" ? true : analyticsOverride === "false" ? false : null,
-      notesInternal:        notes.trim() || null,
+      donorTrackingEnabled:     donorOverride         === "true" ? true : donorOverride         === "false" ? false : null,
+      followUpQueueEnabled:     followUpOverride      === "true" ? true : followUpOverride      === "false" ? false : null,
+      analyticsEnabled:         analyticsOverride     === "true" ? true : analyticsOverride     === "false" ? false : null,
+      eventsEnabled:            eventsOverride        === "true" ? true : eventsOverride        === "false" ? false : null,
+      surveysEnabled:           surveysOverride       === "true" ? true : surveysOverride       === "false" ? false : null,
+      digitalSignaturesEnabled: digitalSigOverride    === "true" ? true : digitalSigOverride    === "false" ? false : null,
+      customFieldsEnabled:      customFieldsOverride  === "true" ? true : customFieldsOverride  === "false" ? false : null,
+      signTrackingEnabled:      signTrackingOverride  === "true" ? true : signTrackingOverride  === "false" ? false : null,
+      contactMapEnabled:        contactMapOverride     === "true" ? true : contactMapOverride     === "false" ? false : null,
+      reportsEnabled:           reportsOverride       === "true" ? true : reportsOverride       === "false" ? false : null,
+      canvassScriptEnabled:     canvassScriptOverride === "true" ? true : canvassScriptOverride === "false" ? false : null,
+      notesInternal:            notes.trim() || null,
     });
 
     if (result.error) {
@@ -310,6 +358,102 @@ export function OverridePanel({
               <select
                 value={analyticsOverride}
                 onChange={(e) => setAnalyticsOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Events" helper="Override tier default">
+              <select
+                value={eventsOverride}
+                onChange={(e) => setEventsOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Surveys" helper="Override tier default">
+              <select
+                value={surveysOverride}
+                onChange={(e) => setSurveysOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Digital signatures" helper="Override tier default">
+              <select
+                value={digitalSigOverride}
+                onChange={(e) => setDigitalSigOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Custom fields" helper="Override tier default">
+              <select
+                value={customFieldsOverride}
+                onChange={(e) => setCustomFieldsOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Sign tracking" helper="Override tier default">
+              <select
+                value={signTrackingOverride}
+                onChange={(e) => setSignTrackingOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Contact map" helper="Override tier default">
+              <select
+                value={contactMapOverride}
+                onChange={(e) => setContactMapOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Reports" helper="Override tier default">
+              <select
+                value={reportsOverride}
+                onChange={(e) => setReportsOverride(e.target.value as "" | "true" | "false")}
+                className={SELECT_CLASS}
+              >
+                <option value="">Use tier default</option>
+                <option value="true">Force enabled</option>
+                <option value="false">Force disabled</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Canvassing script" helper="Override tier default">
+              <select
+                value={canvassScriptOverride}
+                onChange={(e) => setCanvassScriptOverride(e.target.value as "" | "true" | "false")}
                 className={SELECT_CLASS}
               >
                 <option value="">Use tier default</option>

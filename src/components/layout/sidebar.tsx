@@ -28,6 +28,14 @@ interface SidebarProps {
   donorTrackingEnabled?: boolean;
   followUpQueueEnabled?: boolean;
   analyticsEnabled?: boolean;
+  eventsEnabled?: boolean;
+  surveysEnabled?: boolean;
+  digitalSignaturesEnabled?: boolean;
+  customFieldsEnabled?: boolean;
+  signTrackingEnabled?: boolean;
+  contactMapEnabled?: boolean;
+  reportsEnabled?: boolean;
+  canvassScriptEnabled?: boolean;
   constituentUsage?: { count: number; limit: number } | null;
 }
 
@@ -60,7 +68,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, constituentUsage = null }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -144,7 +152,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
         </svg>
       ),
     },
-    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
+    ...(canvassScriptEnabled && (role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair")
       ? [
           {
             href: "/campaign-settings/script",
@@ -157,7 +165,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           },
         ]
       : []),
-    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair"
+    ...(reportsEnabled && (role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair")
       ? [
           {
             href: "/campaign-settings/reports",
@@ -172,15 +180,17 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
       : []),
     ...(role === "candidate" || role === "campaign_manager" || role === "data_manager"
       ? [
-          {
-            href: "/campaign-settings/custom-fields",
-            label: "Custom Fields",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
-              </svg>
-            ),
-          },
+          ...(customFieldsEnabled
+            ? [{
+                href: "/campaign-settings/custom-fields",
+                label: "Custom Fields",
+                icon: (
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
+                  </svg>
+                ),
+              }]
+            : []),
           {
             href: "/campaign-settings/tags",
             label: "Custom Tags",
@@ -190,20 +200,24 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
               </svg>
             ),
           },
-          {
-            href: "/campaign-settings/surveys",
-            label: "Surveys",
-            icon: <ClipboardList size={16} />,
-          },
-          {
-            href: "/campaign-settings/signature-consents",
-            label: "Consent Types",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            ),
-          },
+          ...(surveysEnabled
+            ? [{
+                href: "/campaign-settings/surveys",
+                label: "Surveys",
+                icon: <ClipboardList size={16} />,
+              }]
+            : []),
+          ...(digitalSignaturesEnabled
+            ? [{
+                href: "/campaign-settings/signature-consents",
+                label: "Consent Types",
+                icon: (
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                ),
+              }]
+            : []),
           {
             href: "/campaign-settings/privacy",
             label: "Privacy & Data",
@@ -353,7 +367,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             },
           ]
         : []),
-      ...(role && canViewAllPeople(role)
+      ...(role && canViewAllPeople(role) && eventsEnabled
         ? [
             {
               href: "/events",
@@ -428,7 +442,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             },
           ]
         : []),
-      ...(role && canViewSigns(role)
+      ...(role && canViewSigns(role) && signTrackingEnabled
         ? [
             {
               href: "/signs",
@@ -512,7 +526,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                   ...(role && canViewVolunteers(role)
                     ? [{ href: "/people/volunteers", label: "Volunteers" }]
                     : []),
-                  ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair" || role === "field_organizer"
+                  ...(contactMapEnabled && (role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair" || role === "field_organizer")
                     ? [{ href: "/people/map", label: "Contact Map" }]
                     : []),
                 ] as { href: string; label: string; badge?: number }[]).map((item) => {

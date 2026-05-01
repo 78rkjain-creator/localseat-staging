@@ -12,6 +12,14 @@ const FEATURE_KEYS = [
   "co_chair_seats",
   "unlimited_canvassers",
   "unlimited_constituents",
+  "events",
+  "surveys",
+  "digital_signatures",
+  "custom_fields",
+  "sign_tracking",
+  "contact_map",
+  "reports",
+  "canvass_script",
 ] as const;
 
 const LIMIT_KEYS = [

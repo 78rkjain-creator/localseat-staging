@@ -132,13 +132,21 @@ export async function getCampaignOverride(
 }
 
 export interface SerializableLimits {
-  constituentLimit:     number;
-  canvasserLimit:       number;
-  coChairLimit:         number;
-  fieldOrganizerLimit:  number;
-  donorTrackingEnabled: boolean;
-  followUpQueueEnabled: boolean;
-  analyticsEnabled:     boolean;
+  constituentLimit:         number;
+  canvasserLimit:           number;
+  coChairLimit:             number;
+  fieldOrganizerLimit:      number;
+  donorTrackingEnabled:     boolean;
+  followUpQueueEnabled:     boolean;
+  analyticsEnabled:         boolean;
+  eventsEnabled:            boolean;
+  surveysEnabled:           boolean;
+  digitalSignaturesEnabled: boolean;
+  customFieldsEnabled:      boolean;
+  signTrackingEnabled:      boolean;
+  contactMapEnabled:        boolean;
+  reportsEnabled:           boolean;
+  canvassScriptEnabled:     boolean;
 }
 
 export async function getCampaignEffectiveLimits(
@@ -149,26 +157,42 @@ export async function getCampaignEffectiveLimits(
 
   const limits = await getEffectiveLimits(campaignId);
   return {
-    constituentLimit:     limits.constituentLimit,
-    canvasserLimit:       limits.canvasserLimit,
-    coChairLimit:         limits.coChairLimit,
-    fieldOrganizerLimit:  limits.fieldOrganizerLimit,
-    donorTrackingEnabled: limits.donorTrackingEnabled,
-    followUpQueueEnabled: limits.followUpQueueEnabled,
-    analyticsEnabled:     limits.analyticsEnabled,
+    constituentLimit:         limits.constituentLimit,
+    canvasserLimit:           limits.canvasserLimit,
+    coChairLimit:             limits.coChairLimit,
+    fieldOrganizerLimit:      limits.fieldOrganizerLimit,
+    donorTrackingEnabled:     limits.donorTrackingEnabled,
+    followUpQueueEnabled:     limits.followUpQueueEnabled,
+    analyticsEnabled:         limits.analyticsEnabled,
+    eventsEnabled:            limits.eventsEnabled,
+    surveysEnabled:           limits.surveysEnabled,
+    digitalSignaturesEnabled: limits.digitalSignaturesEnabled,
+    customFieldsEnabled:      limits.customFieldsEnabled,
+    signTrackingEnabled:      limits.signTrackingEnabled,
+    contactMapEnabled:        limits.contactMapEnabled,
+    reportsEnabled:           limits.reportsEnabled,
+    canvassScriptEnabled:     limits.canvassScriptEnabled,
   };
 }
 
 export interface OverrideData {
-  canvasserLimit?:       number | null;
-  extraCanvassers?:      number | null;
-  constituentLimit?:     number | null;
-  coChairLimit?:         number | null;
-  fieldOrganizerLimit?:  number | null;
-  donorTrackingEnabled?: boolean | null;
-  followUpQueueEnabled?: boolean | null;
-  analyticsEnabled?:     boolean | null;
-  notesInternal?:        string | null;
+  canvasserLimit?:            number | null;
+  extraCanvassers?:           number | null;
+  constituentLimit?:          number | null;
+  coChairLimit?:              number | null;
+  fieldOrganizerLimit?:       number | null;
+  donorTrackingEnabled?:      boolean | null;
+  followUpQueueEnabled?:      boolean | null;
+  analyticsEnabled?:          boolean | null;
+  eventsEnabled?:             boolean | null;
+  surveysEnabled?:            boolean | null;
+  digitalSignaturesEnabled?:  boolean | null;
+  customFieldsEnabled?:       boolean | null;
+  signTrackingEnabled?:       boolean | null;
+  contactMapEnabled?:         boolean | null;
+  reportsEnabled?:            boolean | null;
+  canvassScriptEnabled?:      boolean | null;
+  notesInternal?:             string | null;
 }
 
 export async function upsertCampaignOverride(
@@ -187,16 +211,24 @@ export async function upsertCampaignOverride(
   const isNew = !existing;
 
   const writeData = {
-    canvasserLimit:       data.canvasserLimit       ?? null,
-    extraCanvassers:      data.extraCanvassers       ?? null,
-    constituentLimit:     data.constituentLimit      ?? null,
-    coChairLimit:         data.coChairLimit          ?? null,
-    fieldOrganizerLimit:  data.fieldOrganizerLimit   ?? null,
-    donorTrackingEnabled: data.donorTrackingEnabled  ?? null,
-    followUpQueueEnabled: data.followUpQueueEnabled  ?? null,
-    analyticsEnabled:     data.analyticsEnabled      ?? null,
-    notesInternal:        data.notesInternal?.trim() || null,
-    grantedBy:            userId,
+    canvasserLimit:           data.canvasserLimit           ?? null,
+    extraCanvassers:          data.extraCanvassers           ?? null,
+    constituentLimit:         data.constituentLimit          ?? null,
+    coChairLimit:             data.coChairLimit              ?? null,
+    fieldOrganizerLimit:      data.fieldOrganizerLimit       ?? null,
+    donorTrackingEnabled:     data.donorTrackingEnabled      ?? null,
+    followUpQueueEnabled:     data.followUpQueueEnabled      ?? null,
+    analyticsEnabled:         data.analyticsEnabled          ?? null,
+    eventsEnabled:            data.eventsEnabled             ?? null,
+    surveysEnabled:           data.surveysEnabled            ?? null,
+    digitalSignaturesEnabled: data.digitalSignaturesEnabled  ?? null,
+    customFieldsEnabled:      data.customFieldsEnabled       ?? null,
+    signTrackingEnabled:      data.signTrackingEnabled       ?? null,
+    contactMapEnabled:        data.contactMapEnabled         ?? null,
+    reportsEnabled:           data.reportsEnabled            ?? null,
+    canvassScriptEnabled:     data.canvassScriptEnabled      ?? null,
+    notesInternal:            data.notesInternal?.trim()     || null,
+    grantedBy:                userId,
     ...(isNew && { grantedAt: new Date() }),
   };
 

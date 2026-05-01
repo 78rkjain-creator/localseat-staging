@@ -532,6 +532,14 @@ const FEATURE_ROWS = [
   { label: "Co-Chair seats",         key: "co_chair_seats"          },
   { label: "Unlimited canvassers",   key: "unlimited_canvassers"    },
   { label: "Unlimited constituents", key: "unlimited_constituents"  },
+  { label: "Events",                 key: "events"                  },
+  { label: "Surveys",                key: "surveys"                 },
+  { label: "Digital signatures",     key: "digital_signatures"      },
+  { label: "Custom fields",          key: "custom_fields"           },
+  { label: "Sign tracking",          key: "sign_tracking"           },
+  { label: "Contact map",            key: "contact_map"             },
+  { label: "Reports",                key: "reports"                 },
+  { label: "Canvassing script",      key: "canvass_script"          },
 ] as const;
 
 function Toggle({

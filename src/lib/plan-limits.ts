@@ -5,16 +5,24 @@ import { db } from "@/lib/db";
 export type PlanTier = "starter" | "campaign" | "election" | "demo";
 
 export type TierLimits = {
-  constituentLimit:      number;  // 0 = unlimited
-  canvasserLimit:        number;  // 0 = unlimited
-  campaignManagerLimit:  number;
-  coChairLimit:          number;
-  fieldOrganizerLimit:   number;
-  donorTrackingEnabled:  boolean;
-  volunteerCoordEnabled: boolean;
-  financeLeadEnabled:    boolean;
-  followUpQueueEnabled:  boolean;
-  analyticsEnabled:      boolean;
+  constituentLimit:         number;  // 0 = unlimited
+  canvasserLimit:           number;  // 0 = unlimited
+  campaignManagerLimit:     number;
+  coChairLimit:             number;
+  fieldOrganizerLimit:      number;
+  donorTrackingEnabled:     boolean;
+  volunteerCoordEnabled:    boolean;
+  financeLeadEnabled:       boolean;
+  followUpQueueEnabled:     boolean;
+  analyticsEnabled:         boolean;
+  eventsEnabled:            boolean;
+  surveysEnabled:           boolean;
+  digitalSignaturesEnabled: boolean;
+  customFieldsEnabled:      boolean;
+  signTrackingEnabled:      boolean;
+  contactMapEnabled:        boolean;
+  reportsEnabled:           boolean;
+  canvassScriptEnabled:     boolean;
 };
 
 export type EffectiveLimits = TierLimits & {
@@ -26,55 +34,87 @@ export type EffectiveLimits = TierLimits & {
 
 const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
   starter: {
-    constituentLimit:      2500,
-    canvasserLimit:        3,
-    campaignManagerLimit:  1,
-    coChairLimit:          0,
-    fieldOrganizerLimit:   1,
-    donorTrackingEnabled:  false,
-    volunteerCoordEnabled: false,
-    financeLeadEnabled:    false,
-    followUpQueueEnabled:  false,
-    analyticsEnabled:      false,
+    constituentLimit:         2500,
+    canvasserLimit:           3,
+    campaignManagerLimit:     1,
+    coChairLimit:             0,
+    fieldOrganizerLimit:      1,
+    donorTrackingEnabled:     false,
+    volunteerCoordEnabled:    false,
+    financeLeadEnabled:       false,
+    followUpQueueEnabled:     false,
+    analyticsEnabled:         false,
+    eventsEnabled:            false,
+    surveysEnabled:           false,
+    digitalSignaturesEnabled: false,
+    customFieldsEnabled:      false,
+    signTrackingEnabled:      false,
+    contactMapEnabled:        false,
+    reportsEnabled:           false,
+    canvassScriptEnabled:     false,
   },
   campaign: {
-    constituentLimit:      15000,
-    canvasserLimit:        0,
-    campaignManagerLimit:  0,
-    coChairLimit:          2,
-    fieldOrganizerLimit:   0,
-    donorTrackingEnabled:  true,
-    volunteerCoordEnabled: true,
-    financeLeadEnabled:    true,
-    followUpQueueEnabled:  true,
-    analyticsEnabled:      true,
+    constituentLimit:         15000,
+    canvasserLimit:           0,
+    campaignManagerLimit:     0,
+    coChairLimit:             2,
+    fieldOrganizerLimit:      0,
+    donorTrackingEnabled:     true,
+    volunteerCoordEnabled:    true,
+    financeLeadEnabled:       true,
+    followUpQueueEnabled:     true,
+    analyticsEnabled:         true,
+    eventsEnabled:            true,
+    surveysEnabled:           false,
+    digitalSignaturesEnabled: false,
+    customFieldsEnabled:      true,
+    signTrackingEnabled:      true,
+    contactMapEnabled:        true,
+    reportsEnabled:           true,
+    canvassScriptEnabled:     true,
   },
   election: {
-    constituentLimit:      0,
-    canvasserLimit:        0,
-    campaignManagerLimit:  0,
-    coChairLimit:          0,
-    fieldOrganizerLimit:   0,
-    donorTrackingEnabled:  true,
-    volunteerCoordEnabled: true,
-    financeLeadEnabled:    true,
-    followUpQueueEnabled:  true,
-    analyticsEnabled:      true,
+    constituentLimit:         0,
+    canvasserLimit:           0,
+    campaignManagerLimit:     0,
+    coChairLimit:             0,
+    fieldOrganizerLimit:      0,
+    donorTrackingEnabled:     true,
+    volunteerCoordEnabled:    true,
+    financeLeadEnabled:       true,
+    followUpQueueEnabled:     true,
+    analyticsEnabled:         true,
+    eventsEnabled:            true,
+    surveysEnabled:           true,
+    digitalSignaturesEnabled: true,
+    customFieldsEnabled:      true,
+    signTrackingEnabled:      true,
+    contactMapEnabled:        true,
+    reportsEnabled:           true,
+    canvassScriptEnabled:     true,
   },
 };
 
 const UNLIMITED: EffectiveLimits = {
-  constituentLimit:      0,
-  canvasserLimit:        0,
-  campaignManagerLimit:  0,
-  coChairLimit:          0,
-  fieldOrganizerLimit:   0,
-  donorTrackingEnabled:  true,
-  volunteerCoordEnabled: true,
-  financeLeadEnabled:    true,
-  followUpQueueEnabled:  true,
-  analyticsEnabled:      true,
-  isUnlimited:           () => true,
+  constituentLimit:         0,
+  canvasserLimit:           0,
+  campaignManagerLimit:     0,
+  coChairLimit:             0,
+  fieldOrganizerLimit:      0,
+  donorTrackingEnabled:     true,
+  volunteerCoordEnabled:    true,
+  financeLeadEnabled:       true,
+  followUpQueueEnabled:     true,
+  analyticsEnabled:         true,
+  eventsEnabled:            true,
+  surveysEnabled:           true,
+  digitalSignaturesEnabled: true,
+  customFieldsEnabled:      true,
+  signTrackingEnabled:      true,
+  contactMapEnabled:        true,
+  reportsEnabled:           true,
+  canvassScriptEnabled:     true,
+  isUnlimited:              () => true,
 };
 
 // ── Settings parser ────────────────────────────────────────────────────────────
@@ -107,11 +147,19 @@ function parseSettings(
     campaignManagerLimit:  num("campaign_manager_limit",  fb.campaignManagerLimit),
     coChairLimit:          num("cochair_limit",           fb.coChairLimit),
     fieldOrganizerLimit:   num("field_organizer_limit",   fb.fieldOrganizerLimit),
-    donorTrackingEnabled:  feat("donor_tracking",         fb.donorTrackingEnabled),
-    volunteerCoordEnabled: feat("volunteer_coordination", fb.volunteerCoordEnabled),
-    financeLeadEnabled:    feat("finance_lead_access",    fb.financeLeadEnabled),
-    followUpQueueEnabled:  feat("follow_up_queue",        fb.followUpQueueEnabled),
-    analyticsEnabled:      feat("analytics",              fb.analyticsEnabled),
+    donorTrackingEnabled:     feat("donor_tracking",         fb.donorTrackingEnabled),
+    volunteerCoordEnabled:    feat("volunteer_coordination", fb.volunteerCoordEnabled),
+    financeLeadEnabled:       feat("finance_lead_access",    fb.financeLeadEnabled),
+    followUpQueueEnabled:     feat("follow_up_queue",        fb.followUpQueueEnabled),
+    analyticsEnabled:         feat("analytics",              fb.analyticsEnabled),
+    eventsEnabled:            feat("events",                 fb.eventsEnabled),
+    surveysEnabled:           feat("surveys",                fb.surveysEnabled),
+    digitalSignaturesEnabled: feat("digital_signatures",     fb.digitalSignaturesEnabled),
+    customFieldsEnabled:      feat("custom_fields",          fb.customFieldsEnabled),
+    signTrackingEnabled:      feat("sign_tracking",          fb.signTrackingEnabled),
+    contactMapEnabled:        feat("contact_map",            fb.contactMapEnabled),
+    reportsEnabled:           feat("reports",                fb.reportsEnabled),
+    canvassScriptEnabled:     feat("canvass_script",         fb.canvassScriptEnabled),
   };
 }
 
@@ -181,11 +229,19 @@ export async function getEffectiveLimits(campaignId: string): Promise<EffectiveL
     campaignManagerLimit:  resolveNum(null,                           override?.snapshotCampaignManagerLimit, tierLimits.campaignManagerLimit),
     coChairLimit:          resolveNum(override?.coChairLimit,         override?.snapshotCoChairLimit,        tierLimits.coChairLimit),
     fieldOrganizerLimit:   resolveNum(override?.fieldOrganizerLimit,  override?.snapshotFieldOrganizerLimit, tierLimits.fieldOrganizerLimit),
-    donorTrackingEnabled:  resolveBool(override?.donorTrackingEnabled, override?.snapshotDonorTracking,     tierLimits.donorTrackingEnabled),
-    volunteerCoordEnabled: resolveBool(null,                           override?.snapshotVolunteerCoord,     tierLimits.volunteerCoordEnabled),
-    financeLeadEnabled:    resolveBool(null,                           override?.snapshotFinanceLeadAccess,  tierLimits.financeLeadEnabled),
-    followUpQueueEnabled:  resolveBool(override?.followUpQueueEnabled, override?.snapshotFollowUpQueue,     tierLimits.followUpQueueEnabled),
-    analyticsEnabled:      resolveBool(override?.analyticsEnabled,     override?.snapshotAnalytics,         tierLimits.analyticsEnabled),
+    donorTrackingEnabled:     resolveBool(override?.donorTrackingEnabled,     override?.snapshotDonorTracking,        tierLimits.donorTrackingEnabled),
+    volunteerCoordEnabled:    resolveBool(null,                               override?.snapshotVolunteerCoord,       tierLimits.volunteerCoordEnabled),
+    financeLeadEnabled:       resolveBool(null,                               override?.snapshotFinanceLeadAccess,    tierLimits.financeLeadEnabled),
+    followUpQueueEnabled:     resolveBool(override?.followUpQueueEnabled,     override?.snapshotFollowUpQueue,        tierLimits.followUpQueueEnabled),
+    analyticsEnabled:         resolveBool(override?.analyticsEnabled,         override?.snapshotAnalytics,            tierLimits.analyticsEnabled),
+    eventsEnabled:            resolveBool(override?.eventsEnabled,            override?.snapshotEvents,               tierLimits.eventsEnabled),
+    surveysEnabled:           resolveBool(override?.surveysEnabled,           override?.snapshotSurveys,              tierLimits.surveysEnabled),
+    digitalSignaturesEnabled: resolveBool(override?.digitalSignaturesEnabled, override?.snapshotDigitalSignatures,    tierLimits.digitalSignaturesEnabled),
+    customFieldsEnabled:      resolveBool(override?.customFieldsEnabled,      override?.snapshotCustomFields,         tierLimits.customFieldsEnabled),
+    signTrackingEnabled:      resolveBool(override?.signTrackingEnabled,      override?.snapshotSignTracking,         tierLimits.signTrackingEnabled),
+    contactMapEnabled:        resolveBool(override?.contactMapEnabled,        override?.snapshotContactMap,           tierLimits.contactMapEnabled),
+    reportsEnabled:           resolveBool(override?.reportsEnabled,           override?.snapshotReports,              tierLimits.reportsEnabled),
+    canvassScriptEnabled:     resolveBool(override?.canvassScriptEnabled,     override?.snapshotCanvassScript,        tierLimits.canvassScriptEnabled),
   };
 
   return {
@@ -254,4 +310,44 @@ export async function isFollowUpQueueEnabled(campaignId: string): Promise<boolea
 export async function isAnalyticsEnabled(campaignId: string): Promise<boolean> {
   const limits = await getEffectiveLimits(campaignId);
   return limits.analyticsEnabled;
+}
+
+export async function isEventsEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.eventsEnabled;
+}
+
+export async function isSurveysEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.surveysEnabled;
+}
+
+export async function isDigitalSignaturesEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.digitalSignaturesEnabled;
+}
+
+export async function isCustomFieldsEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.customFieldsEnabled;
+}
+
+export async function isSignTrackingEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.signTrackingEnabled;
+}
+
+export async function isContactMapEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.contactMapEnabled;
+}
+
+export async function isReportsEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.reportsEnabled;
+}
+
+export async function isCanvassScriptEnabled(campaignId: string): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.canvassScriptEnabled;
 }

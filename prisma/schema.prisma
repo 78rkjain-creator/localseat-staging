@@ -830,18 +830,26 @@ model CampaignOverride {
   campaign             Campaign @relation(fields: [campaignId], references: [id])
 
   // Manual per-campaign overrides — highest priority, override everything
-  canvasserLimit       Int?
-  constituentLimit     Int?
-  extraCanvassers      Int?
-  coChairLimit         Int?
-  fieldOrganizerLimit  Int?
-  donorTrackingEnabled Boolean?
-  followUpQueueEnabled Boolean?
-  analyticsEnabled     Boolean?
-  notesInternal        String?
-  grantedBy            String?
-  grantedAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  canvasserLimit            Int?
+  constituentLimit          Int?
+  extraCanvassers           Int?
+  coChairLimit              Int?
+  fieldOrganizerLimit       Int?
+  donorTrackingEnabled      Boolean?
+  followUpQueueEnabled      Boolean?
+  analyticsEnabled          Boolean?
+  eventsEnabled             Boolean?
+  surveysEnabled            Boolean?
+  digitalSignaturesEnabled  Boolean?
+  customFieldsEnabled       Boolean?
+  signTrackingEnabled       Boolean?
+  contactMapEnabled         Boolean?
+  reportsEnabled            Boolean?
+  canvassScriptEnabled      Boolean?
+  notesInternal             String?
+  grantedBy                 String?
+  grantedAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   // Snapshot of tier defaults at time of plan selection
   // Used for "best of snapshot vs current" logic — protects existing campaigns
@@ -859,6 +867,14 @@ model CampaignOverride {
   snapshotCoChairSeats          Boolean?
   snapshotUnlimitedCanvassers   Boolean?
   snapshotUnlimitedConstituents Boolean?
+  snapshotEvents                Boolean?
+  snapshotSurveys               Boolean?
+  snapshotDigitalSignatures     Boolean?
+  snapshotCustomFields          Boolean?
+  snapshotSignTracking          Boolean?
+  snapshotContactMap            Boolean?
+  snapshotReports               Boolean?
+  snapshotCanvassScript         Boolean?
   snapshotPricePaid             Int?
   snapshotRegularPrice          Int?
   snapshotSalePrice             Int?

@@ -50,9 +50,17 @@ export default async function AppLayout({
     : 0;
 
   // Load effective limits for plan-gating in sidebar
-  let donorTrackingEnabled = true;
-  let followUpQueueEnabled = true;
-  let analyticsEnabled = true;
+  let donorTrackingEnabled     = true;
+  let followUpQueueEnabled     = true;
+  let analyticsEnabled         = true;
+  let eventsEnabled            = true;
+  let surveysEnabled           = true;
+  let digitalSignaturesEnabled = true;
+  let customFieldsEnabled      = true;
+  let signTrackingEnabled      = true;
+  let contactMapEnabled        = true;
+  let reportsEnabled           = true;
+  let canvassScriptEnabled     = true;
   let constituentUsage: { count: number; limit: number } | null = null;
 
   // Check for pending support access request (candidate/campaign_manager only)
@@ -81,9 +89,17 @@ export default async function AppLayout({
 
   if (activeCampaignId) {
     const limits = await getEffectiveLimits(activeCampaignId);
-    donorTrackingEnabled = limits.donorTrackingEnabled;
-    followUpQueueEnabled = limits.followUpQueueEnabled;
-    analyticsEnabled     = limits.analyticsEnabled;
+    donorTrackingEnabled     = limits.donorTrackingEnabled;
+    followUpQueueEnabled     = limits.followUpQueueEnabled;
+    analyticsEnabled         = limits.analyticsEnabled;
+    eventsEnabled            = limits.eventsEnabled;
+    surveysEnabled           = limits.surveysEnabled;
+    digitalSignaturesEnabled = limits.digitalSignaturesEnabled;
+    customFieldsEnabled      = limits.customFieldsEnabled;
+    signTrackingEnabled      = limits.signTrackingEnabled;
+    contactMapEnabled        = limits.contactMapEnabled;
+    reportsEnabled           = limits.reportsEnabled;
+    canvassScriptEnabled     = limits.canvassScriptEnabled;
 
     if (activeRole === "candidate" || activeRole === "campaign_manager") {
       if (!limits.isUnlimited("constituentLimit") && limits.constituentLimit > 0) {
@@ -122,6 +138,14 @@ export default async function AppLayout({
           donorTrackingEnabled={donorTrackingEnabled}
           followUpQueueEnabled={followUpQueueEnabled}
           analyticsEnabled={analyticsEnabled}
+          eventsEnabled={eventsEnabled}
+          surveysEnabled={surveysEnabled}
+          digitalSignaturesEnabled={digitalSignaturesEnabled}
+          customFieldsEnabled={customFieldsEnabled}
+          signTrackingEnabled={signTrackingEnabled}
+          contactMapEnabled={contactMapEnabled}
+          reportsEnabled={reportsEnabled}
+          canvassScriptEnabled={canvassScriptEnabled}
           constituentUsage={constituentUsage}
         />
         <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">

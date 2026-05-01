@@ -36,6 +36,9 @@ function getTierFeatures(tier: string, pricing: TierPricing): string[] {
       "All Starter features",
       "Donor prospect tracking",
       "Follow-up queue",
+      "Events & attendance tracking",
+      "Custom fields",
+      "Sign tracking",
       "Dashboard analytics",
     ];
   }
@@ -44,6 +47,7 @@ function getTierFeatures(tier: string, pricing: TierPricing): string[] {
     constituentText(constituentLimit),
     canvasserText(canvasserLimit),
     "All Campaign features",
+    "Surveys & digital signatures",
     "Priority support",
     "Onboarding call",
     "Data import assistance",
