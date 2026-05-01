@@ -4,6 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CustomFieldsFormClient } from "./custom-fields-form-client";
+import { isCustomFieldsEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import type { CustomField } from "./actions";
 import type { Role } from "@/types";
 
@@ -20,6 +23,20 @@ export default async function CustomFieldsPage() {
 
   if (!activeRole || !ALLOWED_ROLES.includes(activeRole as Role)) {
     redirect("/dashboard");
+  }
+
+  if (!await isCustomFieldsEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["custom_fields"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
   }
 
   const campaign = await db.campaign.findUnique({

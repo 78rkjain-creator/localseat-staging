@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewDonors, canViewDonorAmounts, isReadOnly } from "@/lib/permissions";
 import { isDonorTrackingEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import { getDonors } from "@/lib/donors";
 import { Card } from "@/components/ui/card";
 import { AddDonorModal } from "./add-donor-modal";
@@ -25,7 +27,19 @@ export default async function DonorsPage({ searchParams }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewDonors(activeRole as Role)) redirect("/dashboard");
 
-  if (!await isDonorTrackingEnabled(activeCampaignId)) redirect("/dashboard");
+  if (!await isDonorTrackingEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["donor_tracking"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const params = await searchParams;
   const status = (params.status as DonorStatus | "") || "";

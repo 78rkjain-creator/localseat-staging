@@ -8,6 +8,8 @@ import {
   isReadOnly,
 } from "@/lib/permissions";
 import { isFollowUpQueueEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import {
   getFullFollowUpQueue,
   getMyFollowUpTasks,
@@ -27,7 +29,19 @@ export default async function FollowUpsPage() {
   const { activeCampaignId, activeRole, id: userId } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
 
-  if (!await isFollowUpQueueEnabled(activeCampaignId)) redirect("/dashboard");
+  if (!await isFollowUpQueueEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["follow_up_queue"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const role = activeRole as Role;
   const isManager = canManageFollowUps(role);

@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAnalyticsData } from "@/lib/analytics";
 import { isAnalyticsEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import { AnalyticsCharts } from "./analytics-charts";
 import type { Role } from "@/types";
 
@@ -22,7 +24,19 @@ export default async function AnalyticsPage() {
     redirect("/dashboard");
   }
 
-  if (!await isAnalyticsEnabled(activeCampaignId)) redirect("/dashboard");
+  if (!await isAnalyticsEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["analytics"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const data = await getAnalyticsData(activeCampaignId);
 

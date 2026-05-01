@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { NewEventForm } from "./new-event-form";
 import type { Role } from "@/types";
 import { canViewAllPeople } from "@/lib/permissions";
+import { isEventsEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 
 export const metadata: Metadata = { title: "New Event" };
 
@@ -21,6 +24,20 @@ export default async function NewEventPage() {
     activeRole === "canvasser"
   ) {
     redirect("/events");
+  }
+
+  if (!await isEventsEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["events"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
   }
 
   const lists = await db.canvassList.findMany({

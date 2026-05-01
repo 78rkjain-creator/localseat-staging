@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewSigns, canManageSigns } from "@/lib/permissions";
+import { isSignTrackingEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import { db } from "@/lib/db";
 import { AddSignButton } from "./add-sign-button";
 import { SignStatusToggle } from "./sign-status-toggle";
@@ -24,6 +27,20 @@ export default async function SignsPage({ searchParams }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewSigns(activeRole as Role)) redirect("/dashboard");
+
+  if (!await isSignTrackingEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["sign_tracking"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const params = await searchParams;
   const statusFilter = (params.status as SignStatusFilter) || "all";

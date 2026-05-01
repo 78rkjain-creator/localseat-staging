@@ -5,6 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewAllPeople } from "@/lib/permissions";
 import { getEvent, getCampaignMembers } from "@/lib/events";
+import { isEventsEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import { updateEventStatus, deleteEvent } from "../actions";
 import { AttendeePanel } from "./attendee-panel";
 import { CopyEventModal } from "./copy-event-modal";
@@ -25,6 +28,20 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole || !canViewAllPeople(activeRole as Role)) redirect("/dashboard");
+
+  if (!await isEventsEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["events"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const [event, members] = await Promise.all([
     getEvent(eventId, activeCampaignId),

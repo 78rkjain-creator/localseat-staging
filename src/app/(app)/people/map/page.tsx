@@ -4,6 +4,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCampaignMapPeople } from "@/lib/map";
 import { CampaignMapClient } from "./campaign-map";
+import { isContactMapEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Contact Map" };
@@ -20,6 +23,20 @@ export default async function ContactMapPage() {
 
   if (!activeRole || !ALLOWED_ROLES.includes(activeRole as Role)) {
     redirect("/dashboard");
+  }
+
+  if (!await isContactMapEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["contact_map"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
   }
 
   const canCreate = CAN_CREATE_ROLES.includes(activeRole as Role);

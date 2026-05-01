@@ -5,6 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getSurveyDetail } from "@/lib/surveys";
 import { SurveyBuilder } from "./survey-builder";
+import { isSurveysEnabled } from "@/lib/plan-limits";
+import { UpgradeCard } from "@/components/upgrade-card";
+import { FEATURE_METADATA } from "@/lib/feature-metadata";
 
 export const metadata: Metadata = { title: "Edit Survey" };
 
@@ -21,6 +24,20 @@ export default async function SurveyEditPage({ params }: PageProps) {
   const { activeCampaignId, activeRole } = session.user;
   if (!activeCampaignId) redirect("/select-campaign");
   if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") redirect("/dashboard");
+
+  if (!await isSurveysEnabled(activeCampaignId)) {
+    const meta = FEATURE_METADATA["surveys"];
+    return (
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <UpgradeCard
+          featureName={meta.name}
+          featureDescription={meta.description}
+          requiredPlan={meta.requiredPlan}
+          campaignId={activeCampaignId}
+        />
+      </div>
+    );
+  }
 
   const survey = await getSurveyDetail(surveyId, activeCampaignId);
   if (!survey) notFound();
