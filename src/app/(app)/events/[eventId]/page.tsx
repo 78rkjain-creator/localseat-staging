@@ -7,6 +7,7 @@ import { canViewAllPeople } from "@/lib/permissions";
 import { getEvent, getCampaignMembers } from "@/lib/events";
 import { updateEventStatus, deleteEvent } from "../actions";
 import { AttendeePanel } from "./attendee-panel";
+import { CopyEventModal } from "./copy-event-modal";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Event" };
@@ -71,6 +72,19 @@ export default async function EventDetailPage({ params }: PageProps) {
         <div className="flex items-start justify-between gap-4 mb-2">
           <h1 className="text-2xl font-bold text-slate-900">{event.name}</h1>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <CopyEventModal
+              canCreate={canManage}
+              source={{
+                id: event.id,
+                name: event.name,
+                description: event.description,
+                dateValue: event.date.toISOString().slice(0, 10),
+                startTime: event.startTime,
+                endTime: event.endTime,
+                location: event.location,
+                eventType: event.eventType,
+              }}
+            />
             <StatusBadge status={event.status} />
           </div>
         </div>

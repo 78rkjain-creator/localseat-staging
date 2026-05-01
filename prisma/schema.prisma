@@ -187,6 +187,7 @@ model Campaign {
   dailySummaryEnabled  Boolean   @default(false)
   dailySummaryEmail    String?
   dataRetentionMonths  Int?
+  advanceVotingDates   DateTime[]
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(starter)
   planActivated  Boolean   @default(true)
@@ -1012,6 +1013,7 @@ model Event {
   eventType     EventType   @default(other)
   status        EventStatus @default(upcoming)
   canvassListId String?
+  seriesId      String?     // null = standalone; shared value = recurring series occurrence
   createdById   String
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -1024,6 +1026,7 @@ model Event {
 
   @@index([campaignId])
   @@index([date])
+  @@index([seriesId])
   @@index([deletedAt])
   @@map("events")
 }

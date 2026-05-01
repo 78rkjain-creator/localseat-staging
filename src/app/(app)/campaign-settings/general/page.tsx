@@ -18,13 +18,21 @@ export default async function GeneralSettingsPage() {
 
   const campaign = await db.campaign.findUnique({
     where: { id: activeCampaignId },
-    select: { name: true, electionDate: true, fundraisingGoal: true },
+    select: { name: true, electionDate: true, fundraisingGoal: true, advanceVotingDates: true },
   });
   if (!campaign) redirect("/dashboard");
 
   const electionDateValue = campaign.electionDate
     ? campaign.electionDate.toISOString().split("T")[0]
     : "";
+
+  // Serialize advance voting dates as { date: "YYYY-MM-DD", time: "HH:MM" }[] for the form
+  const advanceVotingDates = [...campaign.advanceVotingDates]
+    .sort((a, b) => a.getTime() - b.getTime())
+    .map((d) => ({
+      date: d.toISOString().slice(0, 10),
+      time: d.toISOString().slice(11, 16),
+    }));
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
@@ -49,6 +57,7 @@ export default async function GeneralSettingsPage() {
         name={campaign.name}
         electionDateValue={electionDateValue}
         fundraisingGoal={campaign.fundraisingGoal}
+        advanceVotingDates={advanceVotingDates}
       />
     </div>
   );

@@ -1,22 +1,50 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveGeneralSettings } from "./actions";
 import type { GeneralSettingsState } from "./actions";
+
+interface VotingDate {
+  date: string;
+  time: string;
+}
 
 interface Props {
   name: string;
   electionDateValue: string;
   fundraisingGoal: number | null;
+  advanceVotingDates: VotingDate[];
 }
 
 const initialState: GeneralSettingsState = {};
 
-export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal }: Props) {
+export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal, advanceVotingDates }: Props) {
   const [state, formAction, isPending] = useActionState(saveGeneralSettings, initialState);
+  const [vDates, setVDates] = useState<VotingDate[]>(advanceVotingDates);
+
+  function addDate() {
+    setVDates((d) => [...d, { date: "", time: "09:00" }]);
+  }
+
+  function removeDate(idx: number) {
+    setVDates((d) => d.filter((_, i) => i !== idx));
+  }
+
+  function updateDate(idx: number, field: "date" | "time", value: string) {
+    setVDates((d) => d.map((entry, i) => i === idx ? { ...entry, [field]: value } : entry));
+  }
 
   return (
     <form action={formAction}>
+      {/* Hidden count for advance voting dates */}
+      <input type="hidden" name="advanceDateCount" value={vDates.length} />
+      {vDates.map((entry, i) => (
+        <span key={i}>
+          <input type="hidden" name={`advanceDate_${i}`} value={entry.date} />
+          <input type="hidden" name={`advanceTime_${i}`} value={entry.time} />
+        </span>
+      ))}
+
       <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
 
         {/* Campaign name */}
@@ -76,6 +104,62 @@ export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal }
           <p className="text-xs text-slate-400 mt-1.5">
             Shown on the finance dashboard as a progress target.
           </p>
+        </div>
+
+        {/* Advance voting dates */}
+        <div className="px-5 py-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Advance voting dates</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Dates when advance polls are open.
+              </p>
+            </div>
+          </div>
+
+          {vDates.length === 0 ? (
+            <p className="text-sm text-slate-400 mb-3">No advance voting dates set.</p>
+          ) : (
+            <div className="flex flex-col gap-2 mb-3">
+              {vDates.map((entry, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={entry.date}
+                    onChange={(e) => updateDate(i, "date", e.target.value)}
+                    className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <input
+                    type="time"
+                    value={entry.time}
+                    onChange={(e) => updateDate(i, "time", e.target.value)}
+                    className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeDate(i)}
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                    title="Remove this date"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={addDate}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-dashed border-slate-300 text-slate-500 text-sm hover:border-brand-400 hover:text-brand-600 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add another date
+          </button>
         </div>
 
       </div>
