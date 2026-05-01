@@ -3,8 +3,6 @@ import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isSuperAdmin, isSuperUser } from "@/lib/permissions";
-import { ROLE_LABELS } from "@/types";
-import type { Role } from "@/types";
 import Link from "next/link";
 import {
   deactivateCampaign,
@@ -16,7 +14,7 @@ import {
   getAdminSupportAccessStatus,
 } from "./actions";
 import { OverridePanel } from "./override-panel";
-import { MembersPanel } from "./members-panel";
+import { MembersTabs } from "./members-tabs";
 import { SupportAccessCard } from "./support-access-card";
 
 async function getCampaignDetail(campaignId: string) {
@@ -194,7 +192,7 @@ export default async function AdminCampaignDetailPage({
 
           {/* Members */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700">
                 Members ({campaign.memberships.length})
               </h2>
@@ -204,8 +202,8 @@ export default async function AdminCampaignDetailPage({
             </div>
             {campaign.memberships.length === 0 ? (
               <p className="px-6 py-8 text-sm text-slate-400 text-center">No members.</p>
-            ) : callerIsSuperUser ? (
-              <MembersPanel
+            ) : (
+              <MembersTabs
                 campaignId={campaignId}
                 members={campaign.memberships.map((m) => ({
                   id: m.id,
@@ -214,40 +212,8 @@ export default async function AdminCampaignDetailPage({
                   createdAt: m.createdAt,
                   user: m.user,
                 }))}
+                isSuperUser={callerIsSuperUser}
               />
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-50">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Name</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide hidden md:table-cell">Email</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Role</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide hidden lg:table-cell">Joined</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {campaign.memberships.map((m) => (
-                    <tr key={m.id} className={m.deletedAt ? "opacity-40" : ""}>
-                      <td className="px-5 py-3 font-medium text-slate-900">
-                        {m.user.firstName} {m.user.lastName}
-                      </td>
-                      <td className="px-5 py-3 hidden md:table-cell text-slate-500 truncate max-w-[200px]">
-                        {m.user.email}
-                      </td>
-                      <td className="px-5 py-3 text-slate-600">
-                        {ROLE_LABELS[m.role as Role] ?? m.role}
-                      </td>
-                      <td className="px-5 py-3 hidden lg:table-cell text-slate-400 tabular-nums">
-                        {new Date(m.createdAt).toLocaleDateString("en-CA", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             )}
           </div>
         </div>
