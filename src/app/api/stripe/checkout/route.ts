@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { stripe, STRIPE_PRODUCTS } from "@/lib/stripe";
+import { getStripe, STRIPE_PRODUCTS } from "@/lib/stripe";
 import { getTierPricing } from "@/app/onboarding/choose-plan/actions";
 import type { PlanTier } from "@/lib/plan-limits";
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
   const origin = request.headers.get("origin") ?? process.env.NEXTAUTH_URL ?? "";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  const checkoutSession = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
       {

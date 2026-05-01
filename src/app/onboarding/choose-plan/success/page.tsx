@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { stripe } from "@/lib/stripe";
+import type Stripe from "stripe";
+import { getStripe } from "@/lib/stripe";
 import { Logo } from "@/components/brand/Logo";
 
 export const metadata: Metadata = { title: "Plan activated — LocalSeat" };
@@ -19,9 +20,9 @@ export default async function PlanSuccessPage({
   const { session_id } = await searchParams;
   if (!session_id) redirect("/onboarding/choose-plan");
 
-  let sessionData: Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>> | null = null;
+  let sessionData: Stripe.Checkout.Session | null = null;
   try {
-    sessionData = await stripe.checkout.sessions.retrieve(session_id);
+    sessionData = await getStripe().checkout.sessions.retrieve(session_id);
   } catch {
     redirect("/onboarding/choose-plan");
   }

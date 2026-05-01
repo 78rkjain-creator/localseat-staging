@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import type Stripe from "stripe";
+import { getStripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit";
 import { buildPlanSnapshot } from "@/app/onboarding/choose-plan/actions";
@@ -23,9 +24,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
 
-  let event: ReturnType<typeof stripe.webhooks.constructEvent>;
+  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     console.error("[stripe/webhook] Signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
