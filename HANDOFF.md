@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: April 30, 2026 — Batch 13: Volunteers tab restructure, OOD workflow removal, person edit, data_manager role, canvassing screen restructure, residents = ward, hybrid autocomplete fixes, walk list improvements, events recurring/copy, advance voting dates, +pagination, search, geocode-on-import classification fix._
+_Last updated: May 1, 2026 — Batch 14: Plan tier enforcement, feature gating (16 toggles), support access system, maintenance mode, upgrade cards, 404 handling, PWA install prompt, logo refresh, dynamic pricing API, marketing site integration._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -102,6 +102,7 @@ DATABASE_URL="postgresql://localseat:LS_Prod_2026x@localhost:5432/localseat_prod
 NEXTAUTH_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
 NEXT_PUBLIC_STRIPE_ENABLED="false"
+MAINTENANCE_MODE="false"    # Set to "true" for hard maintenance lockout (no DB needed)
 CRON_SECRET="localseat-cron-2026-secret"
 ```
 
@@ -143,6 +144,8 @@ NEXT_PUBLIC_STRIPE_ENABLED="false"
 | sara.bishop@example.com | volunteer_coordinator |
 | dan.wu@example.com | finance_lead |
 | mike.davidson@example.com | sign_installer |
+| starter.candidate@example.com | candidate (Starter plan test campaign) |
+| starter.canvasser@example.com | canvasser (Starter plan test campaign) |
 
 After any reseed: sign out and back in to refresh JWT.
 
@@ -243,14 +246,20 @@ Candidate
 20260427000011_add_surveys_and_signatures
 20260427000012_add_privacy_fields
 20260428000001_add_fundraising_goal
-20260430000001_add_data_manager_role
+20260430000001_add_signature_consent_types
+20260430000002_canvass_language_barrier_and_outcome_detail
+20260430000003_add_data_manager_role
 20260430000004_event_series_advance_voting
+20260501000001_add_campaign_override_snapshot_and_feature_fields
+20260501000002_add_support_access_grants
+20260502000001_add_feature_overrides
 ```
 
 ---
 
 ## Key Models
 - Campaign, User, CampaignMembership, AuditLog, PlatformSettings
+- CampaignOverride (per-campaign limit/feature overrides + snapshot-at-signup values; 16 feature flags + numeric limits; "best of snapshot vs current" enforcement)
 - Person, Household, Address, Tag, Note, Task
 - CanvassList, CanvassListEntry, CanvassAssignment, CanvassResponse
 - OutreachLog, DonorRecord, VolunteerRecord, VolunteerShift
@@ -262,6 +271,8 @@ Candidate
 - FieldMessage (FieldMessagePriority: normal/urgent)
 - Survey, SurveyQuestion (SurveyQuestionType: text/single_choice/multi_choice/rating/yes_no), SurveyResponse
 - SignatureRecord
+- SupportAccessGrant (lifecycle: requested → approved/denied → expired/revoked; 72h expiry from approval)
+- SignatureConsent, SignatureConsentType
 
 **Key enums:**
 - Role: candidate, campaign_manager, data_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
@@ -274,6 +285,7 @@ Candidate
 - ListSource: voters_list, residents_list, manual, canvass, team
 - SupportLevel enum: strong_yes, soft_yes, undecided, soft_no, strong_no (on both Person and CanvassResponse)
 - OutOfDistrictApprovalStatus: not_required, pending, approved, rejected
+- PlanTier: starter, campaign, election, demo
 
 **Key Person fields:**
 - isConfirmedVoter (bool) — set true on OVL match
@@ -308,6 +320,164 @@ Candidate
 - electionDate (DateTime?) — stored on Campaign, shown/edited in General Settings
 - fundraisingGoal (Int?) — dollar goal shown in General Settings; added in migration 20260428000001
 - advanceVotingDates (DateTime[]) — list of advance poll open datetimes; sorted ascending on save; add/remove in General Settings
+- plan (PlanTier, default starter) — determines feature access
+- planActivated (Boolean) — false = fully unlocked (pre-payment)
+- amountPaid (Int?) — locked at purchase time
+- planLockedAt (DateTime?) — when plan was selected
+
+---
+
+## Plan Tier System
+
+### Pricing
+- Three tiers: Starter ($249 regular / $149 sale), Campaign ($499 / $349), Election ($999 / $699)
+- Pricing managed via PlatformSettings keys: `{tier}_regular_price`, `{tier}_sale_price`, `{tier}_label`
+- Public API: `GET /api/pricing` — returns all tiers with prices, limits, and features (no auth, 5min cache, CORS open)
+- Marketing site fetches from `/api/pricing` on page load and updates pricing cards dynamically
+- Onboarding plan cards show strikethrough pricing when sale price differs from regular price
+- Admin panel at `/admin/settings` controls all pricing, limits, and feature toggles
+
+### Feature Gating (16 toggles)
+All controlled via PlatformSettings keys `{tier}_feature_{key}`:
+
+| Feature | Key | Starter | Campaign | Election |
+|---|---|---|---|---|
+| Donor tracking | donor_tracking | ✗ | ✓ | ✓ |
+| Follow-up queue | follow_up_queue | ✗ | ✓ | ✓ |
+| Analytics | analytics | ✗ | ✓ | ✓ |
+| Volunteer coordination | volunteer_coordination | ✗ | ✓ | ✓ |
+| Finance Lead access | finance_lead_access | ✗ | ✓ | ✓ |
+| Co-Chair seats | co_chair_seats | ✗ | ✓ | ✓ |
+| Unlimited canvassers | unlimited_canvassers | ✗ | ✓ | ✓ |
+| Unlimited constituents | unlimited_constituents | ✗ | ✗ | ✓ |
+| Events | events | ✗ | ✓ | ✓ |
+| Surveys | surveys | ✗ | ✗ | ✓ |
+| Digital signatures | digital_signatures | ✗ | ✗ | ✓ |
+| Custom fields | custom_fields | ✗ | ✓ | ✓ |
+| Sign tracking | sign_tracking | ✗ | ✓ | ✓ |
+| Contact map | contact_map | ✗ | ✓ | ✓ |
+| Reports | reports | ✗ | ✓ | ✓ |
+| Canvass script | canvass_script | ✗ | ✓ | ✓ |
+
+### Enforcement layers
+1. **Sidebar** — gated nav items hidden when feature disabled
+2. **Page-level** — gated pages show upgrade card (not redirect) with feature description, pricing breakdown, and upgrade button
+3. **Server actions** — write actions return error if feature disabled
+4. **API routes** — donor export returns 403 if donor tracking disabled
+
+### Snapshot at signup
+- When a campaign selects a plan, all current PlatformSettings limits and features are copied to CampaignOverride as snapshot fields
+- `getEffectiveLimits()` uses "best of snapshot vs current" logic: features can only improve, never get worse
+- Manual per-campaign overrides (set via admin panel) have highest priority
+- Priority chain: manual override → best(snapshot, current global) → hardcoded fallback
+
+### Upgrade cards
+- `src/components/upgrade-card.tsx` — server component, queries campaign's amountPaid and target plan's current price
+- Shows: feature name, description, "You paid $X. {Plan} plan: $Y. Upgrade cost: $Z."
+- Feature metadata in `src/lib/feature-metadata.ts`
+- Upgrade button links to `/onboarding/choose-plan`
+
+### Numeric limits
+- Starter: 5,000 constituents, 3 canvassers, 1 campaign manager, 1 field organizer
+- Campaign: 15,000 constituents, unlimited canvassers/managers/FOs, 2 co-chairs
+- Election: all unlimited
+- Constituent usage indicator shown in sidebar for plans with finite limits
+
+### Production deployment notes
+- After new migrations, PlatformSettings keys must be inserted into production DB manually (seed only runs on reset)
+- Use `psql` via SSH: table is `platform_settings` (snake_case), requires `id` (gen_random_uuid()::text), `key`, `value`, `"updatedAt"` (now())
+- Old keys (`starter_price`, etc.) have been removed — new format is `{tier}_regular_price` / `{tier}_sale_price`
+
+---
+
+## Support Access System
+
+Super_users can view any campaign's data through the normal app UI.
+
+### Two access levels
+- **Read-only** — always available, no approval needed. Super_user enters via admin campaign detail page.
+- **Full access** — must be requested by super_user, approved by campaign's candidate or campaign_manager. 72-hour expiry from approval.
+
+### Flow
+1. Super_user clicks "Request full access" on admin campaign detail page (optional note)
+2. Email sent to all candidate/campaign_manager members
+3. In-app banner shown to candidate/campaign_manager with approve/deny buttons
+4. Campaign approves → 72h clock starts → super_user can enter with full access
+5. Access auto-expires, or campaign/super_user can revoke early
+
+### Session management
+- JWT fields: `supportMode` ("readonly" | "full" | null), `supportOriginalCampaignId`, `supportCampaignName`
+- Dark support banner at top of all pages during support sessions
+- `exitSupportMode()` restores original campaign context
+
+### Write protection
+- Read-only: `checkSupportWriteAccess()` blocks all writes (34 action functions across 14 files)
+- Full access: writes allowed, all audit log entries tagged with `supportAccess: true`
+- Audit log page shows amber "Support" badge on support-session entries
+
+### Key files
+- `src/lib/support-access.ts` — all business logic
+- `src/components/layout/support-banner.tsx` — persistent top banner
+- `src/components/layout/support-access-request-banner.tsx` — in-app approval banner
+- `src/app/(app)/campaign-settings/support-access/` — campaign-side UI
+- `src/app/admin/campaigns/[campaignId]/support-access-card.tsx` — admin-side UI
+
+---
+
+## Maintenance Mode
+
+### Activation
+- **ENV var**: `MAINTENANCE_MODE=true` in `.env` — immediate, no DB needed (for hard lockouts during deploys)
+- **Admin panel**: toggle at `/admin/settings` → saves `maintenance_mode` key to PlatformSettings
+- Proxy checks ENV first, then DB (cached 10 seconds via `/api/maintenance-status`)
+
+### Behavior when active
+- All non-admin traffic redirected to `/maintenance` page
+- Allowed during maintenance: `/admin/*`, `/api/auth/*`, `/api/pricing`, `/api/maintenance-status`, static assets
+- Maintenance page: branded, "We'll be right back", try-again link, no auth required
+
+### Force logout
+- "Force logout all users" button in admin settings
+- Runs `UPDATE users SET "sessionVersion" = "sessionVersion" + 1` — invalidates all active sessions
+- Separate from maintenance mode — can be used independently
+- Typical deploy workflow: maintenance ON → deploy → maintenance OFF → optionally force logout
+
+---
+
+## Brand
+
+### Logo
+- Speech bubble mark with horizontal lines and checkmark accent
+- Three variants: full (lines + checkmark), mono (checkmark only), favicon (rounded rect + checkmark)
+- Three tones: ink (#1a2b24 bubble), cream (#fbf6e9 bubble), clay (#e8855c bubble)
+- Components: `src/components/brand/Logo.tsx`, `src/components/brand/Wordmark.tsx`
+- Wordmark: Fraunces 800 italic + clay dot
+
+### Fonts
+- Body: Inter (app), DM Sans (marketing site)
+- Display: Fraunces italic 800 (wordmark only)
+- Marketing headings: Fraunces (was DM Serif Display — updated May 1)
+
+### Colors (unchanged)
+- Brand orange: #f97316 (app), #F26522 (marketing site legacy)
+- Slate scale: standard Tailwind slate
+- Clay accent: #e8855c (logo accent, used sparingly)
+
+### Icons
+- public/favicon.ico, favicon.svg, apple-touch-icon.png (180px)
+- public/icon-192.png, icon-512.png, icon-512-maskable.png (PWA)
+- public/logo.svg, og-image.png (1200×630)
+
+---
+
+## PWA
+
+- Manifest: `public/manifest.json` — standalone, portrait, start_url /dashboard
+- Service worker: `public/sw.js` — cache-first static assets, network-first navigation, no API interception
+- Cache busting: `scripts/stamp-sw.mjs` stamps CACHE_NAME on every build
+- SW registration: global via `src/components/sw-register.tsx` (root layout)
+- Install prompt: `src/components/pwa-install-prompt.tsx` — mobile only, 7-day dismissal, iOS share-button guidance
+- Apple meta tags in root layout for iOS home screen support
 
 ---
 
@@ -810,17 +980,33 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Advance voting dates — Campaign.advanceVotingDates DateTime[] field; add/remove section in /campaign-settings/general; date + time inputs per entry; submitted via indexed hidden inputs (advanceDateCount, advanceDate_N, advanceTime_N); sorted ascending on save; loaded sorted on page render | April 30, 2026 |
 | Migration 20260430000004_event_series_advance_voting — adds seriesId TEXT (nullable) to events table, events_seriesId_idx index, advanceVotingDates TIMESTAMP(3)[] NOT NULL DEFAULT ARRAY[] to campaigns table; applied via prisma migrate deploy (non-interactive) | April 30, 2026 |
 | EventAttendeeStatus import fix — removed spurious export type \{ EventAttendeeStatus \} from events/actions.ts that caused Vercel build failure; status type now imported directly from @prisma/client in attendee-panel.tsx | April 30, 2026 |
+| Plan tier enforcement — sidebar, page, server action, and API route gating for all plan features | May 1, 2026 |
+| Snapshot-at-signup — CampaignOverride stores limits/features/pricing at plan selection time; "best of snapshot vs current" enforcement | May 1, 2026 |
+| DB-driven feature toggles — 16 features controlled via PlatformSettings, admin panel editable toggle matrix | May 1, 2026 |
+| Dynamic pricing — regular/sale price fields in admin panel, public /api/pricing endpoint, marketing site fetches and updates dynamically | May 1, 2026 |
+| Upgrade cards — gated pages show feature description + pricing breakdown instead of redirecting to dashboard | May 1, 2026 |
+| Support access system — read-only (always) and full access (72h, request/approve flow) for super_users viewing campaign data | May 1, 2026 |
+| Maintenance mode — ENV + DB toggle, /maintenance page, admin panel control, force logout all users | May 1, 2026 |
+| 404 handling — global not-found with auth-aware redirect, in-app not-found with sidebar preserved | May 1, 2026 |
+| Canvassing support numbers reversed — 5=Yes+ down to 1=No- (display only, data values unchanged) | May 1, 2026 |
+| Logo refresh — speech bubble mark + Fraunces italic wordmark across app, marketing site, and PWA icons | May 1, 2026 |
+| PWA install prompt — global SW registration, mobile install banner with 7-day dismissal, iOS guidance | May 1, 2026 |
+| Starter constituent limit raised to 5,000 (from 2,500) | May 1, 2026 |
+| Marketing site pricing/features pulled from /api/pricing — admin panel changes reflect on localseat.io automatically | May 1, 2026 |
+| 8 additional feature toggles (events, surveys, signatures, custom fields, signs, map, reports, script) with full enforcement | May 1, 2026 |
+| Seed data: Starter test campaign + 2 test users, CampaignOverride snapshots for both campaigns | May 1, 2026 |
+| Seed cleanup: signatureConsent, signatureConsentType, supportAccessGrant added to delete order | May 1, 2026 |
+| Proxy fix: /api/pricing added to public paths, /api/* routes skip admin redirect | May 1, 2026 |
+| Migration fix: support_access_grants column names corrected from snake_case to camelCase | May 1, 2026 |
 
 ### High Priority
-| Item | Effort |
-|---|---|
-| PWA manifest and install prompt — SW cache busting shipped; manifest and install prompt still needed | Small |
+_(none)_
 
 ### Medium Priority
 | Item | Effort |
 |---|---|
 | CSV splitter + multi-batch session UI (Prompt C) — client-side splitter for >10k row imports, batches of ~9k rows, session at /import/voters/sessions/[id] with progress tracking. Currently the row cap rejects oversized files — splitter would offer to chunk automatically | Medium — ~5.5h est. |
-| Stripe payment integration | Medium — dev tier selector done, Stripe wiring remaining |
+| Stripe payment integration — plan selector done, upgrade cards done, Stripe Checkout wiring remaining (blocked on bank account activation) | Medium |
 | Two-factor authentication (2FA) | Medium |
 | UI/layout polish pass | Medium |
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, field-level merge, manual review, audit trail | Large |
@@ -840,12 +1026,13 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 ---
 
 ## Roadmap
-1. Stripe payment integration
-2. Two-factor authentication (2FA)
-3. Simple automation rules (soft yes → auto follow-up)
-4. Public volunteer signup / petition pages → feeds CRM
-5. Automated PostgreSQL backups
-6. Demo instance isolation
+1. Stripe payment integration — plan selector + upgrade cards done; Stripe Checkout wiring remaining (blocked on bank account activation)
+2. Marketing site redesign (deferred — ship current, revisit after customer feedback)
+3. Two-factor authentication (2FA)
+4. Simple automation rules (soft yes → auto follow-up)
+5. Public volunteer signup / petition pages → feeds CRM
+6. Automated PostgreSQL backups
+7. Demo instance isolation
 
 ### Defined — Ready to Build
 | Item | Effort |
@@ -853,7 +1040,7 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, phone preservation, field-level merge, manual review, unmatched handling, audit trail, data quality scoring | Large |
 
 ### V2+ Out of Scope
-Payment processing, online donations, mass texting, email broadcasts, predictive scoring, advanced analytics, native apps, social media tools, party integrations, multilingual, custom theming, federal/provincial compliance.
+Online donations, mass texting, email broadcasts, predictive scoring, advanced analytics, native apps, social media tools, party integrations, multilingual, custom theming, federal/provincial compliance.
 
 ---
 
@@ -863,9 +1050,11 @@ Payment processing, online donations, mass texting, email broadcasts, predictive
 3. Candidate: alex.chen@example.com / password
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
-6. All new dev → localseat-staging repo first
-7. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
-8. Test on staging before production deploy
-9. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh`
-10. Run `npx prisma generate` after any migration
-11. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)
+6. Starter test: starter.candidate@example.com / password (Starter plan restrictions)
+7. All new dev → localseat-staging repo first
+8. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
+9. Test on staging before production deploy
+10. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh` → `cd /var/www/demo && ./deploy.sh`
+11. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/`
+12. Run `npx prisma generate` after any migration
+13. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)

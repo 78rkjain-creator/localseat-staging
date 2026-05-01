@@ -137,10 +137,14 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    // Platform users (super_user, super_admin) bypass campaign onboarding
-    // and go straight to /admin. API routes always pass through regardless.
+    // Platform users (super_user, super_admin) go to /admin unless they are
+    // in support mode (viewing a campaign) or accessing an API route.
     const { platformRole } = token;
     if (platformRole === "super_user" || platformRole === "super_admin") {
+      if (token.supportMode) {
+        // In support mode — let them access regular app routes.
+        return NextResponse.next();
+      }
       if (!pathname.startsWith("/admin") && !pathname.startsWith("/api/")) {
         return redirect("/admin");
       }
