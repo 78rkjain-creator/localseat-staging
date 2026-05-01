@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import { canViewAllPeople } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import type { Role } from "@/types";
-import type { EventType, EventStatus, EventAttendeeStatus } from "@prisma/client";
+import type { EventType, EventStatus } from "@prisma/client";
 
 const EVENT_TYPE_VALUES: EventType[] = [
   "campaign_event", "fundraiser", "town_hall", "debate",
@@ -376,6 +376,3 @@ export async function deleteEvent(eventId: string): Promise<{ error?: string }> 
   revalidatePath("/events");
   redirect("/events");
 }
-
-// Re-export types used by pages
-export type { EventAttendeeStatus };
