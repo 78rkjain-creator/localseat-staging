@@ -67,6 +67,67 @@ export async function getTierPricing(): Promise<Record<string, TierPricing>> {
   };
 }
 
+// ── Snapshot builder ───────────────────────────────────────────────────────
+// Reads current PlatformSettings and builds the CampaignOverride snapshot
+// data for a given plan tier. Called by both selectPlanDev and the Stripe
+// webhook so the snapshot logic lives in one place.
+//
+// amountPaid: if provided (Stripe webhook), uses the actual charge amount.
+//             If omitted (dev mode), derives it from current settings.
+
+export async function buildPlanSnapshot(plan: PlanTier, amountPaidOverride?: number) {
+  const settingsRows = await db.platformSettings.findMany();
+  const settings = new Map(settingsRows.map((r) => [r.key, r.value]));
+
+  const regularPrice = parseInt(settings.get(`${plan}_regular_price`) ?? "0", 10);
+  const salePriceRaw = settings.get(`${plan}_sale_price`);
+  const salePrice    = salePriceRaw ? parseInt(salePriceRaw, 10) : null;
+  const derivedAmount = salePrice ?? regularPrice;
+
+  const amountPaid = amountPaidOverride ?? derivedAmount;
+
+  function numSetting(key: string): number | null {
+    const raw = settings.get(key);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return isNaN(n) ? null : n;
+  }
+
+  function boolSetting(key: string): boolean | null {
+    const raw = settings.get(key);
+    if (raw === undefined) return null;
+    return raw === "true";
+  }
+
+  return {
+    snapshotConstituentLimit:      numSetting(`${plan}_constituent_limit`),
+    snapshotCanvasserLimit:        numSetting(`${plan}_canvasser_limit`),
+    snapshotCampaignManagerLimit:  numSetting(`${plan}_campaign_manager_limit`),
+    snapshotCoChairLimit:          numSetting(`${plan}_cochair_limit`),
+    snapshotFieldOrganizerLimit:   numSetting(`${plan}_field_organizer_limit`),
+    snapshotDonorTracking:         boolSetting(`${plan}_feature_donor_tracking`),
+    snapshotFollowUpQueue:         boolSetting(`${plan}_feature_follow_up_queue`),
+    snapshotAnalytics:             boolSetting(`${plan}_feature_analytics`),
+    snapshotVolunteerCoord:        boolSetting(`${plan}_feature_volunteer_coordination`),
+    snapshotFinanceLeadAccess:     boolSetting(`${plan}_feature_finance_lead_access`),
+    snapshotCoChairSeats:          boolSetting(`${plan}_feature_co_chair_seats`),
+    snapshotUnlimitedCanvassers:   boolSetting(`${plan}_feature_unlimited_canvassers`),
+    snapshotUnlimitedConstituents: boolSetting(`${plan}_feature_unlimited_constituents`),
+    snapshotEvents:                boolSetting(`${plan}_feature_events`),
+    snapshotSurveys:               boolSetting(`${plan}_feature_surveys`),
+    snapshotDigitalSignatures:     boolSetting(`${plan}_feature_digital_signatures`),
+    snapshotCustomFields:          boolSetting(`${plan}_feature_custom_fields`),
+    snapshotSignTracking:          boolSetting(`${plan}_feature_sign_tracking`),
+    snapshotContactMap:            boolSetting(`${plan}_feature_contact_map`),
+    snapshotReports:               boolSetting(`${plan}_feature_reports`),
+    snapshotCanvassScript:         boolSetting(`${plan}_feature_canvass_script`),
+    snapshotPricePaid:             amountPaid || null,
+    snapshotRegularPrice:          regularPrice || null,
+    snapshotSalePrice:             salePrice,
+    snapshotedAt:                  new Date(),
+  };
+}
+
 // ── Dev plan selection ─────────────────────────────────────────────────────
 
 const SELECTABLE_PLANS: PlanTier[] = ["starter", "campaign", "election"];
@@ -102,55 +163,7 @@ export async function selectPlanDev(
   });
   if (!campaign) return { error: "Campaign not found." };
 
-  // Read current tier pricing + settings for snapshot
-  const settingsRows = await db.platformSettings.findMany();
-  const settings = new Map(settingsRows.map((r) => [r.key, r.value]));
-
-  const regularPrice = parseInt(settings.get(`${plan}_regular_price`) ?? "0", 10);
-  const salePriceRaw = settings.get(`${plan}_sale_price`);
-  const salePrice    = salePriceRaw ? parseInt(salePriceRaw, 10) : null;
-  const amountPaid   = salePrice ?? regularPrice;
-
-  function numSetting(key: string): number | null {
-    const raw = settings.get(key);
-    if (!raw) return null;
-    const n = parseInt(raw, 10);
-    return isNaN(n) ? null : n;
-  }
-
-  function boolSetting(key: string): boolean | null {
-    const raw = settings.get(key);
-    if (raw === undefined) return null;
-    return raw === "true";
-  }
-
-  const snapshotData = {
-    snapshotConstituentLimit:      numSetting(`${plan}_constituent_limit`),
-    snapshotCanvasserLimit:        numSetting(`${plan}_canvasser_limit`),
-    snapshotCampaignManagerLimit:  numSetting(`${plan}_campaign_manager_limit`),
-    snapshotCoChairLimit:          numSetting(`${plan}_cochair_limit`),
-    snapshotFieldOrganizerLimit:   numSetting(`${plan}_field_organizer_limit`),
-    snapshotDonorTracking:         boolSetting(`${plan}_feature_donor_tracking`),
-    snapshotFollowUpQueue:         boolSetting(`${plan}_feature_follow_up_queue`),
-    snapshotAnalytics:             boolSetting(`${plan}_feature_analytics`),
-    snapshotVolunteerCoord:        boolSetting(`${plan}_feature_volunteer_coordination`),
-    snapshotFinanceLeadAccess:     boolSetting(`${plan}_feature_finance_lead_access`),
-    snapshotCoChairSeats:          boolSetting(`${plan}_feature_co_chair_seats`),
-    snapshotUnlimitedCanvassers:   boolSetting(`${plan}_feature_unlimited_canvassers`),
-    snapshotUnlimitedConstituents: boolSetting(`${plan}_feature_unlimited_constituents`),
-    snapshotEvents:                boolSetting(`${plan}_feature_events`),
-    snapshotSurveys:               boolSetting(`${plan}_feature_surveys`),
-    snapshotDigitalSignatures:     boolSetting(`${plan}_feature_digital_signatures`),
-    snapshotCustomFields:          boolSetting(`${plan}_feature_custom_fields`),
-    snapshotSignTracking:          boolSetting(`${plan}_feature_sign_tracking`),
-    snapshotContactMap:            boolSetting(`${plan}_feature_contact_map`),
-    snapshotReports:               boolSetting(`${plan}_feature_reports`),
-    snapshotCanvassScript:         boolSetting(`${plan}_feature_canvass_script`),
-    snapshotPricePaid:             amountPaid || null,
-    snapshotRegularPrice:          regularPrice || null,
-    snapshotSalePrice:             salePrice,
-    snapshotedAt:                  new Date(),
-  };
+  const snapshotData = await buildPlanSnapshot(plan);
 
   await db.campaign.update({
     where: { id: campaignId },
@@ -158,11 +171,10 @@ export async function selectPlanDev(
       plan,
       planActivated: true,
       planLockedAt:  new Date(),
-      amountPaid,
+      amountPaid:    snapshotData.snapshotPricePaid ?? 0,
     },
   });
 
-  // Upsert override record with snapshot — preserves any existing manual overrides
   await db.campaignOverride.upsert({
     where:  { campaignId },
     create: { campaignId, ...snapshotData },
@@ -175,7 +187,7 @@ export async function selectPlanDev(
     action:     "PLAN_SELECTED_DEV",
     entityType: "campaign",
     entityId:   campaignId,
-    details:    { plan, devMode: true, amountPaid, snapshotedAt: snapshotData.snapshotedAt },
+    details:    { plan, devMode: true, amountPaid: snapshotData.snapshotPricePaid, snapshotedAt: snapshotData.snapshotedAt },
   });
 
   revalidatePath("/dashboard");

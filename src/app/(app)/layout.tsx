@@ -12,6 +12,7 @@ import { getPendingAddressChangeCount } from "@/lib/address-changes";
 import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import { hasPendingRequest } from "@/lib/support-access";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import type { Role } from "@/types";
 
@@ -36,6 +37,38 @@ export default async function AppLayout({
     supportMode,
     supportCampaignName,
   } = session.user;
+
+  const inSupportMode = !!supportMode;
+
+  // DB-driven maintenance gate — catches the admin-panel toggle without a
+  // redeploy. ENV-based hard lockout is handled by the proxy. Admins are exempt.
+  if (!inSupportMode) {
+    const platformRole = session.user.platformRole;
+    const isAdmin = platformRole === "super_user" || platformRole === "super_admin";
+    if (!isAdmin) {
+      const maintenance = await isMaintenanceMode();
+      if (maintenance) {
+        redirect("/maintenance");
+      }
+    }
+  }
+
+  // Payment gate — unpaid campaigns are redirected to plan selection before
+  // any page content, sidebar, or feature queries run. Super_users in support
+  // mode bypass the gate so they can view any campaign state.
+  if (
+    activeCampaignId &&
+    process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true" &&
+    !inSupportMode
+  ) {
+    const campaignPaymentState = await db.campaign.findUnique({
+      where:  { id: activeCampaignId },
+      select: { planActivated: true, plan: true },
+    });
+    if (campaignPaymentState && !campaignPaymentState.planActivated && campaignPaymentState.plan !== "demo") {
+      redirect(`/onboarding/choose-plan?campaignId=${activeCampaignId}`);
+    }
+  }
 
   const activeMembership = memberships.find(
     (m) => m.campaignId === activeCampaignId

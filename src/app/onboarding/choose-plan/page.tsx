@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { getTierPricing } from "./actions";
 import { PlanCards } from "./plan-cards";
 import { Logo } from "@/components/brand/Logo";
@@ -18,15 +19,22 @@ export default async function ChoosePlanPage({
 
   const { campaignId: queryCampaignId } = await searchParams;
 
-  // Prefer the query param; fall back to the active campaign in session.
-  // If neither is available, the user landed here without a campaign — send
-  // them to create one first.
   const campaignId = queryCampaignId ?? session.user.activeCampaignId ?? null;
   if (!campaignId) redirect("/onboarding/create-campaign");
 
-  const pricing = await getTierPricing();
+  const [pricing, campaign] = await Promise.all([
+    getTierPricing(),
+    db.campaign.findUnique({
+      where:  { id: campaignId },
+      select: { plan: true, planActivated: true, amountPaid: true },
+    }),
+  ]);
 
   const stripeEnabled = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
+  const currentAmountPaid =
+    campaign?.planActivated && (campaign.amountPaid ?? 0) > 0
+      ? (campaign.amountPaid ?? 0)
+      : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center px-4 py-12">
@@ -52,6 +60,7 @@ export default async function ChoosePlanPage({
         campaignId={campaignId}
         pricing={pricing}
         stripeEnabled={stripeEnabled}
+        currentAmountPaid={currentAmountPaid}
       />
 
       <p className="mt-10 text-xs text-slate-400">

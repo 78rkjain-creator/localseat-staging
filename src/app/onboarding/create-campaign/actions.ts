@@ -55,6 +55,9 @@ export async function createCampaign(
       province: "ON",
       year,
       ...(electionDate ? { electionDate } : {}),
+      plan: "starter",
+      planActivated: false,
+      advanceVotingDates: [],
       memberships: {
         create: {
           userId: session.user.id,

@@ -5,34 +5,14 @@
 // Renaming this file will break authentication and all route protection silently.
 
 import { withAuth } from "next-auth/middleware";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-// ── Maintenance mode cache ─────────────────────────────────────────────────
-// Prisma cannot be imported in middleware, so we fetch the DB flag from an
-// internal route and cache the result for 10 seconds to avoid a round-trip
-// on every single request.
-let _maintenanceCache: { value: boolean; expiresAt: number } | null = null;
-
-async function isMaintenanceModeActive(req: NextRequest): Promise<boolean> {
-  // ENV var takes immediate precedence — no network call needed.
-  if (process.env.MAINTENANCE_MODE === "true") return true;
-
-  const now = Date.now();
-  if (_maintenanceCache && now < _maintenanceCache.expiresAt) {
-    return _maintenanceCache.value;
-  }
-
-  try {
-    const url = new URL("/api/maintenance-status", req.nextUrl.origin);
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    const data = (await res.json()) as { maintenance?: boolean };
-    const value = data.maintenance === true;
-    _maintenanceCache = { value, expiresAt: now + 10_000 };
-    return value;
-  } catch {
-    // If the check fails, don't block the app.
-    return false;
-  }
+// ── Maintenance mode ───────────────────────────────────────────────────────
+// Proxy can only read the ENV var — Prisma cannot run in Edge middleware and
+// self-fetching /api/maintenance-status from within the proxy causes an
+// infinite request cascade. The DB-driven toggle is handled by the app layout.
+function isMaintenanceModeActive(): boolean {
+  return process.env.MAINTENANCE_MODE === "true";
 }
 
 // Paths that must stay accessible during maintenance mode.
@@ -42,6 +22,7 @@ const MAINTENANCE_ALLOW_PREFIXES = [
   "/api/auth",         // NextAuth must work for admin sign-in
   "/api/maintenance-status", // the endpoint that serves the cache
   "/api/pricing",      // marketing site must keep working
+  "/api/stripe/webhook", // Stripe must be able to deliver webhooks during maintenance
 ];
 
 // Canvassers are restricted to these route prefixes — everything else redirects
@@ -70,12 +51,12 @@ const SIGN_INSTALLER_ALLOW_PREFIXES = [
 ];
 
 export default withAuth(
-  async function middleware(req) {
+  function middleware(req) {
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
     // ── Maintenance mode — checked before everything else ──────────────────
-    const inMaintenance = await isMaintenanceModeActive(req);
+    const inMaintenance = isMaintenanceModeActive();
     if (inMaintenance) {
       const exempt = MAINTENANCE_ALLOW_PREFIXES.some((p) => pathname.startsWith(p));
       if (!exempt) {
@@ -215,6 +196,7 @@ export default withAuth(
           pathname.startsWith("/api/auth") ||
           pathname.startsWith("/api/maintenance-status") ||
           pathname.startsWith("/api/pricing") ||
+          pathname.startsWith("/api/stripe/webhook") ||
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
           pathname.startsWith("/icons")
