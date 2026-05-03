@@ -181,6 +181,7 @@ export function LeadsClient({ initialLeads }: Props) {
                   <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Visits</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">First seen</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">Last seen</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Source</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
                 </tr>
               </thead>
@@ -188,7 +189,14 @@ export function LeadsClient({ initialLeads }: Props) {
                 {filtered.map((lead) => (
                   <tr key={lead.email} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
-                      {lead.firstName} {lead.lastName}
+                      <div className="flex items-center gap-2">
+                        <span>{lead.firstName} {lead.lastName}</span>
+                        {lead.converted && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                            Converted
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       <a href={`mailto:${lead.email}`} className="hover:text-brand-600 hover:underline">
@@ -212,6 +220,17 @@ export function LeadsClient({ initialLeads }: Props) {
                     </td>
                     <td className="px-4 py-3 text-slate-400 text-xs hidden xl:table-cell whitespace-nowrap">
                       {new Date(lead.lastSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {lead.source === "app_signup" ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">
+                          Signup
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                          Demo
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button

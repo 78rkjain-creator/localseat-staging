@@ -40,6 +40,7 @@ export async function parseXlsxToReviewRows(
   fileError: string | null;
   birthYearWarningCount: number;
   originalHeaders: string[];
+  rowCapExceeded?: boolean;
 }> {
   const buffer = await file.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
@@ -80,9 +81,10 @@ export async function parseXlsxToReviewRows(
   if (dataRowCount > VOTER_LIST_ROW_CAP) {
     return {
       rows: [],
-      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}.`,
       birthYearWarningCount: 0,
       originalHeaders: [],
+      rowCapExceeded: true,
     };
   }
 

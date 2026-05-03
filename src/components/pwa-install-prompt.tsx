@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 
 const DISMISSED_KEY = "localseat-pwa-dismissed";
-const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DISMISS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MOUNT_DELAY_MS = 2_000;
+const FALLBACK_DELAY_MS = 3_000;
 
-type PromptMode = "native" | "ios" | null;
+type PromptMode = "native" | "nudge" | "ios" | null;
 
 function isDismissedRecently(): boolean {
   try {
@@ -31,26 +33,40 @@ export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<Event & { prompt: () => void } | null>(null);
 
   useEffect(() => {
-    // Never show when already installed or on desktop
+    // Never show when already installed as a PWA
     if (window.matchMedia("(display-mode: standalone)").matches) return;
-    if (!window.matchMedia("(max-width: 768px)").matches) return;
     if (isDismissedRecently()) return;
 
     const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     if (isIos) {
-      setMode("ios");
-      return;
+      const t = setTimeout(() => setMode("ios"), MOUNT_DELAY_MS);
+      return () => clearTimeout(t);
     }
+
+    let nativeFired = false;
 
     function handler(e: Event) {
       e.preventDefault();
+      nativeFired = true;
       setDeferredPrompt(e as Event & { prompt: () => void });
-      setMode("native");
+      setTimeout(() => setMode("native"), MOUNT_DELAY_MS);
     }
 
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+
+    // Fallback: if Chrome hasn't fired beforeinstallprompt after FALLBACK_DELAY_MS,
+    // show a generic nudge on all platforms so canvassers know they can install.
+    const fallback = setTimeout(() => {
+      if (!nativeFired) {
+        setMode("nudge");
+      }
+    }, MOUNT_DELAY_MS + FALLBACK_DELAY_MS);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      clearTimeout(fallback);
+    };
   }, []);
 
   function handleInstall() {
@@ -67,8 +83,8 @@ export function PwaInstallPrompt() {
   if (!mode) return null;
 
   return (
-    <div className="fixed bottom-20 inset-x-0 z-50 px-4 md:hidden">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl px-4 py-3.5 flex items-center gap-3">
+    <div className="fixed bottom-20 inset-x-0 z-50 px-4 md:bottom-6">
+      <div className="mx-auto max-w-sm bg-white rounded-2xl border border-slate-200 shadow-xl px-4 py-3.5 flex items-center gap-3">
         <Logo size={24} tone="ink" />
 
         <div className="flex-1 min-w-0">
@@ -80,9 +96,13 @@ export function PwaInstallPrompt() {
               </svg>{" "}
               then <strong className="font-semibold">Add to Home Screen</strong>
             </p>
-          ) : (
+          ) : mode === "native" ? (
             <p className="text-sm text-slate-700 leading-snug">
               Install LocalSeat for faster access
+            </p>
+          ) : (
+            <p className="text-sm text-slate-700 leading-snug">
+              For the best experience, install LocalSeat to your home screen.
             </p>
           )}
         </div>

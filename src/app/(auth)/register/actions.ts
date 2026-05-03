@@ -93,6 +93,27 @@ export async function register(input: RegisterInput): Promise<{ error?: string }
     },
   });
 
+  // Capture signup as a demo lead so abandoned registrations appear in /admin/demo-leads.
+  // Skipped on the demo site. Never blocks registration if it fails.
+  if (process.env.DEMO_MODE !== "true") {
+    try {
+      const phone = phoneMobile ?? phoneHome ?? null;
+      const existing = await db.demoRegistration.findFirst({ where: { email } });
+      if (existing) {
+        await db.demoRegistration.update({
+          where: { id: existing.id },
+          data: { firstName, lastName, phone, source: "app_signup", ipAddress: ip },
+        });
+      } else {
+        await db.demoRegistration.create({
+          data: { firstName, lastName, email, phone, source: "app_signup", consented: true, ipAddress: ip },
+        });
+      }
+    } catch (err) {
+      console.error("[register] Failed to capture demo lead:", err);
+    }
+  }
+
   // Generate verification token and send email — welcome email is sent after verification
   const token = await generateVerificationToken(user.id);
   void sendVerificationEmail({ name: `${firstName} ${lastName}`, email, token });

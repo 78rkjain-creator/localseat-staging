@@ -288,12 +288,14 @@ export function listMissingFields(row: ReviewRow): string[] {
 
 export function parseCsvToReviewRows(
   text: string,
-  customFields?: CustomFieldDef[]
+  customFields?: CustomFieldDef[],
+  options?: { skipRowCap?: boolean },
 ): {
   rows: ReviewRow[];
   fileError: string | null;
   birthYearWarningCount: number;
   originalHeaders: string[];
+  rowCapExceeded?: boolean;
 } {
   const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   if (lines.length < 2) {
@@ -306,12 +308,13 @@ export function parseCsvToReviewRows(
   }
 
   const dataRowCount = lines.slice(1).filter((l) => l.trim()).length;
-  if (dataRowCount > VOTER_LIST_ROW_CAP) {
+  if (!options?.skipRowCap && dataRowCount > VOTER_LIST_ROW_CAP) {
     return {
       rows: [],
-      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}. Split your file into smaller batches and upload each separately.`,
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}.`,
       birthYearWarningCount: 0,
       originalHeaders: [],
+      rowCapExceeded: true,
     };
   }
 

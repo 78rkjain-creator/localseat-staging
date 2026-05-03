@@ -24,6 +24,8 @@ export interface DemoLead {
   lastSeenAt:     Date;
   emailedAt:      Date | null;
   consented:      boolean;
+  source:         "demo" | "app_signup";
+  converted:      boolean;
 }
 
 export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[]> {
@@ -46,9 +48,28 @@ export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[
     byEmail.get(key)!.push(row);
   }
 
+  // Resolve conversion status: email matches a user with at least one paid campaign
+  const allEmails = Array.from(byEmail.keys());
+  const convertedUsers = allEmails.length > 0
+    ? await db.user.findMany({
+        where: {
+          email: { in: allEmails },
+          memberships: {
+            some: {
+              deletedAt: null,
+              campaign: { planActivated: true, plan: { not: "demo" } },
+            },
+          },
+        },
+        select: { email: true },
+      })
+    : [];
+  const convertedEmails = new Set(convertedUsers.map((u) => u.email.toLowerCase()));
+
   const leads: DemoLead[] = Array.from(byEmail.values()).map((group) => {
     const latest = group[0];
     const sorted = [...group].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const emailKey = latest.email.toLowerCase();
     return {
       email:         latest.email,
       firstName:     latest.firstName,
@@ -61,6 +82,8 @@ export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[
       lastSeenAt:    sorted[sorted.length - 1].createdAt,
       emailedAt:     group.find((r) => r.emailedAt)?.emailedAt ?? null,
       consented:     group.some((r) => r.consented),
+      source:        group.some((r) => r.source === "app_signup") ? "app_signup" : "demo",
+      converted:     convertedEmails.has(emailKey),
     };
   });
 
@@ -137,7 +160,7 @@ export async function exportDemoLeadsCSV(filters: LeadFilters = {}): Promise<str
   if ("error" in auth) throw new Error(auth.error);
   const leads = await getDemoLeads(filters);
 
-  const header = "Email,First Name,Last Name,Phone,Municipality,Office,Registrations,First Seen,Last Seen,Emailed,Consented";
+  const header = "Email,First Name,Last Name,Phone,Municipality,Office,Registrations,First Seen,Last Seen,Emailed,Consented,Source,Converted";
   const rows = leads.map((l) =>
     [
       l.email,
@@ -151,6 +174,8 @@ export async function exportDemoLeadsCSV(filters: LeadFilters = {}): Promise<str
       l.lastSeenAt.toISOString(),
       l.emailedAt ? l.emailedAt.toISOString() : "",
       l.consented ? "yes" : "no",
+      l.source,
+      l.converted ? "yes" : "no",
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")

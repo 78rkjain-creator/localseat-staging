@@ -19,6 +19,8 @@ import { parseXlsxToReviewRows } from "@/lib/xlsx-import";
 import type { ReviewRow, RowFields, RowStatus, CustomFieldDef, ReviewBucket } from "@/lib/csv-import";
 import { ExportFixModal } from "./import-modal-export";
 import { buildVoterExportCsv, triggerCsvDownload } from "@/lib/import-export";
+import { splitCsvText, splitXlsxFile } from "@/lib/file-splitter";
+import type { FileBatchItem } from "@/lib/file-splitter";
 
 // ── Local constants ────────────────────────────────────────────────────────
 
@@ -66,6 +68,15 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
   } | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
   const [birthYearWarningCount, setBirthYearWarningCount] = useState(0);
+  const [isSplitting, setIsSplitting] = useState(false);
+  const [batchSession, setBatchSession] = useState<{
+    batches: FileBatchItem[];
+    totalRows: number;
+    completedBatches: Set<number>;
+    listName: string;
+    listImportType: "list" | "official_voters_list" | "telephone_list";
+  } | null>(null);
+  const [activeBatchIndex, setActiveBatchIndex] = useState<number | null>(null);
   const [originalHeaders, setOriginalHeaders] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<ReviewBucket, boolean>>({
@@ -148,54 +159,16 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setTagDecisions({});
     setExistingTagsByLower(new Map());
     setAllTagNamesFromImport([]);
+    setBatchSession(null);
+    setActiveBatchIndex(null);
+    setIsSplitting(false);
     onClose();
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    setFileError(null);
-    setReviewRows([]);
+  // ── Shared: duplicate check + tag check → advance to review/tagReview ──────
 
-    if ((listImportType === "list" || listImportType === "telephone_list") && !listName.trim()) {
-      setListNameError("Enter a list name before selecting a file.");
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    setListNameError(null);
-
-    if (!file) return;
-
-    const ext = file.name.toLowerCase().split(".").pop();
-    if (ext !== "csv" && ext !== "xlsx") {
-      setFileError("Upload a .csv or .xlsx file.");
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      setFileError("File must be under 25 MB.");
-      return;
-    }
-
-    let rows: ReviewRow[];
-    let err: string | null;
-    let bywc: number;
-    let hdrs: string[];
-
-    if (ext === "xlsx") {
-      ({ rows, fileError: err, birthYearWarningCount: bywc, originalHeaders: hdrs } = await parseXlsxToReviewRows(file, customFields));
-    } else {
-      const text = await file.text();
-      ({ rows, fileError: err, birthYearWarningCount: bywc, originalHeaders: hdrs } = parseCsvToReviewRows(text, customFields));
-    }
-    if (err) { setFileError(err); return; }
-
-    if (rows.length > 10000) {
-      setFileError("File contains more than 10,000 rows. Split the file and import in batches.");
-      return;
-    }
-
+  async function processRowsForReview(rows: ReviewRow[], bywc: number, hdrs: string[]) {
     setOriginalHeaders(hdrs);
-
-    // Check for duplicates against existing records before showing review step
     setIsCheckingDuplicates(true);
     try {
       const csvRows: VoterCsvRow[] = rows.map((r) => ({
@@ -229,7 +202,6 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
       setReviewRows(markedRows);
       setBirthYearWarningCount(bywc);
 
-      // ── Tag review check ────────────────────────────────────────────────
       const seenTagLower = new Set<string>();
       const allTagNames: string[] = [];
       for (const r of markedRows) {
@@ -260,14 +232,137 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         }
       }
     } catch {
-      // If the duplicate check fails, proceed without warnings
       setReviewRows(rows);
       setBirthYearWarningCount(bywc);
     } finally {
       setIsCheckingDuplicates(false);
     }
-
     setStep("review");
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setFileError(null);
+    setReviewRows([]);
+
+    if ((listImportType === "list" || listImportType === "telephone_list") && !listName.trim()) {
+      setListNameError("Enter a list name before selecting a file.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setListNameError(null);
+
+    if (!file) return;
+
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext !== "csv" && ext !== "xlsx") {
+      setFileError("Upload a .csv or .xlsx file.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setFileError("File must be under 25 MB.");
+      return;
+    }
+
+    let rows: ReviewRow[];
+    let err: string | null;
+    let rowCapExceeded: boolean | undefined;
+    let bywc: number;
+    let hdrs: string[];
+    let csvText: string | undefined;
+
+    if (ext === "xlsx") {
+      ({ rows, fileError: err, rowCapExceeded, birthYearWarningCount: bywc, originalHeaders: hdrs } =
+        await parseXlsxToReviewRows(file, customFields));
+    } else {
+      csvText = await file.text();
+      ({ rows, fileError: err, rowCapExceeded, birthYearWarningCount: bywc, originalHeaders: hdrs } =
+        parseCsvToReviewRows(csvText, customFields));
+    }
+
+    if (rowCapExceeded) {
+      setIsSplitting(true);
+      try {
+        let splitResult: { batches: FileBatchItem[]; totalRows: number; fileError: string | null };
+        if (ext === "xlsx") {
+          splitResult = await splitXlsxFile(file);
+        } else {
+          const { batches, totalRows } = splitCsvText(csvText!);
+          splitResult = { batches, totalRows, fileError: null };
+        }
+        if (splitResult.fileError) {
+          setFileError(splitResult.fileError);
+          return;
+        }
+        setBatchSession({
+          batches: splitResult.batches,
+          totalRows: splitResult.totalRows,
+          completedBatches: new Set(),
+          listName,
+          listImportType,
+        });
+        if (fileRef.current) fileRef.current.value = "";
+      } finally {
+        setIsSplitting(false);
+      }
+      return;
+    }
+
+    if (err) { setFileError(err); return; }
+
+    await processRowsForReview(rows, bywc, hdrs);
+  }
+
+  async function startBatch(idx: number) {
+    if (!batchSession) return;
+    const batch = batchSession.batches[idx];
+    setActiveBatchIndex(idx);
+    setFileError(null);
+    setReviewRows([]);
+    setResult(null);
+    setSubmitError(null);
+    setBirthYearWarningCount(0);
+    setTagDecisions({});
+    setExistingTagsByLower(new Map());
+    setAllTagNamesFromImport([]);
+    setExpanded({ ready: false, incomplete: false, duplicate: false, missing_required: false });
+
+    const { rows, fileError: err, birthYearWarningCount: bywc, originalHeaders: hdrs } =
+      parseCsvToReviewRows(batch.csvText, customFields, { skipRowCap: true });
+
+    if (err || rows.length === 0) {
+      setFileError(err ?? "This batch has no data rows.");
+      return;
+    }
+
+    // Use list config captured at split time
+    setListName(batchSession.listName);
+    setListImportType(batchSession.listImportType);
+
+    await processRowsForReview(rows, bywc, hdrs);
+  }
+
+  function handleBackToBatches() {
+    if (batchSession && activeBatchIndex !== null) {
+      setBatchSession((prev) => {
+        if (!prev) return null;
+        const completed = new Set(prev.completedBatches);
+        completed.add(activeBatchIndex);
+        return { ...prev, completedBatches: completed };
+      });
+    }
+    setActiveBatchIndex(null);
+    setStep("upload");
+    setReviewRows([]);
+    setResult(null);
+    setSubmitError(null);
+    setBirthYearWarningCount(0);
+    setOriginalHeaders([]);
+    setTagDecisions({});
+    setExistingTagsByLower(new Map());
+    setAllTagNamesFromImport([]);
+    setExpanded({ ready: false, incomplete: false, duplicate: false, missing_required: false });
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function updateField(rowId: number, field: keyof RowFields, value: string) {
@@ -373,8 +468,11 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
       }
     }
 
+    const batchSuffix = (batchSession && activeBatchIndex !== null)
+      ? ` — Batch ${activeBatchIndex + 1}`
+      : "";
     startSubmit(async () => {
-      const res = await importVoterRows(toImport, listImportType, listName.trim(), tagPlan);
+      const res = await importVoterRows(toImport, listImportType, listName.trim() + batchSuffix, tagPlan);
       if (res.error) {
         setSubmitError(res.error);
       } else {
@@ -416,11 +514,39 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     <Modal
       open={open}
       onClose={handleClose}
-      title="Import voter list"
+      title={
+        batchSession && activeBatchIndex !== null
+          ? `Import batch ${activeBatchIndex + 1} of ${batchSession.batches.length}`
+          : batchSession
+          ? `Import voter list — ${batchSession.batches.length} batches`
+          : "Import voter list"
+      }
       maxWidth={step === "review" ? "max-w-6xl" : "max-w-lg"}
     >
       {step === "upload" && (
         <div className="flex flex-col gap-5">
+
+          {/* ── Batch session view ──────────────────────────────────────── */}
+          {isSplitting && (
+            <div className="flex flex-col items-center gap-3 py-10 text-sm text-slate-500">
+              <svg className="animate-spin h-5 w-5 text-brand-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Splitting file into batches…
+            </div>
+          )}
+
+          {!isSplitting && batchSession && (
+            <BatchSessionPanel
+              session={batchSession}
+              onStartBatch={startBatch}
+              loadingBatchIndex={isCheckingDuplicates ? activeBatchIndex : null}
+              onClose={handleClose}
+            />
+          )}
+
+          {!isSplitting && !batchSession && (<>
           <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-4">
             <div className="flex items-start justify-between gap-3 mb-2">
               <p className="text-sm font-medium text-slate-700">XLSX / CSV format</p>
@@ -440,7 +566,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
             </p>
             <p className="text-xs text-slate-400 mt-2">
               Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
-              Rows with missing mandatory fields are flagged for review. Max 10,000 rows per file.
+              Rows with missing mandatory fields are flagged for review. Files over 10,000 rows are automatically split into batches.
             </p>
           </div>
 
@@ -537,6 +663,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
           <div className="flex justify-end">
             <Button variant="secondary" onClick={handleClose}>Cancel</Button>
           </div>
+          </>)}
         </div>
       )}
 
@@ -806,7 +933,18 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
             </div>
           )}
 
-          <Button onClick={handleClose}>Done</Button>
+          {batchSession ? (
+            <div className="flex items-center gap-3">
+              <Button variant="secondary" onClick={handleBackToBatches}>
+                {batchSession.completedBatches.size + 1 < batchSession.batches.length
+                  ? "Next batch"
+                  : "Back to batches"}
+              </Button>
+              <Button onClick={handleClose}>Done</Button>
+            </div>
+          ) : (
+            <Button onClick={handleClose}>Done</Button>
+          )}
         </div>
       )}
 
@@ -817,6 +955,83 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
         originalHeaders={originalHeaders}
       />
     </Modal>
+  );
+}
+
+// ── BatchSessionPanel ─────────────────────────────────────────────────────
+
+interface BatchSessionPanelProps {
+  session: {
+    batches: FileBatchItem[];
+    totalRows: number;
+    completedBatches: Set<number>;
+    listName: string;
+    listImportType: string;
+  };
+  onStartBatch: (idx: number) => void;
+  loadingBatchIndex: number | null;
+  onClose: () => void;
+}
+
+function BatchSessionPanel({ session, onStartBatch, loadingBatchIndex, onClose }: BatchSessionPanelProps) {
+  const { batches, completedBatches, totalRows } = session;
+  const allDone = completedBatches.size === batches.length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-4">
+        <p className="text-sm font-medium text-slate-700 mb-1">
+          File split into {batches.length} batches
+        </p>
+        <p className="text-xs text-slate-500">
+          {totalRows.toLocaleString()} total rows — import each batch sequentially through the usual review flow.
+        </p>
+        {allDone && (
+          <p className="text-xs text-emerald-600 font-medium mt-1">All batches imported.</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {batches.map((batch, idx) => {
+          const done = completedBatches.has(idx);
+          const isThisLoading = loadingBatchIndex === idx;
+          const anyLoading = loadingBatchIndex !== null;
+          return (
+            <div
+              key={idx}
+              className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-white"
+            >
+              <div>
+                <p className="text-sm font-medium text-slate-800">Batch {idx + 1}</p>
+                <p className="text-xs text-slate-400">{batch.rowCount.toLocaleString()} rows</p>
+              </div>
+              {done ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Done
+                </span>
+              ) : (
+                <Button
+                  onClick={() => onStartBatch(idx)}
+                  disabled={anyLoading}
+                  loading={isThisLoading}
+                >
+                  Import
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={onClose}>
+          {allDone ? "Close" : "Cancel"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
