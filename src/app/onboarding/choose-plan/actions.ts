@@ -20,9 +20,11 @@ export interface TierPricing {
 }
 
 const LIMIT_DEFAULTS: Record<string, { constituentLimit: number; canvasserLimit: number }> = {
-  starter:  { constituentLimit: 5000,  canvasserLimit: 3 },
-  campaign: { constituentLimit: 15000, canvasserLimit: 0 },
-  election: { constituentLimit: 0,     canvasserLimit: 0 },
+  bench:  { constituentLimit: 5000,   canvasserLimit: 3 },
+  chair:  { constituentLimit: 15000,  canvasserLimit: 0 },
+  podium: { constituentLimit: 50000,  canvasserLimit: 0 },
+  stage:  { constituentLimit: 250000, canvasserLimit: 0 },
+  arena:  { constituentLimit: 0,      canvasserLimit: 0 },
 };
 
 export async function getTierPricing(): Promise<Record<string, TierPricing>> {
@@ -30,12 +32,16 @@ export async function getTierPricing(): Promise<Record<string, TierPricing>> {
     where: {
       key: {
         in: [
-          "starter_label",  "starter_regular_price",  "starter_sale_price",
-          "campaign_label", "campaign_regular_price", "campaign_sale_price",
-          "election_label", "election_regular_price", "election_sale_price",
-          "starter_constituent_limit",  "starter_canvasser_limit",
-          "campaign_constituent_limit", "campaign_canvasser_limit",
-          "election_constituent_limit", "election_canvasser_limit",
+          "bench_label",  "bench_regular_price",  "bench_sale_price",
+          "chair_label",  "chair_regular_price",  "chair_sale_price",
+          "podium_label", "podium_regular_price", "podium_sale_price",
+          "stage_label",  "stage_regular_price",  "stage_sale_price",
+          "arena_label",  "arena_regular_price",  "arena_sale_price",
+          "bench_constituent_limit",  "bench_canvasser_limit",
+          "chair_constituent_limit",  "chair_canvasser_limit",
+          "podium_constituent_limit", "podium_canvasser_limit",
+          "stage_constituent_limit",  "stage_canvasser_limit",
+          "arena_constituent_limit",  "arena_canvasser_limit",
         ],
       },
     },
@@ -61,9 +67,11 @@ export async function getTierPricing(): Promise<Record<string, TierPricing>> {
   }
 
   return {
-    starter:  tierPricing("starter",  "249", "149"),
-    campaign: tierPricing("campaign", "499", "349"),
-    election: tierPricing("election", "999", "699"),
+    bench:  tierPricing("bench",  "249",  "149"),
+    chair:  tierPricing("chair",  "499",  "349"),
+    podium: tierPricing("podium", "999",  "699"),
+    stage:  tierPricing("stage",  "1499", "1099"),
+    arena:  tierPricing("arena",  "1999", "1499"),
   };
 }
 
@@ -121,6 +129,8 @@ export async function buildPlanSnapshot(plan: PlanTier, amountPaidOverride?: num
     snapshotContactMap:            boolSetting(`${plan}_feature_contact_map`),
     snapshotReports:               boolSetting(`${plan}_feature_reports`),
     snapshotCanvassScript:         boolSetting(`${plan}_feature_canvass_script`),
+    snapshotTagLimit:              numSetting(`${plan}_tag_limit`),
+    snapshotCustomFieldLimit:      numSetting(`${plan}_custom_field_limit`),
     snapshotPricePaid:             amountPaid || null,
     snapshotRegularPrice:          regularPrice || null,
     snapshotSalePrice:             salePrice,
@@ -130,7 +140,7 @@ export async function buildPlanSnapshot(plan: PlanTier, amountPaidOverride?: num
 
 // ── Dev plan selection ─────────────────────────────────────────────────────
 
-const SELECTABLE_PLANS: PlanTier[] = ["starter", "campaign", "election"];
+const SELECTABLE_PLANS: PlanTier[] = ["bench", "chair", "podium", "stage", "arena"];
 
 export async function selectPlanDev(
   campaignId: string,

@@ -4,7 +4,7 @@ import Link from "next/link";
 interface UpgradeCardProps {
   featureName: string;
   featureDescription: string;
-  requiredPlan: "campaign" | "election";
+  requiredPlan: "chair" | "podium" | "stage" | "arena";
   campaignId: string;
 }
 
@@ -33,9 +33,13 @@ export async function UpgradeCard({
   ]);
 
   const settingsMap = new Map(settings.map((r) => [r.key, r.value]));
+  const PLAN_LABEL_FALLBACK: Record<string, string> = {
+    chair: "Chair", podium: "Podium", stage: "Stage", arena: "Arena",
+  };
   const planLabel =
     settingsMap.get(`${requiredPlan}_label`) ??
-    (requiredPlan === "campaign" ? "Campaign" : "Election");
+    PLAN_LABEL_FALLBACK[requiredPlan] ??
+    requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1);
 
   const regularRaw = settingsMap.get(`${requiredPlan}_regular_price`);
   const saleRaw    = settingsMap.get(`${requiredPlan}_sale_price`);

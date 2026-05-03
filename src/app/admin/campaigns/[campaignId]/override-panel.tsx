@@ -67,6 +67,8 @@ function EffectivePreview({ limits }: { limits: SerializableLimits }) {
     { label: "Canvasser limit",       value: formatLimit(limits.canvasserLimit)   },
     { label: "Co-Chair limit",        value: formatLimit(limits.coChairLimit)     },
     { label: "Field Organizer limit", value: formatLimit(limits.fieldOrganizerLimit) },
+    { label: "Tag limit",             value: formatLimit(limits.tagLimit)         },
+    { label: "Custom field limit",    value: formatLimit(limits.customFieldLimit) },
     { label: "Donor tracking",        value: limits.donorTrackingEnabled     ? "Enabled" : "Disabled" },
     { label: "Follow-up queue",       value: limits.followUpQueueEnabled     ? "Enabled" : "Disabled" },
     { label: "Analytics",             value: limits.analyticsEnabled         ? "Enabled" : "Disabled" },
@@ -211,10 +213,12 @@ export function OverridePanel({
 
   // Plan badge
   const planLabel =
-    campaignPlan === "demo"     ? "Demo"     :
-    campaignPlan === "election" ? "Election" :
-    campaignPlan === "campaign" ? "Campaign" :
-    campaignPlan === "starter"  ? "Starter"  : campaignPlan;
+    campaignPlan === "demo"   ? "Demo"   :
+    campaignPlan === "arena"  ? "Arena"  :
+    campaignPlan === "stage"  ? "Stage"  :
+    campaignPlan === "podium" ? "Podium" :
+    campaignPlan === "chair"  ? "Chair"  :
+    campaignPlan === "bench"  ? "Bench"  : campaignPlan;
 
   return (
     <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/30 shadow-sm overflow-hidden">

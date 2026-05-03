@@ -136,6 +136,8 @@ export interface SerializableLimits {
   canvasserLimit:           number;
   coChairLimit:             number;
   fieldOrganizerLimit:      number;
+  tagLimit:                 number;
+  customFieldLimit:         number;
   donorTrackingEnabled:     boolean;
   followUpQueueEnabled:     boolean;
   analyticsEnabled:         boolean;
@@ -161,6 +163,8 @@ export async function getCampaignEffectiveLimits(
     canvasserLimit:           limits.canvasserLimit,
     coChairLimit:             limits.coChairLimit,
     fieldOrganizerLimit:      limits.fieldOrganizerLimit,
+    tagLimit:                 limits.tagLimit,
+    customFieldLimit:         limits.customFieldLimit,
     donorTrackingEnabled:     limits.donorTrackingEnabled,
     followUpQueueEnabled:     limits.followUpQueueEnabled,
     analyticsEnabled:         limits.analyticsEnabled,
@@ -181,6 +185,8 @@ export interface OverrideData {
   constituentLimit?:          number | null;
   coChairLimit?:              number | null;
   fieldOrganizerLimit?:       number | null;
+  tagLimit?:                  number | null;
+  customFieldLimit?:          number | null;
   donorTrackingEnabled?:      boolean | null;
   followUpQueueEnabled?:      boolean | null;
   analyticsEnabled?:          boolean | null;
@@ -216,6 +222,8 @@ export async function upsertCampaignOverride(
     constituentLimit:         data.constituentLimit          ?? null,
     coChairLimit:             data.coChairLimit              ?? null,
     fieldOrganizerLimit:      data.fieldOrganizerLimit       ?? null,
+    tagLimit:                 data.tagLimit                  ?? null,
+    customFieldLimit:         data.customFieldLimit          ?? null,
     donorTrackingEnabled:     data.donorTrackingEnabled      ?? null,
     followUpQueueEnabled:     data.followUpQueueEnabled      ?? null,
     analyticsEnabled:         data.analyticsEnabled          ?? null,

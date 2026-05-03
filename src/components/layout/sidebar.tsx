@@ -38,6 +38,7 @@ interface SidebarProps {
   reportsEnabled?: boolean;
   canvassScriptEnabled?: boolean;
   constituentUsage?: { count: number; limit: number } | null;
+  tagUsage?: { count: number; limit: number } | null;
 }
 
 interface NavItem {
@@ -69,7 +70,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null, tagUsage = null }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -621,28 +622,55 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
         )}
       </nav>
 
-      {/* Constituent usage indicator — Starter plans only */}
-      {constituentUsage && (
-        <div className="px-3 py-2 mx-0">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-slate-400">Records</span>
-            <span className="text-[10px] font-medium text-slate-500 tabular-nums">
-              {constituentUsage.count.toLocaleString()} / {constituentUsage.limit.toLocaleString()}
-            </span>
-          </div>
-          <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className={[
-                "h-full rounded-full transition-all",
-                constituentUsage.count / constituentUsage.limit >= 0.9
-                  ? "bg-red-400"
-                  : constituentUsage.count / constituentUsage.limit >= 0.75
-                  ? "bg-amber-400"
-                  : "bg-slate-400",
-              ].join(" ")}
-              style={{ width: `${Math.min(100, Math.round((constituentUsage.count / constituentUsage.limit) * 100))}%` }}
-            />
-          </div>
+      {/* Usage indicators */}
+      {(constituentUsage || tagUsage) && (
+        <div className="px-3 py-2 mx-0 flex flex-col gap-2">
+          {constituentUsage && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-slate-400">Records</span>
+                <span className="text-[10px] font-medium text-slate-500 tabular-nums">
+                  {constituentUsage.count.toLocaleString()} / {constituentUsage.limit.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={[
+                    "h-full rounded-full transition-all",
+                    constituentUsage.count / constituentUsage.limit >= 0.9
+                      ? "bg-red-400"
+                      : constituentUsage.count / constituentUsage.limit >= 0.75
+                      ? "bg-amber-400"
+                      : "bg-slate-400",
+                  ].join(" ")}
+                  style={{ width: `${Math.min(100, Math.round((constituentUsage.count / constituentUsage.limit) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {tagUsage && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-slate-400">Tags</span>
+                <span className="text-[10px] font-medium text-slate-500 tabular-nums">
+                  {tagUsage.count.toLocaleString()} / {tagUsage.limit.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={[
+                    "h-full rounded-full transition-all",
+                    tagUsage.count / tagUsage.limit >= 0.9
+                      ? "bg-red-400"
+                      : tagUsage.count / tagUsage.limit >= 0.75
+                      ? "bg-amber-400"
+                      : "bg-slate-400",
+                  ].join(" ")}
+                  style={{ width: `${Math.min(100, Math.round((tagUsage.count / tagUsage.limit) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

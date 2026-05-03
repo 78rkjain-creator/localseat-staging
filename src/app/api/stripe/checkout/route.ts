@@ -6,7 +6,7 @@ import { getStripe, STRIPE_PRODUCTS } from "@/lib/stripe";
 import { getTierPricing } from "@/app/onboarding/choose-plan/actions";
 import type { PlanTier } from "@/lib/plan-limits";
 
-const SELECTABLE_PLANS: PlanTier[] = ["starter", "campaign", "election"];
+const SELECTABLE_PLANS: PlanTier[] = ["bench", "chair", "podium", "stage", "arena"];
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);

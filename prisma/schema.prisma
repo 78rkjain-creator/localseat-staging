@@ -57,9 +57,11 @@ enum AddressChangeStatus {
 }
 
 enum PlanTier {
-  starter
-  campaign
-  election
+  bench
+  chair
+  podium
+  stage
+  arena
   demo
 }
 
@@ -189,7 +191,7 @@ model Campaign {
   dataRetentionMonths  Int?
   advanceVotingDates   DateTime[]
   isActive       Boolean   @default(true)
-  plan           PlanTier  @default(starter)
+  plan           PlanTier  @default(bench)
   planActivated  Boolean   @default(true)
   amountPaid     Int?
   planLockedAt   DateTime?
@@ -835,6 +837,8 @@ model CampaignOverride {
   extraCanvassers           Int?
   coChairLimit              Int?
   fieldOrganizerLimit       Int?
+  tagLimit                  Int?
+  customFieldLimit          Int?
   donorTrackingEnabled      Boolean?
   followUpQueueEnabled      Boolean?
   analyticsEnabled          Boolean?
@@ -854,6 +858,8 @@ model CampaignOverride {
   // Snapshot of tier defaults at time of plan selection
   // Used for "best of snapshot vs current" logic — protects existing campaigns
   // from pricing/feature changes made after they signed up.
+  snapshotTagLimit              Int?
+  snapshotCustomFieldLimit      Int?
   snapshotConstituentLimit      Int?
   snapshotCanvasserLimit        Int?
   snapshotCampaignManagerLimit  Int?

@@ -96,6 +96,7 @@ export default async function AppLayout({
   let reportsEnabled           = true;
   let canvassScriptEnabled     = true;
   let constituentUsage: { count: number; limit: number } | null = null;
+  let tagUsage: { count: number; limit: number } | null = null;
 
   // Check for pending support access request (candidate/campaign_manager only)
   let pendingSupportRequest: {
@@ -140,6 +141,10 @@ export default async function AppLayout({
         const count = await db.person.count({ where: { campaignId: activeCampaignId, deletedAt: null } });
         constituentUsage = { count, limit: limits.constituentLimit };
       }
+      if (!limits.isUnlimited("tagLimit") && limits.tagLimit > 0) {
+        const count = await db.tag.count({ where: { campaignId: activeCampaignId, deletedAt: null } });
+        tagUsage = { count, limit: limits.tagLimit };
+      }
     }
   }
 
@@ -181,6 +186,7 @@ export default async function AppLayout({
           reportsEnabled={reportsEnabled}
           canvassScriptEnabled={canvassScriptEnabled}
           constituentUsage={constituentUsage}
+          tagUsage={tagUsage}
         />
         <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">
           {children}

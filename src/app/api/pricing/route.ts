@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-const TIERS = ["starter", "campaign", "election"] as const;
+const TIERS = ["bench", "chair", "podium", "stage", "arena"] as const;
 
 const FEATURE_KEYS = [
   "donor_tracking",
@@ -28,18 +28,24 @@ const LIMIT_KEYS = [
   "campaign_manager_limit",
   "cochair_limit",
   "field_organizer_limit",
+  "tag_limit",
+  "custom_field_limit",
 ] as const;
 
 const TIER_DEFAULTS: Record<string, { regularPrice: string; salePrice: string | null }> = {
-  starter:  { regularPrice: "249", salePrice: "149" },
-  campaign: { regularPrice: "499", salePrice: "349" },
-  election: { regularPrice: "999", salePrice: "699" },
+  bench:  { regularPrice: "249",  salePrice: "149"  },
+  chair:  { regularPrice: "499",  salePrice: "349"  },
+  podium: { regularPrice: "999",  salePrice: "699"  },
+  stage:  { regularPrice: "1499", salePrice: "1099" },
+  arena:  { regularPrice: "1999", salePrice: "1499" },
 };
 
 const LIMIT_DEFAULTS: Record<string, Record<string, number>> = {
-  starter:  { constituent_limit: 5000, canvasser_limit: 3,  campaign_manager_limit: 1, cochair_limit: 0, field_organizer_limit: 1 },
-  campaign: { constituent_limit: 15000, canvasser_limit: 0, campaign_manager_limit: 0, cochair_limit: 2, field_organizer_limit: 0 },
-  election: { constituent_limit: 0,    canvasser_limit: 0,  campaign_manager_limit: 0, cochair_limit: 0, field_organizer_limit: 0 },
+  bench:  { constituent_limit: 5000,   canvasser_limit: 3, campaign_manager_limit: 1, cochair_limit: 0, field_organizer_limit: 1, tag_limit: 5,   custom_field_limit: 0  },
+  chair:  { constituent_limit: 15000,  canvasser_limit: 0, campaign_manager_limit: 0, cochair_limit: 0, field_organizer_limit: 0, tag_limit: 15,  custom_field_limit: 3  },
+  podium: { constituent_limit: 50000,  canvasser_limit: 0, campaign_manager_limit: 0, cochair_limit: 2, field_organizer_limit: 0, tag_limit: 50,  custom_field_limit: 10 },
+  stage:  { constituent_limit: 250000, canvasser_limit: 0, campaign_manager_limit: 0, cochair_limit: 4, field_organizer_limit: 0, tag_limit: 100, custom_field_limit: 25 },
+  arena:  { constituent_limit: 0,      canvasser_limit: 0, campaign_manager_limit: 0, cochair_limit: 0, field_organizer_limit: 0, tag_limit: 0,   custom_field_limit: 0  },
 };
 
 const CORS_HEADERS = {

@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type PlanTier = "starter" | "campaign" | "election" | "demo";
+export type PlanTier = "bench" | "chair" | "podium" | "stage" | "arena" | "demo";
 
 export type TierLimits = {
   constituentLimit:         number;  // 0 = unlimited
@@ -10,6 +10,8 @@ export type TierLimits = {
   campaignManagerLimit:     number;
   coChairLimit:             number;
   fieldOrganizerLimit:      number;
+  tagLimit:                 number;  // 0 = unlimited
+  customFieldLimit:         number;  // 0 = unlimited
   donorTrackingEnabled:     boolean;
   volunteerCoordEnabled:    boolean;
   financeLeadEnabled:       boolean;
@@ -33,12 +35,14 @@ export type EffectiveLimits = TierLimits & {
 // Used when PlatformSettings rows are missing from the DB.
 
 const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
-  starter: {
-    constituentLimit:         2500,
+  bench: {
+    constituentLimit:         5000,
     canvasserLimit:           3,
     campaignManagerLimit:     1,
     coChairLimit:             0,
     fieldOrganizerLimit:      1,
+    tagLimit:                 5,
+    customFieldLimit:         0,
     donorTrackingEnabled:     false,
     volunteerCoordEnabled:    false,
     financeLeadEnabled:       false,
@@ -53,12 +57,36 @@ const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
     reportsEnabled:           false,
     canvassScriptEnabled:     false,
   },
-  campaign: {
+  chair: {
     constituentLimit:         15000,
+    canvasserLimit:           0,
+    campaignManagerLimit:     0,
+    coChairLimit:             0,
+    fieldOrganizerLimit:      0,
+    tagLimit:                 15,
+    customFieldLimit:         3,
+    donorTrackingEnabled:     true,
+    volunteerCoordEnabled:    false,
+    financeLeadEnabled:       false,
+    followUpQueueEnabled:     true,
+    analyticsEnabled:         false,
+    eventsEnabled:            true,
+    surveysEnabled:           false,
+    digitalSignaturesEnabled: false,
+    customFieldsEnabled:      true,
+    signTrackingEnabled:      true,
+    contactMapEnabled:        false,
+    reportsEnabled:           false,
+    canvassScriptEnabled:     true,
+  },
+  podium: {
+    constituentLimit:         50000,
     canvasserLimit:           0,
     campaignManagerLimit:     0,
     coChairLimit:             2,
     fieldOrganizerLimit:      0,
+    tagLimit:                 50,
+    customFieldLimit:         10,
     donorTrackingEnabled:     true,
     volunteerCoordEnabled:    true,
     financeLeadEnabled:       true,
@@ -73,12 +101,36 @@ const FALLBACKS: Record<Exclude<PlanTier, "demo">, TierLimits> = {
     reportsEnabled:           true,
     canvassScriptEnabled:     true,
   },
-  election: {
+  stage: {
+    constituentLimit:         250000,
+    canvasserLimit:           0,
+    campaignManagerLimit:     0,
+    coChairLimit:             4,
+    fieldOrganizerLimit:      0,
+    tagLimit:                 100,
+    customFieldLimit:         25,
+    donorTrackingEnabled:     true,
+    volunteerCoordEnabled:    true,
+    financeLeadEnabled:       true,
+    followUpQueueEnabled:     true,
+    analyticsEnabled:         true,
+    eventsEnabled:            true,
+    surveysEnabled:           true,
+    digitalSignaturesEnabled: true,
+    customFieldsEnabled:      true,
+    signTrackingEnabled:      true,
+    contactMapEnabled:        true,
+    reportsEnabled:           true,
+    canvassScriptEnabled:     true,
+  },
+  arena: {
     constituentLimit:         0,
     canvasserLimit:           0,
     campaignManagerLimit:     0,
     coChairLimit:             0,
     fieldOrganizerLimit:      0,
+    tagLimit:                 0,
+    customFieldLimit:         0,
     donorTrackingEnabled:     true,
     volunteerCoordEnabled:    true,
     financeLeadEnabled:       true,
@@ -101,6 +153,8 @@ const UNLIMITED: EffectiveLimits = {
   campaignManagerLimit:     0,
   coChairLimit:             0,
   fieldOrganizerLimit:      0,
+  tagLimit:                 0,
+  customFieldLimit:         0,
   donorTrackingEnabled:     true,
   volunteerCoordEnabled:    true,
   financeLeadEnabled:       true,
@@ -147,6 +201,8 @@ function parseSettings(
     campaignManagerLimit:  num("campaign_manager_limit",  fb.campaignManagerLimit),
     coChairLimit:          num("cochair_limit",           fb.coChairLimit),
     fieldOrganizerLimit:   num("field_organizer_limit",   fb.fieldOrganizerLimit),
+    tagLimit:              num("tag_limit",               fb.tagLimit),
+    customFieldLimit:      num("custom_field_limit",      fb.customFieldLimit),
     donorTrackingEnabled:     feat("donor_tracking",         fb.donorTrackingEnabled),
     volunteerCoordEnabled:    feat("volunteer_coordination", fb.volunteerCoordEnabled),
     financeLeadEnabled:       feat("finance_lead_access",    fb.financeLeadEnabled),
@@ -229,6 +285,8 @@ export async function getEffectiveLimits(campaignId: string): Promise<EffectiveL
     campaignManagerLimit:  resolveNum(null,                           override?.snapshotCampaignManagerLimit, tierLimits.campaignManagerLimit),
     coChairLimit:          resolveNum(override?.coChairLimit,         override?.snapshotCoChairLimit,        tierLimits.coChairLimit),
     fieldOrganizerLimit:   resolveNum(override?.fieldOrganizerLimit,  override?.snapshotFieldOrganizerLimit, tierLimits.fieldOrganizerLimit),
+    tagLimit:              resolveNum(override?.tagLimit,             override?.snapshotTagLimit,            tierLimits.tagLimit),
+    customFieldLimit:      resolveNum(override?.customFieldLimit,     override?.snapshotCustomFieldLimit,    tierLimits.customFieldLimit),
     donorTrackingEnabled:     resolveBool(override?.donorTrackingEnabled,     override?.snapshotDonorTracking,        tierLimits.donorTrackingEnabled),
     volunteerCoordEnabled:    resolveBool(null,                               override?.snapshotVolunteerCoord,       tierLimits.volunteerCoordEnabled),
     financeLeadEnabled:       resolveBool(null,                               override?.snapshotFinanceLeadAccess,    tierLimits.financeLeadEnabled),
@@ -290,6 +348,22 @@ export async function canAddRole(
     default:
       return true;
   }
+}
+
+export async function canAddTag(
+  campaignId: string,
+  currentCount: number,
+): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.isUnlimited("tagLimit") || currentCount < limits.tagLimit;
+}
+
+export async function canAddCustomField(
+  campaignId: string,
+  currentCount: number,
+): Promise<boolean> {
+  const limits = await getEffectiveLimits(campaignId);
+  return limits.isUnlimited("customFieldLimit") || currentCount < limits.customFieldLimit;
 }
 
 export async function isDonorTrackingEnabled(campaignId: string): Promise<boolean> {

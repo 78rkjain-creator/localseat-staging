@@ -242,9 +242,11 @@ function SystemStatusSection({
 // ── Section 1: Tier Pricing ────────────────────────────────────────────────
 
 const TIERS = [
-  { key: "starter",  label: "Starter"  },
-  { key: "campaign", label: "Campaign" },
-  { key: "election", label: "Election" },
+  { key: "bench",  label: "Bench"  },
+  { key: "chair",  label: "Chair"  },
+  { key: "podium", label: "Podium" },
+  { key: "stage",  label: "Stage"  },
+  { key: "arena",  label: "Arena"  },
 ] as const;
 
 function PricingSection({
@@ -391,6 +393,8 @@ const LIMIT_ROWS = [
   { label: "Campaign Manager limit", keyFragment: "campaign_manager_limit" },
   { label: "Co-Chair limit",         keyFragment: "cochair_limit"          },
   { label: "Field Organizer limit",  keyFragment: "field_organizer_limit"  },
+  { label: "Tag limit",              keyFragment: "tag_limit"              },
+  { label: "Custom field limit",     keyFragment: "custom_field_limit"     },
 ] as const;
 
 function LimitsSection({

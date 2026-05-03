@@ -13,7 +13,9 @@ export function getStripe(): Stripe {
 
 // Stripe product IDs (test mode) — one per plan tier
 export const STRIPE_PRODUCTS: Record<string, string> = {
-  starter:  "prod_UREJUkGMu182BI",
-  campaign: "prod_URELmxFyywN5r7",
-  election: "prod_URELAaHM1dfYNA",
+  bench:  "prod_UREJUkGMu182BI",
+  chair:  "prod_URELmxFyywN5r7",
+  podium: "prod_URELAaHM1dfYNA",
+  stage:  "prod_US3T7yDLS1Y5Df",
+  arena:  "prod_US3U6mI3azdBdZ",
 };

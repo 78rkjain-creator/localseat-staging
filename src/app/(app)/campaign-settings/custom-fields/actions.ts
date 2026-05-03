@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { checkSupportWriteAccess } from "@/lib/support-access";
+import { getEffectiveLimits } from "@/lib/plan-limits";
 import type { Role } from "@/types";
 
 const ALLOWED_ROLES: Role[] = ["candidate", "campaign_manager", "data_manager"];
@@ -34,7 +35,14 @@ export async function saveCustomFields(
     .map((f) => ({ id: f.id, label: f.label.trim() }))
     .filter((f) => f.label);
 
-  if (cleaned.length > 5) return { error: "Maximum 5 custom fields allowed." };
+  const limits = await getEffectiveLimits(activeCampaignId);
+  const cfMax = limits.customFieldLimit;
+  if (cfMax > 0 && cleaned.length > cfMax) {
+    return { error: `Your plan supports up to ${cfMax} custom field${cfMax === 1 ? "" : "s"}. Upgrade to add more.` };
+  }
+  if (cfMax === 0 && cleaned.length > 25) {
+    return { error: "Maximum 25 custom fields allowed." };
+  }
 
   const validIds = new Set(cleaned.map((f) => f.id));
 

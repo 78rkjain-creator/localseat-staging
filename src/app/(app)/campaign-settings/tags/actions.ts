@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { canManageTags } from "@/lib/permissions";
 import { sanitizeText } from "@/lib/sanitize";
 import { checkSupportWriteAccess } from "@/lib/support-access";
+import { getEffectiveLimits } from "@/lib/plan-limits";
 import type { Role } from "@/types";
 
 async function requireManager() {
@@ -34,7 +35,10 @@ export async function createTag(
   if (!trimmedName) return { error: "Tag name is required (max 50 chars)." };
 
   const tagCount = await db.tag.count({ where: { campaignId, deletedAt: null } });
-  if (tagCount >= 100) return { error: "Maximum 100 tags per campaign reached." };
+  const limits = await getEffectiveLimits(campaignId);
+  if (limits.tagLimit > 0 && tagCount >= limits.tagLimit) {
+    return { error: `Your plan supports up to ${limits.tagLimit} tag${limits.tagLimit === 1 ? "" : "s"}. Upgrade to add more.` };
+  }
 
   const existing = await db.tag.findFirst({
     where: { campaignId, name: { equals: trimmedName, mode: "insensitive" }, deletedAt: null },

@@ -20,44 +20,71 @@ function canvasserText(limit: number): string {
 
 function getTierFeatures(tier: string, pricing: TierPricing): string[] {
   const { constituentLimit, canvasserLimit } = pricing;
-  if (tier === "starter") {
+  if (tier === "bench") {
     return [
       constituentText(constituentLimit),
       canvasserText(canvasserLimit),
       "Walk lists & turf assignment",
       "Mobile canvassing",
+      "Up to 5 tags",
       "CSV export",
     ];
   }
-  if (tier === "campaign") {
+  if (tier === "chair") {
     return [
       constituentText(constituentLimit),
       canvasserText(canvasserLimit),
-      "All Starter features",
+      "All Bench features",
       "Donor prospect tracking",
       "Follow-up queue",
       "Events & attendance tracking",
-      "Custom fields",
+      "Custom fields (up to 3)",
       "Sign tracking",
-      "Dashboard analytics",
+      "Canvass script",
     ];
   }
-  // election
+  if (tier === "podium") {
+    return [
+      constituentText(constituentLimit),
+      canvasserText(canvasserLimit),
+      "All Chair features",
+      "Dashboard analytics",
+      "Volunteer coordination",
+      "Finance Lead access",
+      "Contact map",
+      "Campaign reports",
+      "2 Co-Chair seats",
+    ];
+  }
+  if (tier === "stage") {
+    return [
+      constituentText(constituentLimit),
+      canvasserText(canvasserLimit),
+      "All Podium features",
+      "Survey builder",
+      "Digital signature capture",
+      "4 Co-Chair seats",
+      "Priority support",
+    ];
+  }
+  // arena
   return [
     constituentText(constituentLimit),
     canvasserText(canvasserLimit),
-    "All Campaign features",
-    "Surveys & digital signatures",
-    "Priority support",
+    "All Stage features",
+    "Unlimited tags & custom fields",
     "Onboarding call",
     "Data import assistance",
+    "Dedicated support",
   ];
 }
 
 const TIERS: { key: PlanTier; popular?: boolean }[] = [
-  { key: "starter"  },
-  { key: "campaign", popular: true },
-  { key: "election" },
+  { key: "bench"  },
+  { key: "chair", popular: true },
+  { key: "podium" },
+  { key: "stage"  },
+  { key: "arena"  },
 ];
 
 // ── Checkmark ─────────────────────────────────────────────────────────────
@@ -85,6 +112,118 @@ interface Props {
   currentAmountPaid?: number; // 0 or absent = first purchase
 }
 
+// ── Plan card ──────────────────────────────────────────────────────────────
+
+function PlanCard({
+  tierKey,
+  popular,
+  info,
+  selecting,
+  onSelect,
+  stripeEnabled,
+  currentAmountPaid,
+}: {
+  tierKey: PlanTier;
+  popular?: boolean;
+  info: TierPricing;
+  selecting: string | null;
+  onSelect: (plan: PlanTier) => void;
+  stripeEnabled: boolean;
+  currentAmountPaid: number;
+}) {
+  const features = getTierFeatures(tierKey, info);
+  const isLoading  = selecting === tierKey;
+  const isDisabled = selecting !== null;
+
+  const effectivePrice = parseInt(info.salePrice ?? info.regularPrice, 10) || 0;
+  const upgradeCharge  = stripeEnabled && currentAmountPaid > 0
+    ? Math.max(effectivePrice - currentAmountPaid, 0)
+    : null;
+
+  return (
+    <div
+      className={[
+        "relative bg-white rounded-3xl border-2 shadow-card flex flex-col p-6 transition-shadow",
+        popular
+          ? "border-brand-500 shadow-brand-100"
+          : "border-slate-100 hover:border-slate-200",
+      ].join(" ")}
+    >
+      {/* Most popular badge */}
+      {popular && (
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-500 text-white shadow-sm whitespace-nowrap">
+            Most popular
+          </span>
+        </div>
+      )}
+
+      {/* Tier name + launch badge */}
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+          {info.label}
+        </p>
+        {info.salePrice && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
+            Launch
+          </span>
+        )}
+      </div>
+
+      {/* Price */}
+      <div className="flex items-end gap-1.5 mb-1">
+        <span className="text-3xl font-bold text-slate-900 tracking-tight leading-none">
+          ${info.salePrice ?? info.regularPrice}
+        </span>
+      </div>
+      {info.salePrice && (
+        <p className="text-sm text-slate-400 line-through mb-0.5">${info.regularPrice}</p>
+      )}
+      <p className="text-sm text-slate-400 mb-1">per campaign</p>
+
+      {/* Upgrade charge callout */}
+      {upgradeCharge !== null && upgradeCharge > 0 && (
+        <p className="text-xs text-blue-600 font-semibold mb-3">
+          You pay ${upgradeCharge} CAD today
+        </p>
+      )}
+      {upgradeCharge !== null && upgradeCharge === 0 && (
+        <p className="text-xs text-emerald-600 font-semibold mb-3">
+          No additional charge
+        </p>
+      )}
+      {upgradeCharge === null && <div className="mb-3" />}
+
+      {/* Feature list */}
+      <ul className="flex flex-col gap-2 flex-1 mb-6">
+        {features.map((feature) => (
+          <li key={feature} className="flex items-start gap-2 text-sm text-slate-700">
+            <Check highlight={popular} />
+            <span>{feature}</span>
+          </li>
+        ))}
+      </ul>
+
+      {/* CTA button */}
+      <button
+        onClick={() => onSelect(tierKey)}
+        disabled={isDisabled}
+        className={[
+          "w-full h-11 rounded-2xl text-sm font-semibold transition-colors",
+          popular
+            ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white disabled:opacity-60"
+            : "bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white disabled:opacity-60",
+          isDisabled ? "cursor-not-allowed" : "cursor-pointer",
+        ].join(" ")}
+      >
+        {isLoading
+          ? (stripeEnabled ? "Redirecting…" : "Setting up…")
+          : (upgradeCharge === 0 ? "Switch to this plan" : "Select plan")}
+      </button>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPaid = 0 }: Props) {
@@ -108,7 +247,6 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
           setSelecting(null);
           return;
         }
-        // Redirect to Stripe Checkout
         window.location.href = data.url;
       } catch {
         setError("Network error. Please try again.");
@@ -127,8 +265,15 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
     window.location.href = "/dashboard";
   }
 
+  const cardProps = {
+    selecting,
+    onSelect: handleSelect,
+    stripeEnabled,
+    currentAmountPaid,
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
       {/* Dev mode banner */}
       {!stripeEnabled && (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
@@ -170,102 +315,34 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
         </div>
       )}
 
-      {/* Tier cards */}
+      {/* Top row: bench, chair (popular), podium */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {TIERS.map(({ key, popular }) => {
-          const info     = pricing[key] ?? { label: key, price: "—", regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
-          const features = getTierFeatures(key, info);
-          const isLoading  = selecting === key;
-          const isDisabled = selecting !== null;
-
-          // Upgrade cost display
-          const effectivePrice = parseInt(info.salePrice ?? info.regularPrice, 10) || 0;
-          const upgradeCharge  = stripeEnabled && currentAmountPaid > 0
-            ? Math.max(effectivePrice - currentAmountPaid, 0)
-            : null;
-
+        {TIERS.slice(0, 3).map(({ key, popular }) => {
+          const info = pricing[key] ?? { label: key, price: "—", regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
           return (
-            <div
+            <PlanCard
               key={key}
-              className={[
-                "relative bg-white rounded-3xl border-2 shadow-card flex flex-col p-7 transition-shadow",
-                popular
-                  ? "border-brand-500 shadow-brand-100"
-                  : "border-slate-100 hover:border-slate-200",
-              ].join(" ")}
-            >
-              {/* Most popular badge */}
-              {popular && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-500 text-white shadow-sm whitespace-nowrap">
-                    Most popular
-                  </span>
-                </div>
-              )}
+              tierKey={key}
+              popular={popular}
+              info={info}
+              {...cardProps}
+            />
+          );
+        })}
+      </div>
 
-              {/* Tier name + launch badge */}
-              <div className="flex items-center gap-2 mb-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  {info.label}
-                </p>
-                {info.salePrice && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
-                    Launch pricing
-                  </span>
-                )}
-              </div>
-
-              {/* Price */}
-              <div className="flex items-end gap-1.5 mb-1">
-                <span className="text-4xl font-bold text-slate-900 tracking-tight leading-none">
-                  ${info.salePrice ?? info.regularPrice}
-                </span>
-              </div>
-              {info.salePrice && (
-                <p className="text-sm text-slate-400 line-through mb-0.5">${info.regularPrice}</p>
-              )}
-              <p className="text-sm text-slate-400 mb-1">per campaign</p>
-
-              {/* Upgrade charge callout */}
-              {upgradeCharge !== null && upgradeCharge > 0 && (
-                <p className="text-xs text-blue-600 font-semibold mb-4">
-                  You pay ${upgradeCharge} CAD today
-                </p>
-              )}
-              {upgradeCharge !== null && upgradeCharge === 0 && (
-                <p className="text-xs text-emerald-600 font-semibold mb-4">
-                  No additional charge
-                </p>
-              )}
-              {upgradeCharge === null && <div className="mb-4" />}
-
-              {/* Feature list */}
-              <ul className="flex flex-col gap-2.5 flex-1 mb-7">
-                {features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm text-slate-700">
-                    <Check highlight={popular} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* CTA button */}
-              <button
-                onClick={() => handleSelect(key)}
-                disabled={isDisabled}
-                className={[
-                  "w-full h-12 rounded-2xl text-sm font-semibold transition-colors",
-                  popular
-                    ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white disabled:opacity-60"
-                    : "bg-slate-900 hover:bg-slate-800 active:bg-slate-700 text-white disabled:opacity-60",
-                  isDisabled ? "cursor-not-allowed" : "cursor-pointer",
-                ].join(" ")}
-              >
-                {isLoading
-                  ? (stripeEnabled ? "Redirecting…" : "Setting up…")
-                  : (upgradeCharge === 0 ? "Switch to this plan" : "Select plan")}
-              </button>
-            </div>
+      {/* Bottom row: stage, arena — centred */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:max-w-2xl md:mx-auto w-full">
+        {TIERS.slice(3).map(({ key, popular }) => {
+          const info = pricing[key] ?? { label: key, price: "—", regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
+          return (
+            <PlanCard
+              key={key}
+              tierKey={key}
+              popular={popular}
+              info={info}
+              {...cardProps}
+            />
           );
         })}
       </div>
