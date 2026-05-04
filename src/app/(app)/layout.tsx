@@ -14,6 +14,7 @@ import { getEffectiveLimits } from "@/lib/plan-limits";
 import { hasPendingRequest } from "@/lib/support-access";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -36,7 +37,19 @@ export default async function AppLayout({
     memberships,
     supportMode,
     supportCampaignName,
+    emailVerified,
+    platformRole: sessionPlatformRole,
   } = session.user;
+
+  // Fetch createdAt for the verification banner (only when needed).
+  let accountCreatedAt: string | null = null;
+  if (!emailVerified && !sessionPlatformRole) {
+    const userRecord = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { createdAt: true },
+    });
+    accountCreatedAt = userRecord?.createdAt.toISOString() ?? null;
+  }
 
   const inSupportMode = !!supportMode;
 
@@ -158,6 +171,9 @@ export default async function AppLayout({
         />
       )}
       {!supportMode && demoMode && <DemoBanner currentEmail={email} />}
+      {accountCreatedAt && (
+        <EmailVerificationBanner email={email} accountCreatedAt={accountCreatedAt} />
+      )}
       {pendingSupportRequest && (
         <SupportAccessRequestBanner
           grantId={pendingSupportRequest.grantId}

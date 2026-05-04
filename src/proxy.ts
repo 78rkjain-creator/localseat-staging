@@ -132,24 +132,6 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    // Email verification gate — skip for verification-related and auth paths.
-    const skipVerificationCheck =
-      pathname.startsWith("/verify-email") ||
-      pathname === "/resend-verification" ||
-      pathname === "/account-expired" ||
-      pathname.startsWith("/api/auth") ||
-      pathname.startsWith("/onboarding/choose-plan");
-
-    if (!skipVerificationCheck && process.env.SKIP_EMAIL_VERIFICATION !== "true") {
-      const { emailVerified, verificationTokenExpiry } = token;
-      if (!emailVerified) {
-        if (verificationTokenExpiry && new Date(verificationTokenExpiry) < new Date()) {
-          return redirect("/account-expired");
-        }
-        return redirect("/verify-email/pending");
-      }
-    }
-
     // Authenticated users with no active campaign selected:
     // - Already at a campaign-selection page → let them through.
     // - Has existing memberships but none active → pick a campaign.

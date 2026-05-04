@@ -19,6 +19,7 @@ declare module "next-auth" {
       activeCampaignId: string | null;
       activeRole: string | null;
       platformRole: string | null;
+      emailVerified: boolean;
       supportMode: "readonly" | "full" | null;
       supportOriginalCampaignId: string | null;
       supportCampaignName: string | null;
@@ -309,6 +310,7 @@ export const authOptions: NextAuthOptions = {
       session.user.activeCampaignId = token.activeCampaignId ?? null;
       session.user.activeRole = token.activeRole ?? null;
       session.user.platformRole = token.platformRole ?? null;
+      session.user.emailVerified = token.emailVerified ?? false;
       session.user.supportMode = token.supportMode ?? null;
       session.user.supportOriginalCampaignId = token.supportOriginalCampaignId ?? null;
       session.user.supportCampaignName = token.supportCampaignName ?? null;
