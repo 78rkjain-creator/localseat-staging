@@ -1630,6 +1630,22 @@ async function main() {
     }
   }
   console.log("  ✓ Campaign override snapshots written");
+
+  // ── Promo codes ────────────────────────────────────────────────────────────
+  await db.promoCode.upsert({
+    where: { code: "LAUNCH2026" },
+    create: {
+      code:            "LAUNCH2026",
+      referrerName:    "Test Referrer",
+      referrerEmail:   "referrer@example.com",
+      discountPercent: 5,
+      stripeCouponId:  null,
+      isActive:        true,
+      maxUses:         null,
+    },
+    update: {},
+  });
+  console.log("  ✓ Promo codes seeded");
 }
 
 main()

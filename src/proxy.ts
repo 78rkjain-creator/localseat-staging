@@ -197,6 +197,7 @@ export default withAuth(
           pathname.startsWith("/api/maintenance-status") ||
           pathname.startsWith("/api/pricing") ||
           pathname.startsWith("/api/stripe/webhook") ||
+          pathname.startsWith("/api/promo/validate") ||
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
           pathname.startsWith("/icons")

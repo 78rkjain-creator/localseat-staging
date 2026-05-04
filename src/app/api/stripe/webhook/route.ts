@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  const { campaignId, plan, userId, previousAmountPaid } = session.metadata ?? {};
+  const { campaignId, plan, userId, previousAmountPaid, promoCodeId } = session.metadata ?? {};
 
   if (!campaignId || !plan || !userId) {
     console.error("[stripe/webhook] Missing required metadata on session", session.id);
@@ -62,10 +62,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  // amount_total is in cents
-  const amountPaidDollars = Math.round((session.amount_total ?? 0) / 100);
-  const previousPaid = parseInt(previousAmountPaid ?? "0", 10);
-  const totalAmountPaid = previousPaid + amountPaidDollars;
+  // amount_total is in cents; amount_subtotal is pre-discount total
+  const amountPaidDollars  = Math.round((session.amount_total    ?? 0) / 100);
+  const subtotalDollars    = Math.round((session.amount_subtotal ?? session.amount_total ?? 0) / 100);
+  const discountDollars    = Math.max(subtotalDollars - amountPaidDollars, 0);
+  const previousPaid       = parseInt(previousAmountPaid ?? "0", 10);
+  const totalAmountPaid    = previousPaid + amountPaidDollars;
 
   const snapshotData = await buildPlanSnapshot(plan as PlanTier, totalAmountPaid);
 
@@ -76,6 +78,7 @@ export async function POST(request: Request) {
       planActivated: true,
       planLockedAt:  new Date(),
       amountPaid:    totalAmountPaid,
+      ...(promoCodeId ? { promoCodeId } : {}),
     },
   });
 
@@ -85,6 +88,17 @@ export async function POST(request: Request) {
     update: snapshotData,
   });
 
+  if (promoCodeId) {
+    await db.promoCode.update({
+      where: { id: promoCodeId },
+      data: {
+        usageCount:     { increment: 1 },
+        totalRevenue:   { increment: amountPaidDollars },
+        totalDiscounts: { increment: discountDollars },
+      },
+    });
+  }
+
   await createAuditLog({
     campaignId,
     userId,
@@ -93,11 +107,13 @@ export async function POST(request: Request) {
     entityId:   campaignId,
     details: {
       plan,
-      stripeSessionId:  session.id,
-      amountCharged:    amountPaidDollars,
+      stripeSessionId:    session.id,
+      amountCharged:      amountPaidDollars,
       totalAmountPaid,
       previousAmountPaid: previousPaid,
-      snapshotedAt: snapshotData.snapshotedAt,
+      discountApplied:    discountDollars,
+      promoCodeId:        promoCodeId ?? null,
+      snapshotedAt:       snapshotData.snapshotedAt,
     },
   });
 

@@ -145,6 +145,7 @@ const SELECTABLE_PLANS: PlanTier[] = ["bench", "chair", "podium", "stage", "aren
 export async function selectPlanDev(
   campaignId: string,
   plan: PlanTier,
+  promoCode?: string,
 ): Promise<{ error?: string }> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return { error: "Not authenticated." };
@@ -173,6 +174,16 @@ export async function selectPlanDev(
   });
   if (!campaign) return { error: "Campaign not found." };
 
+  // Resolve promo code if provided
+  let promoCodeId: string | undefined;
+  if (promoCode) {
+    const promo = await db.promoCode.findUnique({
+      where: { code: promoCode.toUpperCase() },
+      select: { id: true, isActive: true, expiresAt: true, maxUses: true, usageCount: true },
+    });
+    if (promo?.isActive) promoCodeId = promo.id;
+  }
+
   const snapshotData = await buildPlanSnapshot(plan);
 
   await db.campaign.update({
@@ -182,6 +193,7 @@ export async function selectPlanDev(
       planActivated: true,
       planLockedAt:  new Date(),
       amountPaid:    snapshotData.snapshotPricePaid ?? 0,
+      ...(promoCodeId ? { promoCodeId } : {}),
     },
   });
 
@@ -191,13 +203,23 @@ export async function selectPlanDev(
     update: snapshotData,
   });
 
+  if (promoCodeId) {
+    await db.promoCode.update({
+      where: { id: promoCodeId },
+      data: {
+        usageCount:   { increment: 1 },
+        totalRevenue: { increment: snapshotData.snapshotPricePaid ?? 0 },
+      },
+    });
+  }
+
   await createAuditLog({
     campaignId,
     userId:     session.user.id,
     action:     "PLAN_SELECTED_DEV",
     entityType: "campaign",
     entityId:   campaignId,
-    details:    { plan, devMode: true, amountPaid: snapshotData.snapshotPricePaid, snapshotedAt: snapshotData.snapshotedAt },
+    details:    { plan, devMode: true, amountPaid: snapshotData.snapshotPricePaid, promoCode: promoCode ?? null, snapshotedAt: snapshotData.snapshotedAt },
   });
 
   revalidatePath("/dashboard");

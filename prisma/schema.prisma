@@ -225,6 +225,8 @@ model Campaign {
   signatureRecords      SignatureRecord[]
   signatureConsentTypes SignatureConsentType[]
   supportAccessGrants   SupportAccessGrant[]
+  promoCode             PromoCode?  @relation(fields: [promoCodeId], references: [id])
+  promoCodeId           String?
 
   @@index([deletedAt])
   @@map("campaigns")
@@ -1259,4 +1261,27 @@ model SupportAccessGrant {
 
   @@index([campaignId, expiresAt])
   @@map("support_access_grants")
+}
+
+// ─── Promo Codes ──────────────────────────────────────────────────────────────
+
+model PromoCode {
+  id                String    @id @default(cuid())
+  code              String    @unique
+  referrerName      String
+  referrerEmail     String?
+  discountPercent   Int       @default(5)
+  stripeCouponId    String?
+  isActive          Boolean   @default(true)
+  maxUses           Int?
+  usageCount        Int       @default(0)
+  totalRevenue      Int       @default(0)
+  totalDiscounts    Int       @default(0)
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  campaigns         Campaign[]
+
+  @@map("promo_codes")
 }
