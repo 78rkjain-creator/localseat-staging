@@ -81,8 +81,8 @@ function getTierFeatures(tier: string, pricing: TierPricing): string[] {
 
 const TIERS: { key: PlanTier; popular?: boolean }[] = [
   { key: "bench"  },
-  { key: "chair", popular: true },
-  { key: "podium" },
+  { key: "chair"  },
+  { key: "podium", popular: true },
   { key: "stage"  },
   { key: "arena"  },
 ];
@@ -171,7 +171,7 @@ function PlanCard({
   return (
     <div
       className={[
-        "relative bg-white rounded-3xl border-2 shadow-card flex flex-col p-6 transition-shadow",
+        "relative bg-white rounded-3xl border-2 shadow-card flex flex-col p-5 transition-shadow",
         popular
           ? "border-brand-500 shadow-brand-100"
           : "border-slate-100 hover:border-slate-200",
@@ -200,7 +200,7 @@ function PlanCard({
       {discountedPrice !== null ? (
         <div className="mb-1">
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-bold text-slate-900 tracking-tight leading-none">
+            <span className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
               ${discountedPrice.toFixed(2)}
             </span>
             <span className="text-base text-slate-400 line-through leading-tight mb-0.5">
@@ -213,7 +213,7 @@ function PlanCard({
         </div>
       ) : (
         <div className="flex items-end gap-1.5 mb-1">
-          <span className="text-3xl font-bold text-slate-900 tracking-tight leading-none">
+          <span className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
             ${info.salePrice ?? info.regularPrice}
           </span>
         </div>
@@ -344,7 +344,7 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
   const cardProps = { selecting, onSelect: handleSelect, stripeEnabled, currentAmountPaid, appliedPromo };
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
       {!stripeEnabled && (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4">
           <div className="flex items-start gap-3">
@@ -379,15 +379,8 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {TIERS.slice(0, 3).map(({ key, popular }) => {
-          const info = pricing[key] ?? { label: key, price: "—", regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
-          return <PlanCard key={key} tierKey={key} popular={popular} info={info} {...cardProps} />;
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:max-w-2xl md:mx-auto w-full">
-        {TIERS.slice(3).map(({ key, popular }) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {TIERS.map(({ key, popular }) => {
           const info = pricing[key] ?? { label: key, price: "—", regularPrice: "—", salePrice: null, constituentLimit: 0, canvasserLimit: 0 };
           return <PlanCard key={key} tierKey={key} popular={popular} info={info} {...cardProps} />;
         })}
