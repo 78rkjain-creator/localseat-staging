@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PLATFORM_ROLE_LABELS, ROLE_LABELS } from "@/types";
-import type { PlatformRole, Role } from "@/types";
+import { ROLE_LABELS } from "@/types";
+import type { Role } from "@/types";
 
 interface Membership {
   role: string;
@@ -19,24 +19,6 @@ export interface UserRow {
   platformRole: string | null;
   createdAt: Date;
   memberships: Membership[];
-}
-
-function PlatformRoleBadge({ role }: { role: string | null }) {
-  if (!role) return null;
-  const label = PLATFORM_ROLE_LABELS[role as PlatformRole] ?? role;
-  const isSuperUser = role === "super_user";
-  return (
-    <span
-      className={[
-        "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold",
-        isSuperUser
-          ? "bg-brand-50 text-brand-700"
-          : "bg-slate-100 text-slate-600",
-      ].join(" ")}
-    >
-      {label}
-    </span>
-  );
 }
 
 function ActiveBadge({ isActive }: { isActive: boolean }) {
@@ -149,9 +131,6 @@ export function UsersClient({ users }: { users: UserRow[] }) {
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">
                   Email
                 </th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">
-                  Platform Role
-                </th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Status
                 </th>
@@ -178,6 +157,11 @@ export function UsersClient({ users }: { users: UserRow[] }) {
                   <td className="px-5 py-4">
                     <p className="font-medium text-slate-900">
                       {u.firstName} {u.lastName}
+                      {u.platformRole && (
+                        <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                          {u.platformRole === "super_user" ? "Super User" : "Super Admin"}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-400 md:hidden mt-0.5 truncate">
                       {u.email}
@@ -185,13 +169,6 @@ export function UsersClient({ users }: { users: UserRow[] }) {
                   </td>
                   <td className="px-5 py-4 hidden md:table-cell text-slate-600 truncate max-w-[200px]">
                     {u.email}
-                  </td>
-                  <td className="px-5 py-4 hidden sm:table-cell">
-                    {u.platformRole ? (
-                      <PlatformRoleBadge role={u.platformRole} />
-                    ) : (
-                      <span className="text-slate-300 text-xs">—</span>
-                    )}
                   </td>
                   <td className="px-5 py-4">
                     <ActiveBadge isActive={u.isActive} />
