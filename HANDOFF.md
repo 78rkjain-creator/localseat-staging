@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: May 1, 2026 — Batch 14: Plan tier enforcement, feature gating (16 toggles), support access system, maintenance mode, upgrade cards, 404 handling, PWA install prompt, logo refresh, dynamic pricing API, marketing site integration, Stripe Checkout integration._
+_Last updated: May 4, 2026 — Batch 15: 5-tier restructure (Bench/Chair/Podium/Stage/Arena), promo codes, email verification moved post-payment, campaign audit log, admin user search, tag/custom field limits, marketing site 5-card pricing, security headers update, PWA prompt fix._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -144,8 +144,8 @@ NEXT_PUBLIC_STRIPE_ENABLED="false"
 | sara.bishop@example.com | volunteer_coordinator |
 | dan.wu@example.com | finance_lead |
 | mike.davidson@example.com | sign_installer |
-| starter.candidate@example.com | candidate (Starter plan test campaign) |
-| starter.canvasser@example.com | canvasser (Starter plan test campaign) |
+| starter.candidate@example.com | candidate (Bench plan test campaign) |
+| starter.canvasser@example.com | canvasser (Bench plan test campaign) |
 
 After any reseed: sign out and back in to refresh JWT.
 
@@ -253,6 +253,8 @@ Candidate
 20260501000001_add_campaign_override_snapshot_and_feature_fields
 20260501000002_add_support_access_grants
 20260502000001_add_feature_overrides
+20260502000002_tier_rename
+20260503000001_add_promo_codes
 ```
 
 ---
@@ -273,6 +275,7 @@ Candidate
 - SignatureRecord
 - SupportAccessGrant (lifecycle: requested → approved/denied → expired/revoked; 72h expiry from approval)
 - SignatureConsent, SignatureConsentType
+- PromoCode (code, referrerName, referrerEmail, discountPercent, stripeCouponId?, isActive, maxUses?, usageCount, totalRevenue, totalDiscounts)
 
 **Key enums:**
 - Role: candidate, campaign_manager, data_manager, co_chair, field_organizer, canvasser, volunteer_coordinator, finance_lead, sign_installer
@@ -285,7 +288,7 @@ Candidate
 - ListSource: voters_list, residents_list, manual, canvass, team
 - SupportLevel enum: strong_yes, soft_yes, undecided, soft_no, strong_no (on both Person and CanvassResponse)
 - OutOfDistrictApprovalStatus: not_required, pending, approved, rejected
-- PlanTier: starter, campaign, election, demo
+- PlanTier: bench, chair, podium, stage, arena, demo
 
 **Key Person fields:**
 - isConfirmedVoter (bool) — set true on OVL match
@@ -320,44 +323,46 @@ Candidate
 - electionDate (DateTime?) — stored on Campaign, shown/edited in General Settings
 - fundraisingGoal (Int?) — dollar goal shown in General Settings; added in migration 20260428000001
 - advanceVotingDates (DateTime[]) — list of advance poll open datetimes; sorted ascending on save; add/remove in General Settings
-- plan (PlanTier, default starter) — determines feature access
+- plan (PlanTier, default bench) — determines feature access
 - planActivated (Boolean) — false = fully unlocked (pre-payment)
 - amountPaid (Int?) — locked at purchase time
 - planLockedAt (DateTime?) — when plan was selected
+- promoCodeId (String?, FK→PromoCode) — set at checkout when a promo code is applied
 
 ---
 
 ## Plan Tier System
 
 ### Pricing
-- Three tiers: Starter ($249 regular / $149 sale), Campaign ($499 / $349), Election ($999 / $699)
+- Five tiers: Bench, Chair, Podium *(most popular)*, Stage, Arena
 - Pricing managed via PlatformSettings keys: `{tier}_regular_price`, `{tier}_sale_price`, `{tier}_label`
 - Public API: `GET /api/pricing` — returns all tiers with prices, limits, and features (no auth, 5min cache, CORS open)
 - Marketing site fetches from `/api/pricing` on page load and updates pricing cards dynamically
-- Onboarding plan cards show strikethrough pricing when sale price differs from regular price
+- Onboarding plan cards show strikethrough pricing when sale price differs from regular price; single row of 5 cards on `lg:` breakpoint (`max-w-7xl` container)
 - Admin panel at `/admin/settings` controls all pricing, limits, and feature toggles
+- Migration `20260502000002_tier_rename` renamed the enum values from starter/campaign/election → bench/chair/podium/stage/arena and applied a data migration (existing `starter` campaigns → `bench`, `campaign` → `podium`, `election` → `arena`)
 
 ### Feature Gating (16 toggles)
 All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 
-| Feature | Key | Starter | Campaign | Election |
-|---|---|---|---|---|
-| Donor tracking | donor_tracking | ✗ | ✓ | ✓ |
-| Follow-up queue | follow_up_queue | ✗ | ✓ | ✓ |
-| Analytics | analytics | ✗ | ✓ | ✓ |
-| Volunteer coordination | volunteer_coordination | ✗ | ✓ | ✓ |
-| Finance Lead access | finance_lead_access | ✗ | ✓ | ✓ |
-| Co-Chair seats | co_chair_seats | ✗ | ✓ | ✓ |
-| Unlimited canvassers | unlimited_canvassers | ✗ | ✓ | ✓ |
-| Unlimited constituents | unlimited_constituents | ✗ | ✗ | ✓ |
-| Events | events | ✗ | ✓ | ✓ |
-| Surveys | surveys | ✗ | ✗ | ✓ |
-| Digital signatures | digital_signatures | ✗ | ✗ | ✓ |
-| Custom fields | custom_fields | ✗ | ✓ | ✓ |
-| Sign tracking | sign_tracking | ✗ | ✓ | ✓ |
-| Contact map | contact_map | ✗ | ✓ | ✓ |
-| Reports | reports | ✗ | ✓ | ✓ |
-| Canvass script | canvass_script | ✗ | ✓ | ✓ |
+| Feature | Key | Bench | Chair | Podium | Stage | Arena |
+|---|---|---|---|---|---|---|
+| Donor tracking | donor_tracking | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Follow-up queue | follow_up_queue | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Analytics | analytics | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Volunteer coordination | volunteer_coordination | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Finance Lead access | finance_lead_access | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Co-Chair seats | co_chair_seats | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Unlimited canvassers | unlimited_canvassers | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Unlimited constituents | unlimited_constituents | ✗ | ✗ | ✗ | ✓ | ✓ |
+| Events | events | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Surveys | surveys | ✗ | ✗ | ✗ | ✓ | ✓ |
+| Digital signatures | digital_signatures | ✗ | ✗ | ✗ | ✓ | ✓ |
+| Custom fields | custom_fields | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Sign tracking | sign_tracking | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Contact map | contact_map | ✗ | ✗ | ✓ | ✓ | ✓ |
+| Reports | reports | ✗ | ✓ | ✓ | ✓ | ✓ |
+| Canvass script | canvass_script | ✗ | ✓ | ✓ | ✓ | ✓ |
 
 ### Enforcement layers
 1. **Sidebar** — gated nav items hidden when feature disabled
@@ -378,15 +383,18 @@ All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 - Upgrade button links to `/onboarding/choose-plan`
 
 ### Numeric limits
-- Starter: 5,000 constituents, 3 canvassers, 1 campaign manager, 1 field organizer
-- Campaign: 15,000 constituents, unlimited canvassers/managers/FOs, 2 co-chairs
-- Election: all unlimited
+- Bench: 5,000 constituents, 3 canvassers, 1 campaign manager, 1 field organizer
+- Chair: 10,000 constituents, unlimited canvassers/managers/FOs
+- Podium: 20,000 constituents, unlimited canvassers/managers/FOs, 2 co-chairs
+- Stage: 40,000 constituents, unlimited all roles
+- Arena: all unlimited
 - Constituent usage indicator shown in sidebar for plans with finite limits
 
 ### Production deployment notes
 - After new migrations, PlatformSettings keys must be inserted into production DB manually (seed only runs on reset)
 - Use `psql` via SSH: table is `platform_settings` (snake_case), requires `id` (gen_random_uuid()::text), `key`, `value`, `"updatedAt"` (now())
 - Old keys (`starter_price`, etc.) have been removed — new format is `{tier}_regular_price` / `{tier}_sale_price`
+- Old tier keys (`starter_feature_*`, `campaign_feature_*`, `election_feature_*`) must also be renamed to `bench_feature_*`, `chair_feature_*`, etc. when applying `tier_rename` migration to production
 
 ---
 
@@ -407,8 +415,8 @@ All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 
 ### Dynamic pricing
 - No pre-created Stripe prices — amount is set at checkout time from `{tier}_sale_price` (or `{tier}_regular_price` if no sale)
-- Three Stripe products exist (test mode): Starter `prod_UREJUkGMu182BI`, Campaign `prod_URELmxFyywN5r7`, Election `prod_URELAaHM1dfYNA`
-- Product IDs stored in `src/lib/stripe.ts` — must be updated when switching to live mode
+- Five Stripe products exist (test mode): Bench `prod_UREJUkGMu182BI`, Chair `prod_URELmxFyywN5r7`, Podium `prod_URELAaHM1dfYNA`, Stage `prod_US3T7yDLS1Y5Df`, Arena `prod_US3U6mI3azdBdZ`
+- Product IDs in `src/lib/stripe.ts` as `STRIPE_PRODUCTS` map — must be replaced with live product IDs when switching to live mode
 
 ### Upgrades
 - Upgrade cost = target plan price − amountPaid (campaigns pay the difference only)
@@ -447,9 +455,9 @@ NEXT_PUBLIC_STRIPE_ENABLED=false       # set to true when ready to accept paymen
 
 ### Go-live checklist (when bank account is activated)
 1. Get live keys from Stripe dashboard (`sk_live_...`, `pk_live_...`)
-2. Create three products in Stripe live mode (Starter, Campaign, Election) — copy new product IDs
+2. Create five products in Stripe live mode (Bench, Chair, Podium, Stage, Arena) — copy new product IDs
 3. Create webhook endpoint in live mode → `https://app.localseat.io/api/stripe/webhook` → get new signing secret
-4. Update `src/lib/stripe.ts` with live product IDs
+4. Update `src/lib/stripe.ts` `STRIPE_PRODUCTS` map with live product IDs
 5. SSH into VPS, update `/var/www/localseat/.env`:
    - Replace `sk_test_...` with `sk_live_...`
    - Replace `pk_test_...` with `pk_live_...`
@@ -457,6 +465,46 @@ NEXT_PUBLIC_STRIPE_ENABLED=false       # set to true when ready to accept paymen
    - Change `NEXT_PUBLIC_STRIPE_ENABLED=false` to `true`
 6. Deploy: `./deploy.sh`
 7. Test with a real card — verify webhook fires, campaign activates, dashboard accessible
+
+---
+
+## Promo Codes
+
+### Purpose
+Affiliate/referral promo codes that apply a percentage discount at Stripe Checkout. Managed via admin panel at `/admin/promo-codes`.
+
+### Model (PromoCode)
+- `code` (String, unique, uppercase) — user-facing code (e.g. LAUNCH2026)
+- `referrerName`, `referrerEmail` — for tracking/payouts
+- `discountPercent` (Int) — 1–100; used to create a Stripe coupon on first use
+- `stripeCouponId` (String?, nullable) — lazily created in Stripe the first time a code is validated; reused on subsequent uses
+- `isActive` (Boolean, default true) — inactive codes are rejected at validation
+- `maxUses` (Int?, nullable) — null = unlimited
+- `usageCount` (Int, default 0) — incremented by webhook on successful payment
+- `totalRevenue` (Int, default 0) — cumulative amountPaid (cents)
+- `totalDiscounts` (Int, default 0) — cumulative discountAmount (cents)
+- Campaign has `promoCodeId` (String?, FK→PromoCode) — set at checkout; one-to-many (one code can apply to many campaigns)
+
+### How it works
+1. User enters code on plan selection screen → `GET /api/promo/validate?code=X&tier=bench` validates and returns `{ discountPercent, promoCodeId }`
+2. Code is passed to `/api/stripe/checkout` → checkout route creates Stripe PromotionCode on first use (lazily), attaches to CheckoutSession via `discounts: [{ promotion_code: pmid }]`
+3. Stripe Checkout applies discount on Stripe's side (user sees discounted price)
+4. Webhook (`checkout.session.completed`) reads `session.metadata.promoCodeId`, computes `discountDollars = amount_subtotal − amount_total`, updates `promoCode.usageCount + 1`, `totalRevenue`, `totalDiscounts`; sets `campaign.promoCodeId`
+
+### Stripe SDK v22 note
+`promotionCodes.create` shape changed in SDK v22: `coupon` moved into `promotion: { type: "coupon", coupon: id }` at top level. This is already handled in `src/lib/promo-codes.ts`.
+
+### Key files
+- `src/lib/promo-codes.ts` — `validatePromoCode()`, `getOrCreateStripeCoupon()`
+- `src/app/api/promo/validate/route.ts` — public GET endpoint (no auth), rate-limit safe
+- `src/app/admin/promo-codes/page.tsx` — list with usage stats
+- `src/app/admin/promo-codes/[codeId]/page.tsx` — detail + edit
+- `src/app/admin/promo-codes/actions.ts` — create, update, toggle active
+- `src/app/onboarding/choose-plan/plan-cards.tsx` — promo code input UI, shows discount applied
+- `src/app/api/stripe/checkout/route.ts` — accepts `promoCode` in request body, attaches to session
+
+### Seed
+`LAUNCH2026` — 5% discount, referrer: Test Referrer / referrer@example.com, no max uses, no Stripe coupon (created lazily). Added at end of `prisma/seed.ts`.
 
 ---
 
@@ -515,6 +563,32 @@ Super_users can view any campaign's data through the normal app UI.
 - Runs `UPDATE users SET "sessionVersion" = "sessionVersion" + 1` — invalidates all active sessions
 - Separate from maintenance mode — can be used independently
 - Typical deploy workflow: maintenance ON → deploy → maintenance OFF → optionally force logout
+
+---
+
+## Email Verification
+
+### Behavior
+Email verification is **not** a blocking gate. Users can complete onboarding, select a plan, and access the full app without verifying their email. Verification is encouraged via a persistent banner.
+
+### Banner
+- `src/components/layout/email-verification-banner.tsx` — client component
+- Shown in `src/app/(app)/layout.tsx` for unverified users who are not platform admins (super_user/super_admin)
+- Amber styling days 0–6 after account creation; red/urgent styling day 7+ with "X days left" countdown (14-day deadline)
+- "Resend verification email" button calls `resendVerificationEmail(email)` server action directly
+- "Email sent!" confirmation fades after 5 seconds
+- `dismissed` state hides the banner per-session (client-only, resets on next login)
+
+### Session
+- `emailVerified` is exposed on the NextAuth session type (`src/lib/auth.ts`) via both the token callback and the session callback
+- Layout fetches `user.createdAt` from DB only for unverified non-admins (one extra query per unverified app load)
+
+### Dev mode
+- `SKIP_EMAIL_VERIFICATION=true` in `.env` disables the banner entirely (set on demo instance)
+- Verification email sending and the `/verify-email/pending` and `/account-expired` routes are preserved for users who navigate there directly
+
+### What was removed
+- The proxy.ts verification gate — 14 lines that redirected unverified users to `/verify-email/pending` — was removed entirely. Users are never blocked by verification status.
 
 ---
 
@@ -760,6 +834,33 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 - Input sanitization on canvassing and outreach actions
 - nodemailer v8 (SMTP injection CVEs patched)
 
+### Audit Log
+
+**Admin audit log** (`/admin/audit-log`):
+- Server-side pagination (50/page), URL param filters: `userId` and `campaignId`
+- `AuditFilterBar` client component — two `SearchSelect` dropdowns (text input → filtered dropdown, outside-click close, selected shows pill with X); navigates with `useRouter` to `/admin/audit-log?userId=...&campaignId=...&page=1`
+- Filter options built from `getFilterOptions()` — up to 500 distinct users and 500 campaigns from audit log rows
+- All timestamps formatted as Eastern Time (ET) — `new Date(date).toLocaleString("en-CA", { timeZone: "America/Toronto" })`
+- "Support" amber badge on entries where `metadata.supportAccess === true`
+
+**Campaign-level audit log** (`/audit-log`):
+- Accessible to `candidate`, `campaign_manager`, `data_manager` only (role-gated)
+- Loads up to 200 most recent entries scoped to `activeCampaignId`
+- `AuditLogClient` — client-side user filter dropdown, count display, "Showing most recent 200 of N entries" when truncated
+- Sidebar nav item: "Audit Log" with document icon, shown for candidate/campaign_manager/data_manager; placed above the Admin collapsible section
+
+**Shared component**: `src/components/audit-log/audit-log-table.tsx`
+- `AuditEntry` interface, `formatET()` helper, `AuditLogTable` component
+- No "use client" or "use server" directive — works in both server and client trees
+- `showCampaign` prop controls optional Campaign column
+
+### Admin Users
+
+- Client-side search by name or email — `UsersClient` in `src/app/admin/users/users-client.tsx`; search input filters across `firstName`, `lastName`, full name concatenation, and `email`; shows "Showing X of Y users" count when filtering
+- Platform role badge — inline purple badge next to user's name (`bg-purple-100 text-purple-700`) when `platformRole` is set; removed from dedicated column
+- Campaign pills — `CampaignPills` component renders each campaign membership as a linked pill showing campaign name + role label; no separate campaign count column
+- Server page simplified to thin wrapper: `src/app/admin/users/page.tsx` queries `memberships` with `campaign { id, name }` and delegates all rendering to `UsersClient`
+
 ### Canvassing Screen Enhancements
 - Navigate button + phone/SMS links on canvassing screen (tel:/sms: links; home phone SMS shows warning that it may be a landline)
 - Back button on canvassing screen — navigates to previous entry without saving current responses
@@ -892,7 +993,7 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
   people/voters/page.tsx
   team/actions.ts (team server actions — add, remove, restore, list members)
   team/classify-actions.ts, team/classify-modal.tsx (thin re-exports)
-/src/app/admin/campaigns, users, audit-log, export, demo-leads, settings
+/src/app/admin/campaigns, users, audit-log, export, demo-leads, settings, promo-codes
 /src/app/onboarding/choose-plan, create-campaign
 /src/app/api/cron/daily-summary/route.ts
 /src/app/api/dashboard/canvass-activity/route.ts
@@ -901,11 +1002,16 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
   auth.ts, db.ts, permissions.ts, sanitize.ts, rate-limit.ts
   people.ts, canvassing.ts, outreach.ts, activity.ts, dashboard.ts
   geocoding.ts, ward.ts, address-normalize.ts, competitors.ts
-  email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts
+  email.ts, audit.ts, terms.ts, plan-limits.ts, offline-queue.ts, promo-codes.ts
   format-poll-number.ts, classify-actions.ts
   analytics.ts, events.ts, field-messages.ts, map.ts, reports.ts, surveys.ts
 /src/components/classify-modal.tsx (shared classify modal — used by people/ and team/ re-exports)
-/src/components/layout/sidebar.tsx, mobile-nav.tsx
+/src/components/layout/sidebar.tsx, mobile-nav.tsx, email-verification-banner.tsx
+/src/components/audit-log/audit-log-table.tsx (shared AuditEntry interface + AuditLogTable)
+/src/app/(app)/audit-log/page.tsx, audit-log-client.tsx
+/src/app/admin/audit-log/audit-filter-bar.tsx
+/src/app/admin/users/users-client.tsx
+/src/app/api/promo/validate/route.ts
 /src/components/ui/tag-picker.tsx, address-picker.tsx
 /src/components/field-messages-banner.tsx
 /src/components/dashboard/canvass-activity-feed.tsx
@@ -1077,6 +1183,19 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Maintenance mode fix — removed self-referential fetch from proxy, two-layer model (ENV for proxy, DB for layout) | May 1, 2026 |
 | advanceVotingDates fix — explicit empty array on campaign creation to avoid null constraint | May 1, 2026 |
 | Proxy support mode bypass — super_users with supportMode set can access regular app routes | May 1, 2026 |
+| 5-tier plan restructure — PlanTier enum renamed bench/chair/podium/stage/arena; migration `20260502000002_tier_rename` applies data migration; existing starter→bench, campaign→podium, election→arena | May 2, 2026 |
+| Plan cards single-row layout — `/onboarding/choose-plan` plan-cards.tsx: 5-card single-row grid (`lg:grid-cols-5`, `max-w-7xl`); "Most popular" badge moved to Podium; reduced card padding and price font size | May 2, 2026 |
+| Promo codes system — PromoCode model, admin UI at `/admin/promo-codes`, validate API, Stripe coupon lazy creation (SDK v22 shape), webhook usage tracking, plan-cards.tsx discount input; migration `20260503000001_add_promo_codes` | May 3, 2026 |
+| LAUNCH2026 seed promo code — 5% discount, no max uses, no Stripe coupon (lazy); added at end of seed.ts | May 3, 2026 |
+| Stripe webhook promo tracking — extracts `promoCodeId` from session metadata, computes `discountDollars`, increments `promoCode.usageCount/totalRevenue/totalDiscounts`, sets `campaign.promoCodeId` | May 3, 2026 |
+| Email verification moved post-payment — removed proxy.ts blocking gate; persistent amber/red banner in app layout (`email-verification-banner.tsx`); `emailVerified` exposed on session type; banner dismissed per-session; resend button; SKIP_EMAIL_VERIFICATION=true disables banner | May 3, 2026 |
+| Campaign audit log at `/audit-log` — candidate/CM/data_manager only; up to 200 entries; client-side user filter dropdown; "Audit Log" sidebar nav item above Admin section; ET timestamps | May 3, 2026 |
+| Admin audit log improvements — server-side `userId` + `campaignId` filter dropdowns (`AuditFilterBar`); ET timestamps on all entries; pagination preserves active filters | May 3, 2026 |
+| Shared `AuditLogTable` component — `src/components/audit-log/audit-log-table.tsx`; works in server and client trees; `showCampaign` prop; "Support" badge on support-session entries | May 3, 2026 |
+| Admin users page — client-side search by name/email; campaign pills (linked names + roles) replace count column; platform role badge inline next to name | May 3, 2026 |
+| Tag cap raised to 18 (from 10); custom fields — existing 5-field cap confirmed; limits noted in Key Features | May 3, 2026 |
+| Marketing site pricing section — 5-card layout (Bench/Chair/Podium/Stage/Arena); Podium highlighted as most popular; prices fetched from `/api/pricing` dynamically | May 4, 2026 |
+| Security headers update — CSP updated for new Mapbox endpoint patterns; Permissions-Policy refined | May 4, 2026 |
 
 ### High Priority
 _(none)_
@@ -1129,12 +1248,12 @@ Online donations, mass texting, email broadcasts, predictive scoring, advanced a
 3. Candidate: alex.chen@example.com / password
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
-6. Starter test: starter.candidate@example.com / password (Starter plan restrictions)
+6. Bench plan test: starter.candidate@example.com / password (Bench plan restrictions)
 7. Stripe local testing: ensure `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_ENABLED=true`, and `STRIPE_WEBHOOK_SECRET` are in `.env`, then run `C:\stripe\stripe.exe listen --forward-to localhost:3000/api/stripe/webhook` in a separate terminal
 8. All new dev → localseat-staging repo first
 9. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
 10. Test on staging before production deploy
 11. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh` → `cd /var/www/demo && ./deploy.sh`
-12. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/`
+12. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/` — pricing section is 5-card layout (Bench/Chair/Podium/Stage/Arena), Podium highlighted; prices fetched dynamically from `/api/pricing`
 13. Run `npx prisma generate` after any migration
 14. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)
