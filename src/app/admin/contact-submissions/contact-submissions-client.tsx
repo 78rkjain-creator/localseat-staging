@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { ContactSubmission } from "@prisma/client";
+import { deleteContactSubmission } from "./actions";
 
 interface Props {
   initialSubmissions: ContactSubmission[];
@@ -18,8 +19,10 @@ function formatDate(date: Date | string) {
 }
 
 export function ContactSubmissionsClient({ initialSubmissions }: Props) {
-  const [submissions, setSubmissions] = useState<ContactSubmission[]>(initialSubmissions);
-  const [selected, setSelected]       = useState<ContactSubmission | null>(null);
+  const [submissions, setSubmissions]   = useState<ContactSubmission[]>(initialSubmissions);
+  const [selected, setSelected]         = useState<ContactSubmission | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isPending, startTransition]    = useTransition();
 
   async function openSubmission(sub: ContactSubmission) {
     setSelected(sub);
@@ -41,6 +44,16 @@ export function ContactSubmissionsClient({ initialSubmissions }: Props) {
 
   function closePanel() {
     setSelected(null);
+    setDeleteConfirm(false);
+  }
+
+  function executeDelete(id: string) {
+    startTransition(async () => {
+      await deleteContactSubmission(id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      setSelected(null);
+      setDeleteConfirm(false);
+    });
   }
 
   const unreadCount = submissions.filter((s) => !s.readAt).length;
@@ -198,8 +211,8 @@ export function ContactSubmissionsClient({ initialSubmissions }: Props) {
               </p>
             </div>
 
-            {/* Reply CTA */}
-            <div className="px-5 pb-5">
+            {/* Reply CTA + Delete */}
+            <div className="px-5 pb-5 flex items-center justify-between gap-3">
               <a
                 href={`mailto:${selected.email}?subject=Re: ${encodeURIComponent(selected.topic ?? "Your message to LocalSeat")}`}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
@@ -209,6 +222,37 @@ export function ContactSubmissionsClient({ initialSubmissions }: Props) {
                 </svg>
                 Reply by email
               </a>
+
+              {deleteConfirm ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">Delete this message?</span>
+                  <button
+                    onClick={() => executeDelete(selected.id)}
+                    disabled={isPending}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(false)}
+                    disabled={isPending}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeleteConfirm(true)}
+                  disabled={isPending}
+                  title="Delete this submission"
+                  className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>

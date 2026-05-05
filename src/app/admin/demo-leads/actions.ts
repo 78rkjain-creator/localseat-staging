@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSuperUser } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
@@ -153,6 +154,26 @@ export async function unmarkAsEmailed(email: string): Promise<void> {
     entityId:   email.toLowerCase(),
     details:    { email, emailedAt: null, action: "unmarked" },
   });
+}
+
+export async function deleteDemoLead(email: string): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return { error: auth.error };
+
+  await db.demoRegistration.deleteMany({
+    where: { email: email.toLowerCase() },
+  });
+
+  await createAuditLog({
+    userId:     auth.session.user.id,
+    action:     "DEMO_LEAD_DELETED",
+    entityType: "demo_registration",
+    entityId:   email.toLowerCase(),
+    details:    { email },
+  });
+
+  revalidatePath("/admin/demo-leads");
+  return {};
 }
 
 export async function exportDemoLeadsCSV(filters: LeadFilters = {}): Promise<string> {
