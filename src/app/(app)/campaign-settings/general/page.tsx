@@ -19,7 +19,20 @@ export default async function GeneralSettingsPage() {
 
   const campaign = await db.campaign.findUnique({
     where: { id: activeCampaignId },
-    select: { name: true, electionDate: true, fundraisingGoal: true, advanceVotingDates: true },
+    select: {
+      name: true,
+      electionDate: true,
+      fundraisingGoal: true,
+      advanceVotingDates: true,
+      officeAddressStreetNumber: true,
+      officeAddressStreetName: true,
+      officeAddressUnitNumber: true,
+      officeAddressCity: true,
+      officeAddressProvince: true,
+      officeAddressPostalCode: true,
+      officeAddressLat: true,
+      officeAddressLng: true,
+    },
   });
   if (!campaign) redirect("/dashboard");
 
@@ -34,6 +47,25 @@ export default async function GeneralSettingsPage() {
       date: d.toISOString().slice(0, 10),
       time: d.toISOString().slice(11, 16),
     }));
+
+  const hasOffice = !!(campaign.officeAddressStreetNumber && campaign.officeAddressStreetName);
+  const initialOfficeAddr = hasOffice
+    ? {
+        streetNumber: campaign.officeAddressStreetNumber!,
+        streetName:   campaign.officeAddressStreetName!,
+        unitNumber:   campaign.officeAddressUnitNumber ?? "",
+        city:         campaign.officeAddressCity ?? "",
+        province:     campaign.officeAddressProvince ?? "",
+        postalCode:   campaign.officeAddressPostalCode ?? "",
+        lat:          campaign.officeAddressLat != null ? String(campaign.officeAddressLat) : "",
+        lng:          campaign.officeAddressLng != null ? String(campaign.officeAddressLng) : "",
+        addressId:    "",
+      }
+    : null;
+
+  const initialOfficeDisplay = hasOffice
+    ? `${campaign.officeAddressStreetNumber} ${campaign.officeAddressStreetName}${campaign.officeAddressUnitNumber ? ` #${campaign.officeAddressUnitNumber}` : ""}, ${campaign.officeAddressCity}, ${campaign.officeAddressProvince} ${campaign.officeAddressPostalCode}`.trim()
+    : "";
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
@@ -59,6 +91,8 @@ export default async function GeneralSettingsPage() {
         electionDateValue={electionDateValue}
         fundraisingGoal={campaign.fundraisingGoal}
         advanceVotingDates={advanceVotingDates}
+        initialOfficeAddr={initialOfficeAddr}
+        initialOfficeDisplay={initialOfficeDisplay}
       />
 
       {(activeRole === "candidate" || activeRole === "campaign_manager") && (

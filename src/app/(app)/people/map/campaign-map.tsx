@@ -42,12 +42,19 @@ const ALL_ENABLED: EnabledLevels = {
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
+interface OfficePin {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
 interface Props {
   features: CampaignMapFeature[];
   wardBoundary: unknown | null;
   campaignId: string;
   totalCount: number;
   canCreate: boolean;
+  officePin?: OfficePin | null;
 }
 
 // ── Reverse geocode (client-side Mapbox API) ───────────────────────────────
@@ -122,7 +129,7 @@ function colorExpression(): unknown[] {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function CampaignMapClient({ features, wardBoundary, campaignId, totalCount, canCreate }: Props) {
+export function CampaignMapClient({ features, wardBoundary, campaignId, totalCount, canCreate, officePin }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -304,6 +311,40 @@ export function CampaignMapClient({ features, wardBoundary, campaignId, totalCou
             ],
           },
         });
+
+        // ── Campaign office pin ──────────────────────────────────────
+        if (officePin) {
+          const el = document.createElement("div");
+          el.style.cssText = [
+            "width:22px",
+            "height:22px",
+            "border-radius:5px",
+            "background:#8b5cf6",
+            "border:3px solid #ffffff",
+            "box-shadow:0 2px 6px rgba(0,0,0,0.3)",
+            "cursor:pointer",
+          ].join(";");
+
+          const officeMarker = new mapboxgl.default.Marker({ element: el })
+            .setLngLat([officePin.lng, officePin.lat])
+            .addTo(map);
+
+          el.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            new mapboxgl.default.Popup({ offset: 16, maxWidth: "220px" })
+              .setLngLat([officePin.lng, officePin.lat])
+              .setHTML(`
+                <div style="font-family:system-ui,sans-serif;padding:4px 2px;min-width:160px;">
+                  <p style="margin:0 0 2px;font-weight:700;font-size:13px;color:#0f172a;">Campaign office</p>
+                  <p style="margin:0;font-size:11px;color:#94a3b8;">${officePin.address}</p>
+                </div>
+              `)
+              .addTo(map);
+          });
+
+          // Remove marker on cleanup
+          map.once("remove", () => officeMarker.remove());
+        }
 
         // Click → popup
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -683,6 +724,15 @@ export function CampaignMapClient({ features, wardBoundary, campaignId, totalCou
               <span className="text-xs text-slate-600">{LEVEL_LABELS[key]}</span>
             </div>
           ))}
+          {officePin && (
+            <div className="flex items-center gap-2 pt-1 mt-0.5 border-t border-slate-100">
+              <span
+                className="h-3 w-3 rounded flex-shrink-0 border border-white shadow-sm flex-none"
+                style={{ backgroundColor: "#8b5cf6" }}
+              />
+              <span className="text-xs text-slate-600">Campaign office</span>
+            </div>
+          )}
         </div>
       </div>
 

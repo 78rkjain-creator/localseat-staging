@@ -3,10 +3,24 @@
 import { useActionState, useState } from "react";
 import { saveGeneralSettings } from "./actions";
 import type { GeneralSettingsState } from "./actions";
+import { AddressPicker } from "@/components/ui/address-picker";
+import type { AddressPickerResult } from "@/components/ui/address-picker";
 
 interface VotingDate {
   date: string;
   time: string;
+}
+
+interface OfficeAddr {
+  streetNumber: string;
+  streetName: string;
+  unitNumber: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  lat: string;
+  lng: string;
+  addressId: string;
 }
 
 interface Props {
@@ -14,13 +28,28 @@ interface Props {
   electionDateValue: string;
   fundraisingGoal: number | null;
   advanceVotingDates: VotingDate[];
+  initialOfficeAddr: OfficeAddr | null;
+  initialOfficeDisplay: string;
 }
 
 const initialState: GeneralSettingsState = {};
 
-export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal, advanceVotingDates }: Props) {
+function formatOfficeDisplay(a: OfficeAddr): string {
+  return `${a.streetNumber} ${a.streetName}${a.unitNumber ? ` #${a.unitNumber}` : ""}, ${a.city}, ${a.province} ${a.postalCode}`.trim();
+}
+
+export function GeneralSettingsForm({
+  name,
+  electionDateValue,
+  fundraisingGoal,
+  advanceVotingDates: initialAdvanceDates,
+  initialOfficeAddr,
+  initialOfficeDisplay,
+}: Props) {
   const [state, formAction, isPending] = useActionState(saveGeneralSettings, initialState);
-  const [vDates, setVDates] = useState<VotingDate[]>(advanceVotingDates);
+  const [vDates, setVDates] = useState<VotingDate[]>(initialAdvanceDates);
+  const [officeAddr, setOfficeAddr] = useState<OfficeAddr | null>(initialOfficeAddr);
+  const [showPicker, setShowPicker] = useState(!initialOfficeAddr);
 
   function addDate() {
     setVDates((d) => [...d, { date: "", time: "09:00" }]);
@@ -34,6 +63,58 @@ export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal, 
     setVDates((d) => d.map((entry, i) => i === idx ? { ...entry, [field]: value } : entry));
   }
 
+  function handleOfficeSelect(result: AddressPickerResult | null) {
+    if (!result) {
+      setOfficeAddr(null);
+      return;
+    }
+    if (result.type === "campaign") {
+      setOfficeAddr({
+        streetNumber: result.streetNumber,
+        streetName: result.streetName,
+        unitNumber: result.unitNumber ?? "",
+        city: result.city,
+        province: result.province,
+        postalCode: result.postalCode,
+        lat: "",
+        lng: "",
+        addressId: result.id,
+      });
+      setShowPicker(false);
+    } else if (result.type === "mapbox") {
+      setOfficeAddr({
+        streetNumber: result.streetNumber,
+        streetName: result.streetName,
+        unitNumber: "",
+        city: result.city,
+        province: result.province,
+        postalCode: result.postalCode,
+        lat: String(result.latitude),
+        lng: String(result.longitude),
+        addressId: "",
+      });
+      setShowPicker(false);
+    } else {
+      setOfficeAddr({
+        streetNumber: result.streetNumber,
+        streetName: result.streetName,
+        unitNumber: result.unitNumber ?? "",
+        city: result.city,
+        province: result.province,
+        postalCode: result.postalCode,
+        lat: "",
+        lng: "",
+        addressId: "",
+      });
+      setShowPicker(false);
+    }
+  }
+
+  function clearOffice() {
+    setOfficeAddr(null);
+    setShowPicker(true);
+  }
+
   return (
     <form action={formAction}>
       {/* Hidden count for advance voting dates */}
@@ -44,6 +125,17 @@ export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal, 
           <input type="hidden" name={`advanceTime_${i}`} value={entry.time} />
         </span>
       ))}
+
+      {/* Hidden office address fields */}
+      <input type="hidden" name="officeStreetNumber" value={officeAddr?.streetNumber ?? ""} />
+      <input type="hidden" name="officeStreetName"   value={officeAddr?.streetName ?? ""} />
+      <input type="hidden" name="officeUnitNumber"   value={officeAddr?.unitNumber ?? ""} />
+      <input type="hidden" name="officeCity"         value={officeAddr?.city ?? ""} />
+      <input type="hidden" name="officeProvince"     value={officeAddr?.province ?? ""} />
+      <input type="hidden" name="officePostalCode"   value={officeAddr?.postalCode ?? ""} />
+      <input type="hidden" name="officeAddressLat"   value={officeAddr?.lat ?? ""} />
+      <input type="hidden" name="officeAddressLng"   value={officeAddr?.lng ?? ""} />
+      <input type="hidden" name="officeAddressId"    value={officeAddr?.addressId ?? ""} />
 
       <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
 
@@ -104,6 +196,41 @@ export function GeneralSettingsForm({ name, electionDateValue, fundraisingGoal, 
           <p className="text-xs text-slate-400 mt-1.5">
             Shown on the finance dashboard as a progress target.
           </p>
+        </div>
+
+        {/* Office address */}
+        <div className="px-5 py-5">
+          <p className="text-sm font-semibold text-slate-700 mb-1.5">Office address</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Shown as a pin on the contact map.
+          </p>
+
+          {officeAddr && !showPicker ? (
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+              <div className="h-6 w-6 rounded bg-violet-100 flex items-center justify-center flex-shrink-0">
+                <svg className="h-3.5 w-3.5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <p className="text-sm text-slate-800 flex-1 leading-snug">{formatOfficeDisplay(officeAddr)}</p>
+              <button
+                type="button"
+                onClick={clearOffice}
+                className="text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors flex-shrink-0"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <AddressPicker onSelect={handleOfficeSelect} />
+          )}
+
+          {initialOfficeDisplay && !officeAddr && (
+            <p className="text-xs text-slate-400 mt-1.5">
+              Previously: {initialOfficeDisplay}
+            </p>
+          )}
         </div>
 
         {/* Advance voting dates */}

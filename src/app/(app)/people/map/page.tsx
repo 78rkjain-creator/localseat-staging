@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCampaignMapPeople } from "@/lib/map";
+import { db } from "@/lib/db";
 import { CampaignMapClient } from "./campaign-map";
 import { isContactMapEnabled } from "@/lib/plan-limits";
 import { UpgradeCard } from "@/components/upgrade-card";
@@ -43,6 +44,36 @@ export default async function ContactMapPage() {
 
   const { features, wardBoundary, totalCount } = await getCampaignMapPeople(activeCampaignId);
 
+  const campaignRow = await db.campaign.findUnique({
+    where: { id: activeCampaignId },
+    select: {
+      officeAddressLat:         true,
+      officeAddressLng:         true,
+      officeAddressStreetNumber: true,
+      officeAddressStreetName:   true,
+      officeAddressUnitNumber:   true,
+      officeAddressCity:         true,
+      officeAddressProvince:     true,
+      officeAddressPostalCode:   true,
+    },
+  });
+
+  const officePin =
+    campaignRow?.officeAddressLat != null && campaignRow?.officeAddressLng != null
+      ? {
+          lat: campaignRow.officeAddressLat,
+          lng: campaignRow.officeAddressLng,
+          address: [
+            campaignRow.officeAddressStreetNumber,
+            campaignRow.officeAddressStreetName,
+            campaignRow.officeAddressUnitNumber ? `#${campaignRow.officeAddressUnitNumber}` : null,
+            campaignRow.officeAddressCity,
+            campaignRow.officeAddressProvince,
+            campaignRow.officeAddressPostalCode,
+          ].filter(Boolean).join(" "),
+        }
+      : null;
+
   if (features.length === 0) {
     return (
       <div className="px-4 sm:px-6 py-12 max-w-lg mx-auto text-center">
@@ -66,6 +97,7 @@ export default async function ContactMapPage() {
       campaignId={activeCampaignId}
       totalCount={totalCount}
       canCreate={canCreate}
+      officePin={officePin}
     />
   );
 }

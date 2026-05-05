@@ -190,6 +190,14 @@ model Campaign {
   dailySummaryEmail    String?
   dataRetentionMonths  Int?
   advanceVotingDates   DateTime[]
+  officeAddressStreetNumber String?
+  officeAddressStreetName   String?
+  officeAddressUnitNumber   String?
+  officeAddressCity         String?
+  officeAddressProvince     String?
+  officeAddressPostalCode   String?
+  officeAddressLat          Float?
+  officeAddressLng          Float?
   isActive       Boolean   @default(true)
   plan           PlanTier  @default(bench)
   planActivated  Boolean   @default(true)

@@ -53,13 +53,61 @@ export async function saveGeneralSettings(
       if (!isNaN(d.getTime())) advanceVotingDates.push(d);
     }
   }
-  // Sort ascending before save
   advanceVotingDates.sort((a, b) => a.getTime() - b.getTime());
+
+  // Office address — structured fields from hidden inputs
+  const officeStreetNumber = (formData.get("officeStreetNumber") as string | null)?.trim() || null;
+  const officeStreetName   = (formData.get("officeStreetName")   as string | null)?.trim() || null;
+  const officeUnitNumber   = (formData.get("officeUnitNumber")   as string | null)?.trim() || null;
+  const officeCity         = (formData.get("officeCity")         as string | null)?.trim() || null;
+  const officeProvince     = (formData.get("officeProvince")     as string | null)?.trim() || null;
+  const officePostalCode   = (formData.get("officePostalCode")   as string | null)?.trim() || null;
+  const officeAddressId    = (formData.get("officeAddressId")    as string | null)?.trim() || null;
+  const officeLatRaw       = (formData.get("officeAddressLat")   as string | null)?.trim() || null;
+  const officeLngRaw       = (formData.get("officeAddressLng")   as string | null)?.trim() || null;
+
+  const hasOfficeAddress = !!(officeStreetNumber && officeStreetName);
+
+  let officeLat: number | null = null;
+  let officeLng: number | null = null;
+
+  if (hasOfficeAddress) {
+    if (officeLatRaw && officeLngRaw) {
+      const parsedLat = parseFloat(officeLatRaw);
+      const parsedLng = parseFloat(officeLngRaw);
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        officeLat = parsedLat;
+        officeLng = parsedLng;
+      }
+    } else if (officeAddressId) {
+      const addr = await db.address.findUnique({
+        where: { id: officeAddressId },
+        select: { lat: true, lng: true },
+      });
+      if (addr?.lat != null && addr?.lng != null) {
+        officeLat = addr.lat;
+        officeLng = addr.lng;
+      }
+    }
+  }
 
   try {
     await db.campaign.update({
       where: { id: activeCampaignId },
-      data: { name, electionDate, fundraisingGoal, advanceVotingDates },
+      data: {
+        name,
+        electionDate,
+        fundraisingGoal,
+        advanceVotingDates,
+        officeAddressStreetNumber: hasOfficeAddress ? officeStreetNumber : null,
+        officeAddressStreetName:   hasOfficeAddress ? officeStreetName   : null,
+        officeAddressUnitNumber:   hasOfficeAddress ? (officeUnitNumber  || null) : null,
+        officeAddressCity:         hasOfficeAddress ? officeCity         : null,
+        officeAddressProvince:     hasOfficeAddress ? officeProvince     : null,
+        officeAddressPostalCode:   hasOfficeAddress ? officePostalCode   : null,
+        officeAddressLat:          hasOfficeAddress ? officeLat          : null,
+        officeAddressLng:          hasOfficeAddress ? officeLng          : null,
+      },
     });
   } catch {
     return { error: "Failed to save settings. Please try again." };
