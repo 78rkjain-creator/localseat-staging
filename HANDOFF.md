@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: May 4, 2026 — Batch 15: 5-tier restructure (Bench/Chair/Podium/Stage/Arena), promo codes, email verification moved post-payment, campaign audit log, admin user search, tag/custom field limits, marketing site 5-card pricing, security headers update, PWA prompt fix._
+_Last updated: May 5, 2026 — Batch 16: Street walk canvassing, leads management + bulk delete, Stripe live mode, marketing site comparison modal, contact form delete, admin improvements._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -21,7 +21,7 @@ Lightweight Canada-focused municipal campaign CRM and canvassing platform. Next.
 - **Auth:** NextAuth.js v4, credentials provider
 - **Email:** Nodemailer v8, Hostinger SMTP
 - **SMS:** Telnyx (decided, not built)
-- **Payments:** Stripe (test mode deployed, go-live blocked on bank account activation)
+- **Payments:** Stripe (live mode — payments active as of May 4, 2026)
 - **Maps:** Mapbox GL JS
 - **Production:** Hostinger VPS (app.localseat.io)
 - **Demo:** Hostinger VPS (demo.localseat.io)
@@ -101,7 +101,10 @@ NEXT_PUBLIC_STRIPE_ENABLED="false"
 DATABASE_URL="postgresql://localseat:LS_Prod_2026x@localhost:5432/localseat_prod"
 NEXTAUTH_URL="https://app.localseat.io"
 DEMO_WEBHOOK_SECRET="localseat-demo-webhook-2026"
-NEXT_PUBLIC_STRIPE_ENABLED="false"
+NEXT_PUBLIC_STRIPE_ENABLED="true"           # live mode — payments active
+STRIPE_SECRET_KEY="sk_live_..."             # live secret key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_..."  # live publishable key
+STRIPE_WEBHOOK_SECRET="whsec_03fLlyEglpn8E0NMWCywZJy952Ckbdsa"
 MAINTENANCE_MODE="false"    # Set to "true" for hard maintenance lockout (no DB needed)
 CRON_SECRET="localseat-cron-2026-secret"
 ```
@@ -401,22 +404,23 @@ All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 ## Stripe Integration
 
 ### Status
-- Code deployed, webhook configured, test keys active
-- `NEXT_PUBLIC_STRIPE_ENABLED=false` on production — payments not live yet
-- Blocked on bank account activation → then switch to live keys
+**Live mode — payments active as of May 4, 2026.**
+- `NEXT_PUBLIC_STRIPE_ENABLED=true` on production
+- Live keys and live webhook in production `.env`
+- Webhook signing secret: `whsec_03fLlyEglpn8E0NMWCywZJy952Ckbdsa`
 
 ### How it works
 1. User registers → creates campaign (`planActivated: false`)
 2. Layout gate redirects unpaid campaigns to `/onboarding/choose-plan`
 3. User selects a plan → app creates a Stripe Checkout Session with dynamic pricing from PlatformSettings
-4. User pays on Stripe's hosted checkout page (test card: `4242 4242 4242 4242`)
+4. User pays on Stripe's hosted checkout page
 5. Stripe webhook (`checkout.session.completed`) fires → app activates campaign, snapshots limits/features, sets amountPaid
 6. User redirected to success page → session refreshed → dashboard accessible
 
 ### Dynamic pricing
 - No pre-created Stripe prices — amount is set at checkout time from `{tier}_sale_price` (or `{tier}_regular_price` if no sale)
-- Five Stripe products exist (test mode): Bench `prod_UREJUkGMu182BI`, Chair `prod_URELmxFyywN5r7`, Podium `prod_URELAaHM1dfYNA`, Stage `prod_US3T7yDLS1Y5Df`, Arena `prod_US3U6mI3azdBdZ`
-- Product IDs in `src/lib/stripe.ts` as `STRIPE_PRODUCTS` map — must be replaced with live product IDs when switching to live mode
+- Five Stripe products (same product IDs in both test and live mode): Bench `prod_UREJUkGMu182BI`, Chair `prod_URELmxFyywN5r7`, Podium `prod_URELAaHM1dfYNA`, Stage `prod_US3T7yDLS1Y5Df`, Arena `prod_US3U6mI3azdBdZ`
+- Product IDs in `src/lib/stripe.ts` as `STRIPE_PRODUCTS` map
 
 ### Upgrades
 - Upgrade cost = target plan price − amountPaid (campaigns pay the difference only)
@@ -440,31 +444,31 @@ All controlled via PlatformSettings keys `{tier}_feature_{key}`:
 
 ### Environment variables (production)
 ```
-STRIPE_SECRET_KEY=sk_test_...          # swap to sk_live_... when ready
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...  # swap to pk_live_... when ready
-STRIPE_WEBHOOK_SECRET=whsec_...        # production webhook signing secret
-NEXT_PUBLIC_STRIPE_ENABLED=false       # set to true when ready to accept payments
+STRIPE_SECRET_KEY=sk_live_...                     # live secret key (active)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...    # live publishable key (active)
+STRIPE_WEBHOOK_SECRET=whsec_03fLlyEglpn8E0NMWCywZJy952Ckbdsa  # live webhook signing secret
+NEXT_PUBLIC_STRIPE_ENABLED=true                   # payments live
+```
+
+Local dev (`.env`):
+```
+NEXT_PUBLIC_STRIPE_ENABLED=false   # keeps dev in instant-activate mode
 ```
 
 ### Webhook
 - Endpoint: `https://app.localseat.io/api/stripe/webhook`
 - Events: `checkout.session.completed`
-- Configured in Stripe dashboard (test mode)
+- Configured in Stripe dashboard (live mode)
 - Signing secret in production `.env`
 - Route added to proxy public paths and maintenance-exempt paths
 
-### Go-live checklist (when bank account is activated)
-1. Get live keys from Stripe dashboard (`sk_live_...`, `pk_live_...`)
-2. Create five products in Stripe live mode (Bench, Chair, Podium, Stage, Arena) — copy new product IDs
-3. Create webhook endpoint in live mode → `https://app.localseat.io/api/stripe/webhook` → get new signing secret
-4. Update `src/lib/stripe.ts` `STRIPE_PRODUCTS` map with live product IDs
-5. SSH into VPS, update `/var/www/localseat/.env`:
-   - Replace `sk_test_...` with `sk_live_...`
-   - Replace `pk_test_...` with `pk_live_...`
-   - Replace `STRIPE_WEBHOOK_SECRET` with live signing secret
-   - Change `NEXT_PUBLIC_STRIPE_ENABLED=false` to `true`
-6. Deploy: `./deploy.sh`
-7. Test with a real card — verify webhook fires, campaign activates, dashboard accessible
+### Go-live checklist — COMPLETED May 4, 2026
+1. ✅ Got live keys from Stripe dashboard (`sk_live_...`, `pk_live_...`)
+2. ✅ Verified product IDs are same in test and live — no code change needed
+3. ✅ Created webhook endpoint in live mode → `https://app.localseat.io/api/stripe/webhook` → got signing secret
+4. ✅ Updated production `.env` with live keys and webhook secret
+5. ✅ Set `NEXT_PUBLIC_STRIPE_ENABLED=true` in production `.env`
+6. ✅ Deployed and verified webhook fires, campaign activates, dashboard accessible
 
 ---
 
@@ -505,6 +509,88 @@ Affiliate/referral promo codes that apply a percentage discount at Stripe Checko
 
 ### Seed
 `LAUNCH2026` — 5% discount, referrer: Test Referrer / referrer@example.com, no max uses, no Stripe coupon (created lazily). Added at end of `prisma/seed.ts`.
+
+---
+
+## Street Walk Canvassing
+
+A walk-list-free canvassing mode for canvassing streets not yet in the system. Available to all plan tiers.
+
+### Route
+`/canvassing/street-walk` — accessible to canvasser, field_organizer, campaign_manager, candidate, data_manager.
+
+### Two-phase flow
+**Phase 1 — Street context setup:** canvasser enters street name, city, province, and optional postal prefix. City/province pre-filled from campaign municipality/province fields. Tapping "Start canvassing →" locks the context and advances to Phase 2.
+
+**Phase 2 — Rapid door entry:**
+1. Canvasser types a house number → taps "Check address"
+2. Server checks if address exists in the campaign DB (exact match on streetNumber + city, fuzzy match on normalized street name)
+3. If address exists: shows existing residents' names and support level buttons per person
+4. If address is new: shows a blank "new person" form with name inputs + support level buttons
+5. Canvasser records support levels, sign/volunteer/donor interest, and notes
+6. "Save and next →" creates/updates all records and clears house number for the next door
+
+### What gets created on save
+- **Address** — created if not found; `wardStatus: not_checked`, no geocoding during street walk
+- **Household** — one per address
+- **Person** — created for each new person entered; `listSource: canvass`, `includeInWalkLists: true`, `field-entry` tag applied (silently skipped if tag not found)
+- **CanvassResponse** — created when a support level is set; updates `Person.supportLevel`
+- **OutreachLog** — one per person per save
+- Duplicate prevention: checks first+last name (case-insensitive) at same address before creating
+
+### System list pattern
+Street walk requires a non-null `assignmentId` on `CanvassResponse`. Solved by:
+- Lazy-creating a "Street Walk (System)" `CanvassList` per campaign (only once)
+- Lazy-creating one `CanvassAssignment` per canvasser per campaign (reused across sessions)
+- All street-walk responses are linked to this assignment for data consistency
+
+### Street name normalization
+`normalizeStreetName()` strips common suffix words (street/st/avenue/ave/road/rd/drive/dr/boulevard/blvd/crescent/cres/court/ct/place/pl/lane/ln/way/wy) before fuzzy comparison. The original typed value is stored verbatim.
+
+### Key files
+- `src/app/(app)/canvassing/street-walk/actions.ts` — `checkAddress()` and `saveStreetWalkEntry()` server actions
+- `src/app/(app)/canvassing/street-walk/page.tsx` — server component with session + role check
+- `src/app/(app)/canvassing/street-walk/street-walk-screen.tsx` — client component, two-phase UI
+- `src/app/(app)/canvassing/page.tsx` — Street Walk card added to canvasser and manager views
+
+---
+
+## Leads Management
+
+### Admin leads page at `/admin/demo-leads`
+Unified view of all inbound leads: marketing site demo registrations and abandoned app signups. Accessible to super_user and super_admin only. Renamed from "Demo Leads" → "Leads" throughout sidebar, admin index card, and page title.
+
+### Two sources
+- **Demo** — marketing site demo registration form (`demo.localseat.io`)
+- **App** — abandoned app registration (user started signup but never completed plan selection)
+
+### Capture mechanism
+Both sources write to the `DemoRegistration` table. App registrations are captured in `src/app/(auth)/register/actions.ts` via an upsert (update or insert) on `DemoRegistration` whenever a user completes the registration form, with `source: "app"`. Old records with `source: "app_signup"` are handled by backward-compat logic in the groupBy query.
+
+### Source field normalization
+- New records: `source: "app"` (standardized in register action, May 4 2026)
+- Old records in DB: `source: "app_signup"` — groupBy logic treats both as `"app"` in output
+- No migration needed — `source String?` already existed
+
+### Source pills
+- Blue "Demo" pill — marketing site registrations
+- Purple "App" pill — abandoned app registrations (both `"app"` and legacy `"app_signup"`)
+
+### Delete functionality
+- Inline confirm pattern: trash icon → "Delete? Yes / No" in same table row
+- Hard delete (`deleteMany` by email — removes all DemoRegistration rows for that email)
+- Restricted to super_user / super_admin
+- Audit logged as `DEMO_LEAD_DELETED`
+- Contact submissions (`/admin/contact-submissions`) have the same delete pattern (single row by id)
+
+### Key files
+- `src/app/admin/demo-leads/actions.ts` — `getDemoLeads`, `markAsEmailed`, `unmarkAsEmailed`, `deleteDemoLead`, `exportDemoLeadsCSV`
+- `src/app/admin/demo-leads/leads-client.tsx` — table with inline delete confirm, source pills
+- `src/app/admin/demo-leads/page.tsx` — server wrapper
+- `src/app/admin/contact-submissions/actions.ts` — `deleteContactSubmission`
+- `src/app/admin/contact-submissions/contact-submissions-client.tsx` — detail panel with delete in footer
+- `src/components/layout/admin-sidebar.tsx` — nav label "Leads"
+- `src/app/admin/page.tsx` — admin index card renamed "Demo & App Signups"
 
 ---
 
@@ -993,7 +1079,8 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
   people/voters/page.tsx
   team/actions.ts (team server actions — add, remove, restore, list members)
   team/classify-actions.ts, team/classify-modal.tsx (thin re-exports)
-/src/app/admin/campaigns, users, audit-log, export, demo-leads, settings, promo-codes
+/src/app/(app)/canvassing/street-walk/ (page.tsx, street-walk-screen.tsx, actions.ts)
+/src/app/admin/campaigns, users, audit-log, export, demo-leads, contact-submissions, settings, promo-codes
 /src/app/onboarding/choose-plan, create-campaign
 /src/app/api/cron/daily-summary/route.ts
 /src/app/api/dashboard/canvass-activity/route.ts
@@ -1196,6 +1283,18 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Tag cap raised to 18 (from 10); custom fields — existing 5-field cap confirmed; limits noted in Key Features | May 3, 2026 |
 | Marketing site pricing section — 5-card layout (Bench/Chair/Podium/Stage/Arena); Podium highlighted as most popular; prices fetched from `/api/pricing` dynamically | May 4, 2026 |
 | Security headers update — CSP updated for new Mapbox endpoint patterns; Permissions-Policy refined | May 4, 2026 |
+| Stripe live mode — switched from test to live keys; `NEXT_PUBLIC_STRIPE_ENABLED=true` on production; live webhook configured with signing secret `whsec_03fLlyEglpn8E0NMWCywZJy952Ckbdsa`; product IDs unchanged (same in test and live) | May 4, 2026 |
+| Marketing site comparison modal — feature comparison table modal accessible from pricing cards; mobile-friendly overlay; closes on backdrop click | May 4, 2026 |
+| Marketing site footer fixes — consistent link structure, corrected URLs | May 4, 2026 |
+| Marketing site about page — dynamic pricing pulled from `/api/pricing`, shown in context of product description | May 4, 2026 |
+| Marketing site terms — plan duration and billing language updated to reflect live payments | May 4, 2026 |
+| Street walk canvassing at `/canvassing/street-walk` — two-phase mobile UI (street context → door entry); creates Address, Household, Person, CanvassResponse on save; lazy "Street Walk (System)" list + per-canvasser assignment; all plan tiers | May 4, 2026 |
+| Street walk card on canvassing hub — added to canvasser view (above empty state) and manager view; amber styling with location pin icon | May 4, 2026 |
+| Admin leads page renamed — "Demo Leads" → "Leads" across sidebar nav, admin index card, page title, and description | May 4, 2026 |
+| Leads page unified source display — App (purple pill) and Demo (blue pill) source pills in leads table; backward compat for legacy `"app_signup"` records | May 4, 2026 |
+| App signup source normalized — register action now writes `source: "app"` (was `"app_signup"`); groupBy logic handles both for backward compat | May 4, 2026 |
+| Demo leads delete — inline confirm pattern (trash icon → "Delete? Yes / No"); hard delete by email (`deleteMany`); super_user/super_admin only; audit logged | May 4, 2026 |
+| Contact submissions delete — same inline confirm pattern in detail panel footer; hard delete by id; super_user/super_admin only; audit logged | May 4, 2026 |
 
 ### High Priority
 _(none)_
@@ -1204,7 +1303,6 @@ _(none)_
 | Item | Effort |
 |---|---|
 | CSV splitter + multi-batch session UI (Prompt C) — client-side splitter for >10k row imports, batches of ~9k rows, session at /import/voters/sessions/[id] with progress tracking. Currently the row cap rejects oversized files — splitter would offer to chunk automatically | Medium — ~5.5h est. |
-| Stripe go-live — test mode fully deployed; blocked on bank account activation. When ready: swap to live keys, create live products/webhook, set NEXT_PUBLIC_STRIPE_ENABLED=true | Small (config only) |
 | Two-factor authentication (2FA) | Medium |
 | UI/layout polish pass | Medium |
 | Official voter list reconciliation engine — address normalization, fuzzy name matching, field-level merge, manual review, audit trail | Large |
@@ -1224,13 +1322,12 @@ _(none)_
 ---
 
 ## Roadmap
-1. Stripe go-live (bank account activation → swap to live keys → enable payments)
-2. Marketing site redesign (deferred — ship current, revisit after customer feedback)
-3. Two-factor authentication (2FA)
-4. Simple automation rules (soft yes → auto follow-up)
-5. Public volunteer signup / petition pages → feeds CRM
-6. Automated PostgreSQL backups
-7. Demo instance isolation
+1. Marketing site redesign (deferred — ship current, revisit after customer feedback)
+2. Two-factor authentication (2FA)
+3. Simple automation rules (soft yes → auto follow-up)
+4. Public volunteer signup / petition pages → feeds CRM
+5. Automated PostgreSQL backups
+6. Demo instance isolation
 
 ### Defined — Ready to Build
 | Item | Effort |
@@ -1249,11 +1346,11 @@ Online donations, mass texting, email broadcasts, predictive scoring, advanced a
 4. Canvasser: priya.nair@example.com / password
 5. Admin: superuser@localseat.io / password
 6. Bench plan test: starter.candidate@example.com / password (Bench plan restrictions)
-7. Stripe local testing: ensure `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_ENABLED=true`, and `STRIPE_WEBHOOK_SECRET` are in `.env`, then run `C:\stripe\stripe.exe listen --forward-to localhost:3000/api/stripe/webhook` in a separate terminal
+7. **Stripe is live on production** — local dev keeps `NEXT_PUBLIC_STRIPE_ENABLED=false` for instant-activate dev mode. To test Stripe locally: set `NEXT_PUBLIC_STRIPE_ENABLED=true` + live or test keys in `.env`, then run `C:\stripe\stripe.exe listen --forward-to localhost:3000/api/stripe/webhook` in a separate terminal
 8. All new dev → localseat-staging repo first
 9. **Sync staging Neon DB** after any new migration: `$env:DATABASE_URL='<neon-connection-string>' ; npx prisma migrate deploy`
 10. Test on staging before production deploy
 11. Production deploy: `git push origin main && git push staging main` → SSH → `cd /var/www/localseat && ./deploy.sh` → `cd /var/www/demo && ./deploy.sh`
-12. Marketing site deploy (if changed): `scp marketing-site/*.html root@2.24.212.25:/var/www/marketing/` — pricing section is 5-card layout (Bench/Chair/Podium/Stage/Arena), Podium highlighted; prices fetched dynamically from `/api/pricing`
+12. Marketing site deploy (if changed): `scp "C:\Users\rkjai\OneDrive\Desktop\marketing-site\*.html" root@2.24.212.25:/var/www/marketing/` — pricing section is 5-card layout (Bench/Chair/Podium/Stage/Arena), Podium highlighted; prices fetched dynamically from `/api/pricing`; comparison modal available on pricing page
 13. Run `npx prisma generate` after any migration
 14. After any `prisma migrate dev` reset, run backfill.sql to create team Person records (seed data doesn't exist when migrations run)

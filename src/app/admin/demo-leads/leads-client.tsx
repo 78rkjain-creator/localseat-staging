@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import type { DemoLead, LeadFilters } from "./actions";
-import { markAsEmailed, unmarkAsEmailed, exportDemoLeadsCSV, deleteDemoLead } from "./actions";
+import { markAsEmailed, unmarkAsEmailed, exportDemoLeadsCSV, deleteDemoLeads } from "./actions";
 
 const OFFICE_OPTIONS = [
   "Ward Councillor",
@@ -16,16 +16,16 @@ interface Props {
 }
 
 export function LeadsClient({ initialLeads }: Props) {
-  const [leads, setLeads]             = useState<DemoLead[]>(initialLeads);
-  const [search, setSearch]           = useState("");
-  const [emailed, setEmailed]         = useState<LeadFilters["emailed"]>("all");
-  const [officeType, setOfficeType]   = useState("");
-  const [dateFrom, setDateFrom]       = useState("");
-  const [dateTo, setDateTo]           = useState("");
-  const [isPending, startTransition]  = useTransition();
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [leads, setLeads]            = useState<DemoLead[]>(initialLeads);
+  const [search, setSearch]          = useState("");
+  const [emailed, setEmailed]        = useState<LeadFilters["emailed"]>("all");
+  const [officeType, setOfficeType]  = useState("");
+  const [dateFrom, setDateFrom]      = useState("");
+  const [dateTo, setDateTo]          = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [checkedEmails, setCheckedEmails] = useState<Set<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // Client-side filter (data is already loaded server-side; this handles interactive updates)
   const filtered = useMemo(() => {
     return leads.filter((lead) => {
       if (search) {
@@ -49,6 +49,50 @@ export function LeadsClient({ initialLeads }: Props) {
       return true;
     });
   }, [leads, search, emailed, officeType, dateFrom, dateTo]);
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((l) => checkedEmails.has(l.email));
+  const someFilteredSelected = filtered.some((l) => checkedEmails.has(l.email));
+  const selCount = checkedEmails.size;
+  const selLabel = selCount === 1 ? "1 lead" : `${selCount} leads`;
+
+  function clearSelection() {
+    setCheckedEmails(new Set());
+    setConfirmingDelete(false);
+  }
+
+  // Clearing selection when filters change keeps the visual state consistent
+  function updateFilter(fn: () => void) {
+    fn();
+    setCheckedEmails(new Set());
+    setConfirmingDelete(false);
+  }
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setCheckedEmails(new Set());
+    } else {
+      setCheckedEmails(new Set(filtered.map((l) => l.email)));
+    }
+    setConfirmingDelete(false);
+  }
+
+  function toggleSelectOne(email: string) {
+    setCheckedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) next.delete(email); else next.add(email);
+      return next;
+    });
+    setConfirmingDelete(false);
+  }
+
+  function executeBulkDelete() {
+    startTransition(async () => {
+      await deleteDemoLeads(Array.from(checkedEmails));
+      setLeads((prev) => prev.filter((l) => !checkedEmails.has(l.email)));
+      setCheckedEmails(new Set());
+      setConfirmingDelete(false);
+    });
+  }
 
   function toggleEmailed(lead: DemoLead) {
     startTransition(async () => {
@@ -90,22 +134,6 @@ export function LeadsClient({ initialLeads }: Props) {
     });
   }
 
-  function confirmDelete(email: string) {
-    setDeleteConfirm(email);
-  }
-
-  function cancelDelete() {
-    setDeleteConfirm(null);
-  }
-
-  function executeDelete(email: string) {
-    startTransition(async () => {
-      await deleteDemoLead(email);
-      setLeads((prev) => prev.filter((l) => l.email !== email));
-      setDeleteConfirm(null);
-    });
-  }
-
   return (
     <div>
       {/* Filters */}
@@ -114,13 +142,13 @@ export function LeadsClient({ initialLeads }: Props) {
           type="text"
           placeholder="Search name, email, municipality…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => updateFilter(() => setSearch(e.target.value))}
           className="h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
         />
 
         <select
           value={emailed ?? "all"}
-          onChange={(e) => setEmailed(e.target.value as LeadFilters["emailed"])}
+          onChange={(e) => updateFilter(() => setEmailed(e.target.value as LeadFilters["emailed"]))}
           className="h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="all">All — emailed status</option>
@@ -130,7 +158,7 @@ export function LeadsClient({ initialLeads }: Props) {
 
         <select
           value={officeType}
-          onChange={(e) => setOfficeType(e.target.value)}
+          onChange={(e) => updateFilter(() => setOfficeType(e.target.value))}
           className="h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
           <option value="">All office types</option>
@@ -143,14 +171,14 @@ export function LeadsClient({ initialLeads }: Props) {
           <input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => updateFilter(() => setDateFrom(e.target.value))}
             className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
             title="From date"
           />
           <input
             type="date"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => updateFilter(() => setDateTo(e.target.value))}
             className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
             title="To date"
           />
@@ -181,6 +209,54 @@ export function LeadsClient({ initialLeads }: Props) {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selCount > 0 && (
+        <div className="mb-3 flex items-center justify-between px-4 py-2.5 bg-slate-900 rounded-xl">
+          {confirmingDelete ? (
+            <>
+              <p className="text-sm text-white font-medium">
+                Permanently delete {selLabel}? This cannot be undone.
+              </p>
+              <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={isPending}
+                  className="text-sm text-slate-300 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeBulkDelete}
+                  disabled={isPending}
+                  className="text-sm font-medium px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? "Deleting…" : `Delete ${selLabel}`}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-white font-medium">{selCount} selected</p>
+              <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                <button
+                  onClick={clearSelection}
+                  className="text-sm text-slate-300 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  disabled={isPending}
+                  className="text-sm font-medium px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                >
+                  Delete {selLabel}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
         {filtered.length === 0 ? (
@@ -190,6 +266,16 @@ export function LeadsClient({ initialLeads }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="w-10 px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={(el) => { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                      aria-label="Select all"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Name</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Email</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Phone</th>
@@ -200,12 +286,26 @@ export function LeadsClient({ initialLeads }: Props) {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">Last seen</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Source</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
-                  <th className="px-4 py-3 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((lead) => (
-                  <tr key={lead.email} className="hover:bg-slate-50/50 transition-colors">
+                  <tr
+                    key={lead.email}
+                    className={[
+                      "transition-colors",
+                      checkedEmails.has(lead.email) ? "bg-brand-50" : "hover:bg-slate-50/50",
+                    ].join(" ")}
+                  >
+                    <td className="w-10 px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={checkedEmails.has(lead.email)}
+                        onChange={() => toggleSelectOne(lead.email)}
+                        className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                        aria-label={`Select ${lead.firstName} ${lead.lastName}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span>{lead.firstName} {lead.lastName}</span>
@@ -268,38 +368,6 @@ export function LeadsClient({ initialLeads }: Props) {
                           </svg>
                         )}
                       </button>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {deleteConfirm === lead.email ? (
-                        <div className="flex items-center gap-1 justify-end">
-                          <span className="text-xs text-slate-500 whitespace-nowrap">Delete?</span>
-                          <button
-                            onClick={() => executeDelete(lead.email)}
-                            disabled={isPending}
-                            className="text-xs font-medium px-2 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={cancelDelete}
-                            disabled={isPending}
-                            className="text-xs font-medium px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => confirmDelete(lead.email)}
-                          disabled={isPending}
-                          title="Delete this lead"
-                          className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))}

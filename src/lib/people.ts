@@ -26,12 +26,13 @@ export interface PeopleListFilters {
   needsClassification?: boolean; // wardStatus = not_checked AND has address
   notGeocoded?: boolean;         // address exists but lat/lng null
   volunteerInterest?: boolean;   // has a canvass response with volunteerInterest = true
+  minTouches?: number;           // minimum total touch count (canvass + outreach)
   page?: number;
 }
 
 const PEOPLE_PAGE_SIZE = 100;
 
-export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, wardIn, isOutOfDistrict, excludeAnonymized, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, page = 1 }: PeopleListFilters) {
+export async function getPeopleList({ campaignId, q, tagId, supportFilter, contactedAfter, customFieldFilters, listSource, wardIn, isOutOfDistrict, excludeAnonymized, missingAddress, missingPhone, missingEmail, needsClassification, notGeocoded, volunteerInterest, minTouches, page = 1 }: PeopleListFilters) {
   const andFilters: Prisma.PersonWhereInput[] = [];
 
   if (supportFilter === "supporting") {
@@ -123,6 +124,32 @@ export async function getPeopleList({ campaignId, q, tagId, supportFilter, conta
         { volunteerRecords: { some: { deletedAt: null } } },
       ],
     });
+  }
+
+  // Touch filter: raw SQL because computing per-person touch counts in Prisma would require
+  // N+1 queries. Canvass responses are joined via assignment→list→campaign. EventAttendee
+  // is excluded here because it links by userId (not personId) and is only set for team members.
+  if (minTouches !== undefined && minTouches > 0) {
+    const qualifying = await db.$queryRaw<{ id: string }[]>`
+      SELECT p.id FROM people p
+      LEFT JOIN (
+        SELECT cr."personId", COUNT(*)::int AS n
+        FROM canvass_responses cr
+        JOIN canvass_assignments ca ON cr."assignmentId" = ca.id
+        JOIN canvass_lists cl ON ca."canvassListId" = cl.id
+        WHERE cl."campaignId" = ${campaignId}
+        GROUP BY cr."personId"
+      ) c ON c."personId" = p.id
+      LEFT JOIN (
+        SELECT "personId", COUNT(*)::int AS n
+        FROM outreach_logs
+        WHERE "campaignId" = ${campaignId} AND "deletedAt" IS NULL
+        GROUP BY "personId"
+      ) o ON o."personId" = p.id
+      WHERE p."campaignId" = ${campaignId} AND p."deletedAt" IS NULL
+        AND COALESCE(c.n, 0) + COALESCE(o.n, 0) >= ${minTouches}
+    `;
+    andFilters.push({ id: { in: qualifying.map((r) => r.id) } });
   }
 
   const where: Prisma.PersonWhereInput = {

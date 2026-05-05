@@ -13,6 +13,7 @@ import {
   canViewTeam,
   canManageVoterList,
   canAccessImportHub,
+  canViewReports,
 } from "@/lib/permissions";
 import { ClipboardList, ShieldCheck, Settings } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
@@ -366,7 +367,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
         ? [
             {
               href: "/events",
-              label: "Events",
+              label: "Events & Scheduling",
               icon: (
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -419,19 +420,6 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
               icon: (
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-      ...(role && canViewVolunteers(role)
-        ? [
-            {
-              href: "/volunteers/schedule",
-              label: "Volunteers",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               ),
             },
@@ -562,6 +550,49 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
             ))}
           </div>
         ))}
+
+        {/* Reports section */}
+        {role && canViewReports(role) && (
+          <>
+            <div className="h-px bg-slate-100 my-1" />
+            <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Reports</p>
+            {[
+              {
+                href: "/reports/touches",
+                label: "Touches",
+                icon: (
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                ),
+              },
+              {
+                href: "/reports/support-levels",
+                label: "Support Levels",
+                icon: (
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                ),
+              },
+              {
+                href: "/reports/export",
+                label: "Export Data",
+                icon: (
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                ),
+              },
+            ].map((item) => (
+              <NavLink
+                key={item.href}
+                {...item}
+                active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              />
+            ))}
+          </>
+        )}
 
         {/* Audit log — candidate / campaign_manager / data_manager */}
         {(role === "candidate" || role === "campaign_manager" || role === "data_manager") && (

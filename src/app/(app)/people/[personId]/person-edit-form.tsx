@@ -33,6 +33,7 @@ interface PersonEditFormProps {
   birthDate: Date | null;
   supportLevel: SupportLevel | null;
   pollNumber: string | null;
+  availability: string | null;
   wardStatus?: string;
   readOnly?: boolean;
   address?: PersonAddress;
@@ -56,6 +57,7 @@ export function PersonEditForm({
   birthDate,
   supportLevel,
   pollNumber,
+  availability,
   wardStatus: _wardStatus,
   readOnly = false,
   address,
@@ -132,6 +134,7 @@ export function PersonEditForm({
         birthDate: (fd.get("birthDate") as string) || null,
         supportLevel: (fd.get("supportLevel") as SupportLevel) || null,
         pollNumber: (fd.get("pollNumber") as string) || null,
+        availability: (fd.get("availability") as string) || null,
       });
       if (personResult.error) { setError(personResult.error); return; }
 
@@ -298,6 +301,9 @@ export function PersonEditForm({
                 onToggle={handleVolunteerToggle}
               />
               {volError && <p className="text-xs text-red-600">{volError}</p>}
+              {isVolunteer && (
+                <ReadRow label="Availability" value={availability ?? null} />
+              )}
               <ToggleRow
                 label="Donor interest"
                 value={hasDonorInterest}
@@ -534,6 +540,17 @@ export function PersonEditForm({
                 <span className="text-sm text-slate-700">Donor interest</span>
               </label>
             </div>
+
+            {isVolunteer && (
+              <Field label="Availability">
+                <input
+                  name="availability"
+                  defaultValue={availability ?? ""}
+                  placeholder="e.g. M/W/F 3-7pm, prefers canvassing"
+                  className={inputCls}
+                />
+              </Field>
+            )}
           </>
         )}
 

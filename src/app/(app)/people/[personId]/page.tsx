@@ -105,6 +105,16 @@ export default async function PersonDetailPage({ params }: PageProps) {
   ]);
   if (!person) notFound();
 
+  // Touch count: canvass + outreach already loaded by getPersonDetail; events optional via userId
+  const canvassCount  = person.canvassResponses.length;
+  const outreachCount = person.outreachLogs.length; // already filtered deletedAt: null
+  const eventCount = person.userId
+    ? await db.eventAttendee.count({
+        where: { userId: person.userId, deletedAt: null, event: { campaignId: activeCampaignId } },
+      })
+    : 0;
+  const touchCount = canvassCount + outreachCount + eventCount;
+
   // Fetch available team members for the link dropdown (two-step to avoid unsupported nested filter)
   let availableMembers: AvailableMember[] = [];
   if (canLinkTeamMember) {
@@ -272,6 +282,21 @@ export default async function PersonDetailPage({ params }: PageProps) {
               ))}
             </div>
           )}
+          {!isAnonymized && (
+            <p className="text-xs text-slate-500 mt-2">
+              {touchCount === 0 ? (
+                <span className="text-slate-400">No touches</span>
+              ) : (
+                <>
+                  <strong className="text-slate-700">{touchCount}</strong>
+                  {" touch"}{touchCount !== 1 ? "es" : ""}{" "}
+                  <span className="text-slate-400">
+                    ({canvassCount} canvass, {outreachCount} outreach{eventCount > 0 ? `, ${eventCount} events` : ""})
+                  </span>
+                </>
+              )}
+            </p>
+          )}
           {canAnonymize && !isAnonymized && (
             <div className="mt-3">
               <AnonymizeButton
@@ -332,6 +357,7 @@ export default async function PersonDetailPage({ params }: PageProps) {
               birthDate={person.birthDate}
               supportLevel={person.supportLevel}
               pollNumber={person.pollNumber ?? null}
+              availability={person.availability ?? null}
               wardStatus={person.wardStatus}
               readOnly={readOnly}
               address={address ? {

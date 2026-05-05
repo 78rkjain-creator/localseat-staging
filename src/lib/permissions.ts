@@ -219,6 +219,13 @@ export function canManageSigns(role: Role): boolean {
   return role !== Role.co_chair;
 }
 
+// ── Reports ───────────────────────────────────────────────────────────────────
+
+// field_organizer and above may view reports. Finance lead and canvasser cannot.
+export function canViewReports(role: Role): boolean {
+  return FIELD_AND_ABOVE.includes(role);
+}
+
 // ── Special flags ─────────────────────────────────────────────────────────────
 
 // co_chair has broad read access but cannot modify campaign data.

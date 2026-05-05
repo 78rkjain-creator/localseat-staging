@@ -43,6 +43,8 @@ export async function GET() {
         take: 1,
         select: { supportLevel: true },
       },
+      outreachLogs: { where: { deletedAt: null }, select: { id: true } },
+      _count: { select: { canvassResponses: true } },
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
@@ -50,7 +52,7 @@ export async function GET() {
   const headers = row([
     "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
     "Street", "Unit", "City", "Province", "Postal Code",
-    "Tags", "Support Level", "Notes Count", "Created Date",
+    "Tags", "Support Level", "Notes Count", "Touches", "Availability", "Created Date",
   ]);
 
   const rows = people.map((p) => {
@@ -64,10 +66,12 @@ export async function GET() {
       ? (SUPPORT_LEVEL_LABELS[rawLevel as SupportLevel] ?? rawLevel)
       : "";
 
+    const touches = p._count.canvassResponses + p.outreachLogs.length;
+
     return row([
       p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
       street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
-      tags, supportLevel, p.notes.length,
+      tags, supportLevel, p.notes.length, touches, p.availability,
       p.createdAt.toISOString().slice(0, 10),
     ]);
   });

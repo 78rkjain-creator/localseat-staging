@@ -61,6 +61,7 @@ function buildUrl(params: {
   cfFilters?: string;
   missing?: string;
   volunteer?: string;
+  touches?: string;
   page?: number;
 }) {
   const p = new URLSearchParams();
@@ -71,6 +72,7 @@ function buildUrl(params: {
   if (params.cfFilters) p.set("cfFilters", params.cfFilters);
   if (params.missing) p.set("missing", params.missing);
   if (params.volunteer) p.set("volunteer", params.volunteer);
+  if (params.touches) p.set("touches", params.touches);
   if (params.page && params.page > 1) p.set("page", String(params.page));
   const s = p.toString();
   return `/people/residents${s ? `?${s}` : ""}`;
@@ -92,6 +94,7 @@ interface PageProps {
     cfFilters?: string;
     missing?: string;
     volunteer?: string;
+    touches?: string;
     page?: string;
   }>;
 }
@@ -107,10 +110,12 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     cfFilters: rawCfFilters,
     missing: rawMissing,
     volunteer: rawVolunteer,
+    touches: rawTouches,
     page: rawPage,
   } = await searchParams;
 
   const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
+  const minTouches = rawTouches ? parseInt(rawTouches, 10) : undefined;
 
   const supportFilter =
     rawSupportFilter && rawSupportFilter in SUPPORT_FILTER_LABELS
@@ -158,6 +163,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         needsClassification: activeMissing.includes("needs_classification"),
         notGeocoded: activeMissing.includes("not_geocoded"),
         volunteerInterest: showVolunteer || undefined,
+        minTouches,
       }),
       // Total count: anyone living in the ward (inside or outside_accepted), not anonymized.
       db.person.count({
@@ -191,7 +197,8 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
     !!contactedAfter ||
     activeCfFilters.length > 0 ||
     activeMissing.length > 0 ||
-    showVolunteer;
+    showVolunteer ||
+    minTouches !== undefined;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
@@ -271,9 +278,9 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 supportFilter: pill.value,
                 contactedAfter,
                 cfFilters: rawCfFilters,
-
                 missing: rawMissing,
                 volunteer: rawVolunteer,
+                touches: rawTouches,
               })}
               className={
                 isActive
@@ -305,6 +312,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
             cfFilters: rawCfFilters,
             missing: rawMissing,
             volunteer: showVolunteer ? undefined : "true",
+            touches: rawTouches,
           })}
           className={
             showVolunteer
@@ -314,6 +322,42 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
         >
           Volunteer interest
         </Link>
+      </div>
+
+      {/* Touches filter pills */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-xs text-slate-400 font-medium">Touches:</span>
+        {[
+          { label: "Any", value: undefined },
+          { label: "1+", value: "1" },
+          { label: "3+", value: "3" },
+          { label: "5+", value: "5" },
+          { label: "10+", value: "10" },
+        ].map((pill) => {
+          const isActive = rawTouches === pill.value;
+          return (
+            <Link
+              key={pill.label}
+              href={buildUrl({
+                q,
+                tag,
+                supportFilter,
+                contactedAfter,
+                cfFilters: rawCfFilters,
+                missing: rawMissing,
+                volunteer: rawVolunteer,
+                touches: pill.value,
+              })}
+              className={
+                isActive
+                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
+                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+              }
+            >
+              {pill.label}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Custom field filter pills */}
@@ -332,9 +376,9 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                   supportFilter,
                   contactedAfter,
                   cfFilters: nextCfFilters,
-  
                   missing: rawMissing,
                   volunteer: rawVolunteer,
+                  touches: rawTouches,
                 })}
                 className={
                   isActive
@@ -364,9 +408,9 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 supportFilter,
                 contactedAfter,
                 cfFilters: rawCfFilters,
-
                 missing: next,
                 volunteer: rawVolunteer,
+                touches: rawTouches,
               })}
               className={
                 isActive
@@ -507,6 +551,7 @@ export default async function ResidentsListPage({ searchParams }: PageProps) {
                 cfFilters: rawCfFilters,
                 missing: rawMissing,
                 volunteer: rawVolunteer,
+                touches: rawTouches,
                 page: p,
               })
             }

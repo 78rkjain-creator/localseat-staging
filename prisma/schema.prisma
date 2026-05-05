@@ -382,6 +382,7 @@ model Person {
   userId                       String?
   needsDistrictClassification  Boolean                      @default(false)
   customFieldValues   Json?
+  availability        String?
   voterId             String?
   anonymizedAt        DateTime?
   createdAt   DateTime  @default(now())

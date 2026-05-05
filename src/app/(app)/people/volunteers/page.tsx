@@ -189,6 +189,7 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
         email: true,
         phoneMobile: true,
         phoneHome: true,
+        availability: true,
         userId: true,
         volunteerRecords: {
           where: { deletedAt: null },
@@ -321,6 +322,11 @@ export default async function VolunteersPage({ searchParams }: PageProps) {
                       {(person.email || phone) && (
                         <p className="text-sm text-slate-500 truncate">
                           {person.email ?? phone}
+                        </p>
+                      )}
+                      {person.availability && (
+                        <p className="text-xs text-slate-400 truncate mt-0.5">
+                          {person.availability}
                         </p>
                       )}
                       <Link

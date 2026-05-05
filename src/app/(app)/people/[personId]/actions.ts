@@ -27,6 +27,7 @@ interface UpdatePersonInput {
   birthDate?: string | null;
   supportLevel?: SupportLevel | null;
   pollNumber?: string | null;
+  availability?: string | null;
 }
 
 export async function updatePerson(
@@ -62,6 +63,7 @@ export async function updatePerson(
       birthDate: true,
       supportLevel: true,
       pollNumber: true,
+      availability: true,
     },
   });
   if (!existing) return { error: "Person not found." };
@@ -106,6 +108,7 @@ export async function updatePerson(
     birthDate: sanitizeBirthDate(input.birthDate),
     supportLevel: sanitizeEnum(input.supportLevel, SUPPORT_LEVEL_VALUES),
     pollNumber: input.pollNumber?.trim() || null,
+    availability: input.availability?.trim() || null,
   };
 
   await db.person.update({
@@ -124,6 +127,7 @@ export async function updatePerson(
     birthDate: existing.birthDate ? existing.birthDate.toISOString() : null,
     supportLevel: existing.supportLevel ?? null,
     pollNumber: existing.pollNumber ?? null,
+    availability: existing.availability ?? null,
   };
   for (const key of Object.keys(data) as (keyof typeof data)[]) {
     const from = prev[key];

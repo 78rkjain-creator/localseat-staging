@@ -156,24 +156,27 @@ export async function unmarkAsEmailed(email: string): Promise<void> {
   });
 }
 
-export async function deleteDemoLead(email: string): Promise<{ error?: string }> {
+export async function deleteDemoLeads(emails: string[]): Promise<{ error?: string; deleted?: number }> {
   const auth = await requireSuperUser();
   if ("error" in auth) return { error: auth.error };
+  if (emails.length === 0) return { deleted: 0 };
 
-  await db.demoRegistration.deleteMany({
-    where: { email: email.toLowerCase() },
+  const normalizedEmails = emails.map((e) => e.toLowerCase());
+
+  const result = await db.demoRegistration.deleteMany({
+    where: { email: { in: normalizedEmails } },
   });
 
   await createAuditLog({
     userId:     auth.session.user.id,
     action:     "DEMO_LEAD_DELETED",
     entityType: "demo_registration",
-    entityId:   email.toLowerCase(),
-    details:    { email },
+    entityId:   normalizedEmails.join(","),
+    details:    { emails: normalizedEmails, count: emails.length },
   });
 
   revalidatePath("/admin/demo-leads");
-  return {};
+  return { deleted: result.count };
 }
 
 export async function exportDemoLeadsCSV(filters: LeadFilters = {}): Promise<string> {
