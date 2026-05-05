@@ -25,7 +25,7 @@ export interface DemoLead {
   lastSeenAt:     Date;
   emailedAt:      Date | null;
   consented:      boolean;
-  source:         "demo" | "app_signup";
+  source:         "demo" | "app";
   converted:      boolean;
 }
 
@@ -83,7 +83,7 @@ export async function getDemoLeads(filters: LeadFilters = {}): Promise<DemoLead[
       lastSeenAt:    sorted[sorted.length - 1].createdAt,
       emailedAt:     group.find((r) => r.emailedAt)?.emailedAt ?? null,
       consented:     group.some((r) => r.consented),
-      source:        group.some((r) => r.source === "app_signup") ? "app_signup" : "demo",
+      source:        group.some((r) => r.source === "app" || r.source === "app_signup") ? "app" : "demo",
       converted:     convertedEmails.has(emailKey),
     };
   });

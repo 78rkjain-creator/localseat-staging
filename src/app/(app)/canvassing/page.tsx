@@ -75,7 +75,42 @@ export default async function CanvassingPage() {
             <NewListButton tags={tags} />
           </div>
         )}
+        {!canManage && (
+          <Link
+            href="/canvassing/street-walk"
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-2xl border border-amber-200 bg-amber-50 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Street walk
+          </Link>
+        )}
       </div>
+
+      {/* Street Walk — quick access for managers too */}
+      {canManage && (
+        <Link href="/canvassing/street-walk" className="block mb-6">
+          <Card padding="md" className="hover:border-amber-200 hover:bg-amber-50/40 transition-all cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-900">Street Walk</p>
+                <p className="text-sm text-slate-500">Canvass a street without a walk list. Add new addresses and residents on the go.</p>
+              </div>
+              <svg className="h-4 w-4 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </Card>
+        </Link>
+      )}
 
       {/* Pending approval section — visible to approvers */}
       {pendingLists.length > 0 && (
@@ -256,6 +291,27 @@ async function CanvasserView({ userId, campaignId }: { userId: string; campaignI
           {assignments.length} list{assignments.length !== 1 ? "s" : ""} assigned to you
         </p>
       </div>
+
+      {/* Street Walk — available to canvassers independent of assigned lists */}
+      <Link href="/canvassing/street-walk" className="block mb-4">
+        <Card padding="md" className="hover:border-amber-200 hover:bg-amber-50/40 transition-all cursor-pointer">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-slate-900">Street Walk</p>
+              <p className="text-sm text-slate-500">Canvass a street without a walk list. Add new addresses and residents on the go.</p>
+            </div>
+            <svg className="h-4 w-4 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </Card>
+      </Link>
 
       {assignments.length === 0 ? (
         <EmptyState

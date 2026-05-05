@@ -73,7 +73,7 @@ const allNavItems: NavItem[] = [
   },
   {
     href: "/admin/demo-leads",
-    label: "Demo Leads",
+    label: "Leads",
     superUserOnly: true,
     icon: (
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

@@ -240,12 +240,12 @@ export function LeadsClient({ initialLeads }: Props) {
                       {new Date(lead.lastSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      {lead.source === "app_signup" ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">
-                          Signup
+                      {lead.source === "app" ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700">
+                          App
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
                           Demo
                         </span>
                       )}

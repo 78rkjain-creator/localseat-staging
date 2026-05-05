@@ -102,11 +102,11 @@ export async function register(input: RegisterInput): Promise<{ error?: string }
       if (existing) {
         await db.demoRegistration.update({
           where: { id: existing.id },
-          data: { firstName, lastName, phone, source: "app_signup", ipAddress: ip },
+          data: { firstName, lastName, phone, source: "app", ipAddress: ip },
         });
       } else {
         await db.demoRegistration.create({
-          data: { firstName, lastName, email, phone, source: "app_signup", consented: true, ipAddress: ip },
+          data: { firstName, lastName, email, phone, source: "app", consented: true, ipAddress: ip },
         });
       }
     } catch (err) {

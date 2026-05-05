@@ -19,11 +19,9 @@ export default async function DemoLeadsPage() {
   return (
     <div className="px-6 py-8 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Demo Leads</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
         <p className="text-slate-500 mt-1">
-          Registrations from{" "}
-          <span className="font-medium text-slate-700">demo.localseat.io</span>
-          {" "}— grouped by email address.
+          Demo site registrations and app signups — grouped by email address.
         </p>
       </div>
 

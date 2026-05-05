@@ -151,7 +151,7 @@ export default async function AdminDashboardPage() {
       {canSeeLeads && (
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Demo Leads
+            Leads
           </h2>
           <Link
             href="/admin/demo-leads"
@@ -159,7 +159,7 @@ export default async function AdminDashboardPage() {
           >
             <div className="flex items-start justify-between mb-4">
               <p className="text-sm font-semibold text-slate-700 group-hover:text-brand-600 transition-colors">
-                Demo Registrations
+                Demo &amp; App Signups
               </p>
               <svg className="h-4 w-4 text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
