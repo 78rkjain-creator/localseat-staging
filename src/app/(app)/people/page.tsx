@@ -259,87 +259,86 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
         <PeopleSearchBar defaultValue={q ?? ""} />
       </div>
 
-      {/* Support filter pills */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {SUPPORT_FILTER_PILLS.map((pill) => {
-          const isActive = supportFilter === pill.value;
-          return (
-            <Link
-              key={pill.label}
-              href={buildUrl({ q, tag, supportFilter: pill.value, missing: rawMissing, volunteer: rawVolunteer, touches: rawTouches })}
-              className={
-                isActive
-                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              }
-            >
-              {pill.label}
-            </Link>
-          );
-        })}
-      </div>
+      {/* Filters container */}
+      <div className="bg-white rounded-2xl border border-slate-100 px-4 py-3 mb-5">
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Filters</p>
 
-      {/* Volunteer interest filter */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <Link
-          href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: showVolunteer ? undefined : "true", touches: rawTouches })}
-          className={
-            showVolunteer
-              ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-              : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-          }
-        >
-          Volunteer interest
-        </Link>
-      </div>
+        {/* Row 1: support pills + volunteer toggle */}
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          {SUPPORT_FILTER_PILLS.map((pill) => {
+            const isActive = supportFilter === pill.value;
+            return (
+              <Link
+                key={pill.label}
+                href={buildUrl({ q, tag, supportFilter: pill.value, missing: rawMissing, volunteer: rawVolunteer, touches: rawTouches })}
+                className={
+                  isActive
+                    ? "bg-slate-900 text-white rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    : "bg-white border border-slate-200 text-slate-600 rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-50"
+                }
+              >
+                {pill.label}
+              </Link>
+            );
+          })}
+          <span className="h-4 w-px bg-slate-200 mx-1 flex-shrink-0" />
+          <Link
+            href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: showVolunteer ? undefined : "true", touches: rawTouches })}
+            className={
+              showVolunteer
+                ? "bg-slate-900 text-white rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                : "bg-white border border-slate-200 text-slate-600 rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-50"
+            }
+          >
+            Volunteer interest
+          </Link>
+        </div>
 
-      {/* Touches filter pills */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="text-xs text-slate-400 font-medium">Touches:</span>
-        {[
-          { label: "Any", value: undefined },
-          { label: "1+", value: "1" },
-          { label: "3+", value: "3" },
-          { label: "5+", value: "5" },
-          { label: "10+", value: "10" },
-        ].map((pill) => {
-          const isActive = rawTouches === pill.value;
-          return (
-            <Link
-              key={pill.label}
-              href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, touches: pill.value })}
-              className={
-                isActive
-                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              }
-            >
-              {pill.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Missing data filter chips */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        <span className="text-xs text-slate-400 font-medium">Missing:</span>
-        {MISSING_FILTER_OPTIONS.map((opt) => {
-          const isActive = activeMissing.includes(opt.value);
-          const next = toggleMissingFilter(opt.value, activeMissing);
-          return (
-            <Link
-              key={opt.value}
-              href={buildUrl({ q, tag, supportFilter, missing: next, volunteer: rawVolunteer, touches: rawTouches })}
-              className={
-                isActive
-                  ? "bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold"
-                  : "bg-white border border-slate-200 text-slate-600 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
-              }
-            >
-              {opt.label}
-            </Link>
-          );
-        })}
+        {/* Row 2: touches + missing */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Touches:</span>
+          {[
+            { label: "Any", value: undefined },
+            { label: "1+", value: "1" },
+            { label: "3+", value: "3" },
+            { label: "5+", value: "5" },
+            { label: "10+", value: "10" },
+          ].map((pill) => {
+            const isActive = rawTouches === pill.value;
+            return (
+              <Link
+                key={pill.label}
+                href={buildUrl({ q, tag, supportFilter, missing: rawMissing, volunteer: rawVolunteer, touches: pill.value })}
+                className={
+                  isActive
+                    ? "bg-slate-900 text-white rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    : "bg-white border border-slate-200 text-slate-600 rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-50"
+                }
+              >
+                {pill.label}
+              </Link>
+            );
+          })}
+          <span className="h-4 w-px bg-slate-200 mx-1 flex-shrink-0" />
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Missing:</span>
+          {MISSING_FILTER_OPTIONS.map((opt) => {
+            const isActive = activeMissing.includes(opt.value);
+            const next = toggleMissingFilter(opt.value, activeMissing);
+            return (
+              <Link
+                key={opt.value}
+                href={buildUrl({ q, tag, supportFilter, missing: next, volunteer: rawVolunteer, touches: rawTouches })}
+                className={
+                  isActive
+                    ? "bg-slate-900 text-white rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    : "bg-white border border-slate-200 text-slate-600 rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-50"
+                }
+              >
+                {opt.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Active tag filter */}

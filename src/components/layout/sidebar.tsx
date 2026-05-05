@@ -76,6 +76,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
 
   const isPeoplePath = pathname.startsWith("/people");
@@ -90,6 +91,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
   useEffect(() => {
     if (isAdminPath) setAdminOpen(true);
   }, [isAdminPath]);
+
+  const isReportsPath = pathname.startsWith("/reports");
+  useEffect(() => {
+    if (isReportsPath) setReportsOpen(true);
+  }, [isReportsPath]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -551,46 +557,137 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           </div>
         ))}
 
-        {/* Reports section */}
+        {/* Reports collapsible section */}
         {role && canViewReports(role) && (
           <>
             <div className="h-px bg-slate-100 my-1" />
-            <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Reports</p>
-            {[
-              {
-                href: "/reports/touches",
-                label: "Touches",
-                icon: (
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                  </svg>
-                ),
-              },
-              {
-                href: "/reports/support-levels",
-                label: "Support Levels",
-                icon: (
+            <button
+              type="button"
+              onClick={() => setReportsOpen((v) => !v)}
+              className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
+            >
+              <span className="flex items-center gap-3">
+                <span className="h-5 w-5 flex-shrink-0">
                   <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                ),
-              },
-              {
-                href: "/reports/export",
-                label: "Export Data",
-                icon: (
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                ),
-              },
-            ].map((item) => (
-              <NavLink
-                key={item.href}
-                {...item}
-                active={pathname === item.href || pathname.startsWith(item.href + "/")}
-              />
-            ))}
+                </span>
+                Reports
+              </span>
+              <svg
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (reportsOpen || isReportsPath) ? "rotate-180" : ""].join(" ")}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {(reportsOpen || isReportsPath) && (
+              <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
+                {[
+                  {
+                    href: "/reports/canvassing",
+                    label: "Canvassing Activity",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    href: "/reports/support-levels",
+                    label: "Support Levels",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    href: "/reports/touches",
+                    label: "Touches",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    href: "/reports/follow-ups",
+                    label: "Follow-up Status",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    href: "/reports/volunteers",
+                    label: "Volunteer Summary",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    ),
+                  },
+                  ...(donorTrackingEnabled ? [{
+                    href: "/reports/donors",
+                    label: "Donor Summary",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ),
+                  }] : []),
+                  ...(signTrackingEnabled ? [{
+                    href: "/reports/signs",
+                    label: "Sign Summary",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                      </svg>
+                    ),
+                  }] : []),
+                  {
+                    href: "/reports/coverage",
+                    label: "Coverage",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    href: "/reports/export",
+                    label: "Export Data",
+                    icon: (
+                      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    ),
+                  },
+                ].map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={[
+                        "flex items-center gap-3 px-3 py-2 text-sm rounded-r-xl transition-colors",
+                        isActive
+                          ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                      ].join(" ")}
+                    >
+                      <span className="h-4 w-4 flex-shrink-0">{item.icon}</span>
+                      <span className="flex-1">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 

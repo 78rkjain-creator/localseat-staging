@@ -636,7 +636,7 @@ export function CanvassScreen({
         <div className="px-4 pt-1.5 pb-4 max-w-lg mx-auto">
 
           {/* ── Household hero ── */}
-          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
+          <div className="bg-gradient-to-r from-slate-50 to-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
             <div className="flex items-center gap-1.5">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Household</p>
               {isMultiUnit && (
@@ -648,7 +648,7 @@ export function CanvassScreen({
                 </span>
               )}
             </div>
-            <p className="text-xl font-extrabold text-slate-900 leading-tight">{addressLine}</p>
+            <p className="text-[22px] font-extrabold text-slate-900 leading-tight tracking-tight">{addressLine}</p>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[12px] text-slate-500">
                 {cityLine}{cityLine ? " · " : ""}{coResidents.length + 1} on file
@@ -864,12 +864,12 @@ export function CanvassScreen({
                     }
                   }}
                   className={[
-                    "flex-1 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-2 transition-all disabled:opacity-50",
+                    "flex-1 h-16 sm:h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-2 transition-all disabled:opacity-50",
                     s.style,
                     isActive ? "ring-2 ring-slate-900 ring-offset-1" : "",
                   ].join(" ")}
                 >
-                  <span className="text-lg font-bold">{s.numeral}</span>
+                  <span className="text-xl font-bold">{s.numeral}</span>
                   <span className="text-[10px] font-medium">{s.caption}</span>
                 </button>
               );
@@ -896,15 +896,13 @@ export function CanvassScreen({
           )}
 
           {/* ── Notes — always visible so canvasser can type before selecting outcome ── */}
-          <div className="bg-white rounded-2xl border border-slate-200 mb-1.5">
-            <textarea
-              value={draft.notes}
-              onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-              placeholder="Note (optional)…"
-              rows={2}
-              className="w-full px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-transparent block rounded-2xl"
-            />
-          </div>
+          <textarea
+            value={draft.notes}
+            onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+            placeholder="Note (optional)…"
+            rows={2}
+            className="w-full px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none bg-slate-50 rounded-xl border border-slate-200 block mb-1.5"
+          />
 
           {/* ── Toggles — always visible so canvasser can set before selecting outcome ── */}
           <div className="flex gap-2 mb-1.5">
@@ -920,7 +918,7 @@ export function CanvassScreen({
                 className={[
                   "h-11 px-3 rounded-xl border-2 text-xs font-semibold transition-all flex items-center justify-center flex-1",
                   checked
-                    ? "border-slate-900 bg-slate-900 text-white"
+                    ? "border-brand-500 bg-brand-500 text-white"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
                 ].join(" ")}
               >
@@ -930,7 +928,7 @@ export function CanvassScreen({
           </div>
 
           {/* ── Follow-up + appointment — always available ── */}
-          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 mb-1.5">
+          <div className="bg-slate-50 rounded-xl divide-y divide-slate-100 mb-1.5">
             <CompactToggle
               label="Needs follow-up"
               checked={draft.needsFollowUp}
@@ -1158,10 +1156,10 @@ export function CanvassScreen({
               onClick={handleSave}
               disabled={!canSave}
               className={[
-                "flex-1 h-12 rounded-2xl font-bold text-base transition-all",
+                "flex-1 h-14 rounded-2xl font-bold text-base transition-all",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2",
                 canSave
-                  ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-sm"
+                  ? "bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white shadow-md shadow-orange-200/50"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed",
               ].join(" ")}
             >

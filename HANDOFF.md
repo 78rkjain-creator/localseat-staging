@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: May 5, 2026 — Batch 16: Street walk canvassing, leads management + bulk delete, Stripe live mode, marketing site comparison modal, contact form delete, admin improvements._
+_Last updated: May 5, 2026 — Batch 17: Bulk checkbox delete, touches feature, reports section, events & scheduling merge, volunteer availability._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -1295,6 +1295,12 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | App signup source normalized — register action now writes `source: "app"` (was `"app_signup"`); groupBy logic handles both for backward compat | May 4, 2026 |
 | Demo leads delete — inline confirm pattern (trash icon → "Delete? Yes / No"); hard delete by email (`deleteMany`); super_user/super_admin only; audit logged | May 4, 2026 |
 | Contact submissions delete — same inline confirm pattern in detail panel footer; hard delete by id; super_user/super_admin only; audit logged | May 4, 2026 |
+| Bulk checkbox delete — Leads page: replaced individual inline delete with checkbox select-all + bulk delete bar; `deleteDemoLeads(emails[])` server action; audit logged with count | May 5, 2026 |
+| Bulk checkbox delete — Contact Submissions: same checkbox + bulk delete pattern; `deleteContactSubmissions(ids[])` server action; detail panel delete removed, deletion via list selection only | May 5, 2026 |
+| Touches feature — computed touch count (canvass responses + outreach logs + event attendees) on person detail page with inline breakdown; "Minimum touches" filter on people list tabs via raw SQL; "Touches" column added to people CSV export | May 5, 2026 |
+| Events & Scheduling — renamed sidebar item from "Events" to "Events & Scheduling"; removed separate Volunteers schedule nav item; `/volunteers/schedule` redirects to `/events` | May 5, 2026 |
+| Reports section — new sidebar group with three pages: Touches report (`/reports/touches`) with summary stats + distribution table, Support Levels report (`/reports/support-levels`) with count/percentage breakdown, Export Data hub (`/reports/export`) with download cards for People/Volunteers/Donors/Outreach; permission-gated via `canViewReports(role)` | May 5, 2026 |
+| Volunteer availability field — `availability String?` on Person model; editable on person detail page when volunteer interest flagged; displayed on Volunteers tab under People; included in people CSV export; migration `20260505000001_add_person_availability` | May 5, 2026 |
 
 ### High Priority
 _(none)_

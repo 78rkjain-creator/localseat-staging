@@ -242,12 +242,14 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
       </div>
 
       {/* ── KPI strip ── */}
-      <div className={`grid gap-3 flex-shrink-0 ${isStarterPlan ? "grid-cols-3" : "grid-cols-4"}`}>
+      <div className="bg-gradient-to-b from-orange-50/30 to-transparent rounded-2xl px-1 pt-1 pb-0 -mx-1 flex-shrink-0">
+      <div className={`grid gap-3 ${isStarterPlan ? "grid-cols-3" : "grid-cols-4"}`}>
         <KpiCard
           label="Doors today"
           value={doorsToday}
           badge={doorsBadge}
           badgeColor={doorsDelta >= 0 ? "green" : "amber"}
+          accent
         >
           <BarSparkline data={doorsSeries} />
         </KpiCard>
@@ -277,6 +279,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
             <LineSparkline data={donorsSeries} />
           </KpiCard>
         )}
+      </div>
       </div>
 
       {/* ── Geocoding coverage (candidate + campaign_manager only) ── */}
@@ -423,8 +426,8 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
           </div>
         </div>
 
-        {/* Action queue — col-span-4 */}
-        <div className="col-span-4 bg-white border border-slate-200 rounded-xl p-3 flex flex-col min-h-0 overflow-hidden">
+        {/* Action queue — col-span-4 — borderless, against page bg */}
+        <div className="col-span-4 flex flex-col min-h-0 overflow-hidden px-1">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">For you</p>
             <Link href="/follow-ups" className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">queue →</Link>
@@ -437,7 +440,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
                 <Link
                   key={item.id}
                   href={item.href}
-                  className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-white transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={[
@@ -512,7 +515,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
         {/* ── Row 2 ── */}
 
         {/* Live activity — col-span-4 */}
-        <div className="col-span-4 bg-white border border-slate-200 rounded-xl overflow-hidden min-h-0">
+        <div className="col-span-4 bg-white border border-slate-200 border-l-2 border-l-brand-300 rounded-xl overflow-hidden min-h-0">
           <CanvassActivityFeed initialEntries={liveActivity.slice(0, 4)} />
         </div>
 
@@ -550,7 +553,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
         <div className="col-span-3 flex flex-col gap-3 min-h-0 overflow-hidden">
 
           {/* Leaderboard */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Top canvassers</p>
             {leaderboard.length === 0 ? (
               <p className="text-xs text-slate-400">No canvass data yet.</p>
@@ -599,18 +602,24 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
             ) : (
               <div className="flex flex-col gap-2">
                 {upcomingEvents.map((ev) => {
-                  const borderColor = EVENT_TYPE_COLORS[ev.eventType as string] ?? "#94a3b8";
+                  const dotColor = EVENT_TYPE_COLORS[ev.eventType as string] ?? "#94a3b8";
                   const dateStr = new Date(ev.date).toLocaleDateString("en-CA", {
                     weekday: "short",
                     month: "short",
                     day: "numeric",
                   });
                   return (
-                    <div key={ev.id} className="pl-2.5 border-l-2" style={{ borderColor }}>
-                      <p className="text-xs font-medium text-slate-800 truncate">{ev.name}</p>
-                      <p className="text-[10px] text-slate-400">
-                        {dateStr} · {ev.startTime} · {ev._count.attendees} attending
-                      </p>
+                    <div key={ev.id} className="flex items-start gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full flex-shrink-0 mt-1"
+                        style={{ background: dotColor }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{ev.name}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {dateStr} · {ev.startTime} · {ev._count.attendees} attending
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
@@ -666,16 +675,23 @@ function KpiCard({
   value,
   badge,
   badgeColor = "green",
+  accent,
   children,
 }: {
   label: string;
   value: string | number;
   badge?: string;
   badgeColor?: "green" | "amber";
+  accent?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
+    <div className={[
+      "bg-white rounded-xl p-3 flex flex-col",
+      accent
+        ? "border-l-[3px] border-l-brand-400 border-t border-r border-b border-slate-200"
+        : "border border-slate-200",
+    ].join(" ")}>
       <div className="flex items-start justify-between mb-1">
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
         {badge && (

@@ -164,7 +164,10 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
                 const secondaryLabel = complete ? "Review" : "Continue";
 
                 return (
-                  <div key={a.assignmentId} className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div key={a.assignmentId} className={[
+                    "bg-white rounded-xl border border-slate-200 p-3",
+                    isPrimary ? "border-l-[3px] border-l-brand-400" : "",
+                  ].join(" ")}>
                     {/* Top row */}
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <p className="text-sm font-medium text-slate-800 truncate">{a.list.name}</p>

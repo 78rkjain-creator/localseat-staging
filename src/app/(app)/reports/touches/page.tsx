@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewReports } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { StatCard } from "@/components/ui/stat-card";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Touches Report" };
@@ -75,11 +76,11 @@ export default async function TouchesReportPage() {
       : "0";
 
   const buckets = [
-    { label: "0 touches", count: result.zero ?? 0 },
-    { label: "1–2 touches", count: result.one_two ?? 0 },
-    { label: "3–5 touches", count: result.three_five ?? 0 },
+    { label: "0 touches",    count: result.zero ?? 0 },
+    { label: "1–2 touches",  count: result.one_two ?? 0 },
+    { label: "3–5 touches",  count: result.three_five ?? 0 },
     { label: "6–10 touches", count: result.six_ten ?? 0 },
-    { label: "10+ touches", count: result.over_ten ?? 0 },
+    { label: "10+ touches",  count: result.over_ten ?? 0 },
   ];
 
   return (
@@ -91,60 +92,39 @@ export default async function TouchesReportPage() {
         </p>
       </div>
 
-      {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total people" value={totalPeople.toLocaleString()} />
-        <StatCard label="Contacted (1+ touches)" value={withTouches.toLocaleString()} sub={pct(withTouches, totalPeople)} />
+        <StatCard
+          variant="hero"
+          label="Contacted (1+ touches)"
+          value={withTouches.toLocaleString()}
+          sub={pct(withTouches, totalPeople)}
+        />
         <StatCard label="Avg touches per contacted" value={avgTouches} />
       </div>
 
-      {/* Breakdown */}
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-700">Distribution</h2>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50">
-              <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Range</th>
-              <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">People</th>
-              <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden sm:table-cell">%</th>
-              <th className="px-5 py-3 hidden sm:table-cell" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {buckets.map((b) => (
-              <tr key={b.label}>
-                <td className="px-5 py-3 font-medium text-slate-700">{b.label}</td>
-                <td className="px-5 py-3 text-right text-slate-900 tabular-nums font-semibold">
-                  {b.count.toLocaleString()}
-                </td>
-                <td className="px-5 py-3 text-right text-slate-400 tabular-nums hidden sm:table-cell">
-                  {pct(b.count, totalPeople)}
-                </td>
-                <td className="pr-5 py-3 w-32 hidden sm:table-cell">
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-brand-400 transition-all"
-                      style={{ width: totalPeople > 0 ? `${Math.round((b.count / totalPeople) * 100)}%` : "0%" }}
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="px-5 py-4 space-y-3">
+          {buckets.map((b) => (
+            <div key={b.label} className="flex items-center gap-4">
+              <span className="w-28 text-sm text-slate-600 font-medium flex-shrink-0">{b.label}</span>
+              <div className="flex-1 h-6 rounded bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded bg-brand-400"
+                  style={{ width: totalPeople > 0 ? `${Math.round((b.count / totalPeople) * 100)}%` : "0%" }}
+                />
+              </div>
+              <div className="text-right tabular-nums text-sm flex-shrink-0 w-20">
+                <span className="font-semibold text-slate-900">{b.count.toLocaleString()}</span>
+                <span className="text-slate-400 ml-1.5 text-xs">{pct(b.count, totalPeople)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 px-5 py-4">
-      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 tabular-nums">{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   );
 }

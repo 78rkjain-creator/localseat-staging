@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewReports } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { StatCard } from "@/components/ui/stat-card";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
 import type { Role, SupportLevel } from "@/types";
 
@@ -72,14 +73,31 @@ export default async function SupportLevelsReportPage() {
         </p>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Total people" value={totalPeople.toLocaleString()} />
-        <StatCard label="Support level set" value={setCount.toLocaleString()} sub={pct(setCount, totalPeople)} />
+        <StatCard
+          variant="hero"
+          label="Support level set"
+          value={setCount.toLocaleString()}
+          sub={pct(setCount, totalPeople)}
+        />
         <StatCard label="No support level" value={notSetCount.toLocaleString()} sub={pct(notSetCount, totalPeople)} />
       </div>
 
-      {/* Breakdown table */}
+      {/* Stacked bar */}
+      {totalPeople > 0 && (
+        <div className="h-3 rounded-full overflow-hidden flex bg-slate-100 mb-8">
+          {rows.filter((r) => r.count > 0).map((r) => (
+            <div
+              key={r.level}
+              className={r.color}
+              style={{ width: `${(r.count / totalPeople) * 100}%` }}
+              title={`${r.label}: ${r.count}`}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100">
           <h2 className="text-sm font-semibold text-slate-700">Breakdown by level</h2>
@@ -133,16 +151,6 @@ export default async function SupportLevelsReportPage() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 px-5 py-4">
-      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 tabular-nums">{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
