@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { NewListButton } from "./new-list-button";
 import { ApproveRejectButtons } from "./approve-reject-buttons";
 import { ArchivedSection } from "./archived-section";
+import { DemoHint } from "@/components/demo/demo-hint";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Canvassing" };
@@ -53,6 +54,12 @@ export default async function CanvassingPage() {
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
+      <DemoHint
+        demoMode={process.env.DEMO_MODE === "true"}
+        storageKey="demo-hint-canvassing"
+        hint="Open a walk list and tap 'Start canvassing' to try the mobile door-knocking screen. You can record support levels, sign requests, and follow-ups."
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

@@ -14,6 +14,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { PeopleSearchBar } from "./search-bar";
 import { DistrictClassifyBanner } from "./classify-banner";
 import { BulkGeocodeButton } from "./bulk-geocode-button";
+import { DemoHint } from "@/components/demo/demo-hint";
 import type { UnclassifiedPerson } from "./classify-modal";
 import type { Role, SupportLevel } from "@/types";
 import { ROLE_LABELS } from "@/types";
@@ -253,6 +254,12 @@ export default async function PeopleMasterListPage({ searchParams }: PageProps) 
           people={classifyPeople}
         />
       )}
+
+      <DemoHint
+        demoMode={process.env.DEMO_MODE === "true"}
+        storageKey="demo-hint-people"
+        hint="This is a sample voter list for Owen Sound Ward 4. Click any name to see their full profile, or use the filters below to explore by support level."
+      />
 
       {/* Search */}
       <div className="mb-3">

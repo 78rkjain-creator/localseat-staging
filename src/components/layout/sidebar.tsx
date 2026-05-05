@@ -495,7 +495,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            {(peopleOpen || isPeoplePath) && (
+            {peopleOpen && (
               <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
                 {([
                   { href: "/people", label: "All People" },
@@ -584,7 +584,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            {(reportsOpen || isReportsPath) && (
+            {reportsOpen && (
               <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
                 {[
                   {
@@ -736,7 +736,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            {(adminOpen || isAdminPath) && (
+            {adminOpen && (
               <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
                 {adminItems.map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");

@@ -16,6 +16,7 @@ import { SurveyPanel } from "@/components/survey-panel";
 import type { ActiveSurvey } from "@/lib/surveys";
 import { SignatureModal } from "@/components/signature-modal";
 import { saveSignature } from "@/app/(app)/people/[personId]/signature-actions";
+import { DemoHint } from "@/components/demo/demo-hint";
 
 function formatVisitDate(iso: string | Date): string {
   const d = new Date(iso);
@@ -190,6 +191,7 @@ interface CanvassScreenProps {
   fieldMessages?: FieldMessageItem[];
   activeSurvey?: ActiveSurvey | null;
   consentTypes?: { id: string; label: string }[];
+  demoMode?: boolean;
 }
 
 export function CanvassScreen({
@@ -205,6 +207,7 @@ export function CanvassScreen({
   fieldMessages = [],
   activeSurvey = null,
   consentTypes = [],
+  demoMode = false,
 }: CanvassScreenProps) {
   const [entries, setEntries] = useState<LocalEntry[]>(
     () => initialEntries as LocalEntry[]
@@ -562,6 +565,12 @@ export function CanvassScreen({
 
   return (
     <div className="h-screen [height:100dvh] bg-slate-50 flex flex-col overflow-hidden">
+
+      <DemoHint
+        demoMode={demoMode}
+        storageKey="demo-hint-canvass-screen"
+        hint="Tap a support level (1–5), toggle sign or volunteer interest, then hit Save & next. All responses are recorded to the campaign dashboard."
+      />
 
       {/* SW failure warning */}
       {swFailure && (

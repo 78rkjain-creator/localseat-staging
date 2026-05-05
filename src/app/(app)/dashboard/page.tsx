@@ -11,6 +11,7 @@ import { FieldOrganizerDashboard } from "./_field-organizer";
 import { VolunteerCoordinatorDashboard } from "./_volunteer-coordinator";
 import { FinanceLeadDashboard } from "./_finance-lead";
 import { CanvasserHome } from "./_canvasser";
+import { DemoWelcome } from "@/components/demo/demo-welcome";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -30,28 +31,37 @@ export default async function DashboardPage() {
     select: { plan: true },
   });
   const plan = (campaignRow?.plan as PlanTier) ?? null;
+  const demoMode = process.env.DEMO_MODE === "true";
+
+  let dashboard: React.ReactNode;
 
   switch (role) {
     case "candidate":
     case "campaign_manager":
     case "data_manager":
     case "co_chair":
-      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
-
+      dashboard = <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
+      break;
     case "field_organizer":
-      return <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} userId={userId} />;
-
+      dashboard = <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} userId={userId} />;
+      break;
     case "canvasser":
-      return <CanvasserHome userId={userId} campaignId={activeCampaignId} firstName={firstName} />;
-
+      dashboard = <CanvasserHome userId={userId} campaignId={activeCampaignId} firstName={firstName} />;
+      break;
     case "volunteer_coordinator":
-      return <VolunteerCoordinatorDashboard campaignId={activeCampaignId} firstName={firstName} />;
-
+      dashboard = <VolunteerCoordinatorDashboard campaignId={activeCampaignId} firstName={firstName} />;
+      break;
     case "finance_lead":
-      return <FinanceLeadDashboard campaignId={activeCampaignId} firstName={firstName} />;
-
+      dashboard = <FinanceLeadDashboard campaignId={activeCampaignId} firstName={firstName} />;
+      break;
     default:
-      // Fallback: show candidate-style dashboard for unknown roles
-      return <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
+      dashboard = <CandidateDashboard campaignId={activeCampaignId} firstName={firstName} role={role} plan={plan} />;
   }
+
+  return (
+    <>
+      <DemoWelcome demoMode={demoMode} />
+      {dashboard}
+    </>
+  );
 }

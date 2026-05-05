@@ -530,9 +530,12 @@ async function main() {
     "Requested more info",
   ];
 
+  // Weighted toward recent days: squaring pushes values toward 0 (today)
   function randomRespondedAt(): Date {
-    const d = new Date(Date.now() - Math.random() * 21 * 24 * 60 * 60 * 1000);
-    d.setHours(9 + Math.floor(Math.random() * 11), Math.floor(Math.random() * 60), 0, 0);
+    const daysAgo = Math.floor(Math.random() * Math.random() * 14);
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    d.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 60), 0, 0);
     return d;
   }
 
@@ -706,6 +709,24 @@ async function main() {
     console.log("  ✔ Extended canvass responses: 50 for us, 20 Akshay Kumar, 30 Charles Wong, 15 Walter Smith");
   }
 
+  // ── Force 10 responses to today ───────────────────────────────────────────
+  // Ensures "Doors today" on the dashboard reads 8–12, not 0–1.
+  {
+    const todayResponses = await db.canvassResponse.findMany({
+      where: { assignment: { canvassList: { campaignId: campaign.id } } },
+      take: 10,
+      orderBy: { respondedAt: "asc" },
+    });
+    await Promise.all(
+      todayResponses.map((r, i) => {
+        const t = new Date();
+        t.setHours(8 + i, Math.floor(Math.random() * 60), 0, 0);
+        return db.canvassResponse.update({ where: { id: r.id }, data: { respondedAt: t } });
+      })
+    );
+    console.log("  ✔ Set 10 canvass responses to today with staggered times (8am–6pm)");
+  }
+
   // ── Voting records ────────────────────────────────────────────────────────
   // Owen Sound municipal elections only. Fetch all 1,500 people ordered by id
   // (deterministic — no Math.random). Slice into groups by index.
@@ -791,14 +812,38 @@ async function main() {
   const THREE_WEEKS_MS = 21 * 24 * 60 * 60 * 1000;
   const TWO_WEEKS_MS   = 14 * 24 * 60 * 60 * 1000;
 
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
   await db.task.createMany({
     data: followUpPersons.map((p, i) => {
       const isCompleted = i >= 15;
       const assignee    = followUpAssignees[i % followUpAssignees.length];
       const createdAt   = new Date(nowMs - Math.random() * THREE_WEEKS_MS);
       const completedAt = isCompleted
-        ? new Date(nowMs - Math.random() * TWO_WEEKS_MS)
+        ? new Date(nowMs - Math.random() * SEVEN_DAYS_MS)
         : null;
+
+      // Due date distribution for open tasks:
+      // i < 4  → overdue (2–5 days ago)
+      // i 4–6  → due today
+      // i 7–10 → next 1–4 days
+      // i 11–14 → next 1–2 weeks
+      let dueDate: Date | null = null;
+      if (!isCompleted) {
+        const d = new Date();
+        d.setHours(9, 0, 0, 0);
+        if (i < 4) {
+          d.setDate(d.getDate() - (2 + i));
+        } else if (i < 7) {
+          // today — keep d as is
+        } else if (i < 11) {
+          d.setDate(d.getDate() + (1 + (i - 7)));
+        } else {
+          d.setDate(d.getDate() + (7 + (i - 11)));
+        }
+        dueDate = d;
+      }
+
       return {
         campaignId: campaign.id,
         personId:   p.id,
@@ -808,10 +853,11 @@ async function main() {
         completed:  isCompleted,
         createdAt,
         ...(completedAt ? { completedAt } : {}),
+        ...(dueDate     ? { dueDate }     : {}),
       };
     }),
   });
-  console.log("  ✓ Follow-up tasks: 30 (15 open, 15 completed)");
+  console.log("  ✓ Follow-up tasks: 30 (4 overdue, 3 today, 4 upcoming, 4 future, 15 completed)");
 
   // ── Donor prospects ───────────────────────────────────────────────────────
   const donorPersons = await db.person.findMany({
@@ -836,7 +882,9 @@ async function main() {
       const status     = i < 8  ? DonorStatus.interested
                        : i < 13 ? DonorStatus.pledged
                        :           DonorStatus.received;
-      const createdAt  = new Date(nowMs - Math.random() * FOUR_WEEKS_MS);
+      // Weighted toward recent 14 days so donor sparkline shows a visible trend
+      const donorDaysAgo = Math.floor(Math.random() * Math.random() * 14);
+      const createdAt  = new Date(nowMs - donorDaysAgo * 24 * 60 * 60 * 1000 - Math.random() * 24 * 60 * 60 * 1000);
       const amount     = 50 + Math.floor(Math.random() * 701);
       return {
         campaignId:    campaign.id,
@@ -919,7 +967,11 @@ async function main() {
   const SIX_WEEKS_MS = 42 * 24 * 60 * 60 * 1000;
 
   function randomOutreachDate(): Date {
-    return new Date(nowMs - Math.random() * SIX_WEEKS_MS);
+    const daysAgo = Math.floor(Math.random() * Math.random() * 14);
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    d.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 60), 0, 0);
+    return d;
   }
 
   function outreachOutcome(sl: string | null): string {
@@ -1246,6 +1298,37 @@ async function main() {
     ],
   });
   console.log("  ✓ Upcoming events: 3 (within 72h)");
+
+  // ── Event attendees ───────────────────────────────────────────────────────
+  {
+    const seededEvents = await db.event.findMany({
+      where: { campaignId: campaign.id },
+      orderBy: { date: "asc" },
+      take: 3,
+    });
+    if (seededEvents.length >= 3) {
+      await db.eventAttendee.createMany({
+        data: [
+          // Canvass kickoff — 4 attendees
+          { eventId: seededEvents[0].id, userId: priyaNair.id,    status: "confirmed" },
+          { eventId: seededEvents[0].id, userId: kevinLafleur.id, status: "confirmed" },
+          { eventId: seededEvents[0].id, userId: amyZhang.id,     status: "confirmed" },
+          { eventId: seededEvents[0].id, userId: tomOkonkwo.id,   status: "confirmed" },
+          // Volunteer training — 3 attendees
+          { eventId: seededEvents[1].id, userId: jamesOkafor.id,  status: "confirmed" },
+          { eventId: seededEvents[1].id, userId: sarahKim.id,     status: "confirmed" },
+          { eventId: seededEvents[1].id, userId: priyaNair.id,    status: "confirmed" },
+          // Fundraiser — 5 attendees
+          { eventId: seededEvents[2].id, userId: alexChen.id,     status: "confirmed" },
+          { eventId: seededEvents[2].id, userId: mariaSantos.id,  status: "confirmed" },
+          { eventId: seededEvents[2].id, userId: claireMorgan.id, status: "confirmed" },
+          { eventId: seededEvents[2].id, userId: robertBell.id,   status: "confirmed" },
+          { eventId: seededEvents[2].id, userId: danWu.id,        status: "confirmed" },
+        ],
+      });
+      console.log("  ✔ Event attendees: 12 (4 + 3 + 5 across 3 events)");
+    }
+  }
 
   // ── Volunteer follow-up tasks ─────────────────────────────────────────────
   // 3 open volunteer_follow_up tasks assigned to the field organizer, linked

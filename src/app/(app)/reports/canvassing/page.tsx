@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { canViewReports } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { DemoHint } from "@/components/demo/demo-hint";
 import type { Role } from "@/types";
 
 export const metadata: Metadata = { title: "Canvassing Activity" };
@@ -90,6 +91,12 @@ export default async function CanvassingActivityPage() {
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto">
+      <DemoHint
+        demoMode={process.env.DEMO_MODE === "true"}
+        storageKey="demo-hint-report-canvassing"
+        hint="This report reflects all door-knocking activity across the demo campaign. Data is updated in real time as canvassers submit responses."
+      />
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Canvassing Activity</h1>
         <p className="text-slate-500 text-sm mt-0.5">Doors knocked and canvass responses across all canvassers</p>

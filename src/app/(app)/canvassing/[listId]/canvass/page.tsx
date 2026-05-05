@@ -78,6 +78,7 @@ export default async function CanvassPage({ params }: PageProps) {
       fieldMessages={fieldMessages}
       activeSurvey={activeSurvey}
       consentTypes={consentTypes}
+      demoMode={process.env.DEMO_MODE === "true"}
     />
   );
 }
