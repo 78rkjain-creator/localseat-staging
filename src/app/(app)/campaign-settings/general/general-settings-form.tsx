@@ -5,6 +5,10 @@ import { saveGeneralSettings } from "./actions";
 import type { GeneralSettingsState } from "./actions";
 import { AddressPicker } from "@/components/ui/address-picker";
 import type { AddressPickerResult } from "@/components/ui/address-picker";
+import { MunicipalitySelector } from "@/components/ui/municipality-selector";
+import type { MunicipalitySelectorValue } from "@/components/ui/municipality-selector";
+import { MunicipalityMap } from "@/components/ui/municipality-map";
+import type { Polygon, MultiPolygon } from "geojson";
 
 interface VotingDate {
   date: string;
@@ -30,6 +34,21 @@ interface Props {
   advanceVotingDates: VotingDate[];
   initialOfficeAddr: OfficeAddr | null;
   initialOfficeDisplay: string;
+  initialMunicipalityName: string | null;
+  initialMunicipalityId: string | null;
+  initialMunicipalityBoundary: Polygon | MultiPolygon | null;
+}
+
+interface BoundaryIndex {
+  [id: string]: string;
+}
+
+function bboxToPolygon(bbox: [number, number, number, number]): Polygon {
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  return {
+    type: "Polygon",
+    coordinates: [[[minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat]]],
+  };
 }
 
 const initialState: GeneralSettingsState = {};
@@ -45,11 +64,54 @@ export function GeneralSettingsForm({
   advanceVotingDates: initialAdvanceDates,
   initialOfficeAddr,
   initialOfficeDisplay,
+  initialMunicipalityName,
+  initialMunicipalityId,
+  initialMunicipalityBoundary,
 }: Props) {
   const [state, formAction, isPending] = useActionState(saveGeneralSettings, initialState);
   const [vDates, setVDates] = useState<VotingDate[]>(initialAdvanceDates);
   const [officeAddr, setOfficeAddr] = useState<OfficeAddr | null>(initialOfficeAddr);
   const [showPicker, setShowPicker] = useState(!initialOfficeAddr);
+  const [municipality, setMunicipality] = useState<MunicipalitySelectorValue | null>(
+    initialMunicipalityName ? { id: initialMunicipalityId, name: initialMunicipalityName } : null
+  );
+  const [municipalityBoundary, setMunicipalityBoundary] = useState<Polygon | MultiPolygon | null>(
+    initialMunicipalityBoundary
+  );
+  const [loadingBoundary, setLoadingBoundary] = useState(false);
+
+  async function fetchAndSetBoundary(id: string, bbox?: [number, number, number, number]) {
+    setLoadingBoundary(true);
+    try {
+      const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
+      if (indexRes?.ok) {
+        const index: BoundaryIndex = await indexRes.json();
+        const path = index[id];
+        if (path) {
+          const geoRes = await fetch(path);
+          if (geoRes.ok) {
+            setMunicipalityBoundary((await geoRes.json()) as Polygon | MultiPolygon);
+            return;
+          }
+        }
+      }
+      if (bbox) setMunicipalityBoundary(bboxToPolygon(bbox));
+    } catch {
+      if (bbox) setMunicipalityBoundary(bboxToPolygon(bbox));
+    } finally {
+      setLoadingBoundary(false);
+    }
+  }
+
+  async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
+    setMunicipality(value);
+    setMunicipalityBoundary(null);
+    if (value?.id) {
+      await fetchAndSetBoundary(value.id, value.bbox);
+    } else if (value?.bbox) {
+      setMunicipalityBoundary(bboxToPolygon(value.bbox));
+    }
+  }
 
   function addDate() {
     setVDates((d) => [...d, { date: "", time: "09:00" }]);
@@ -136,6 +198,11 @@ export function GeneralSettingsForm({
       <input type="hidden" name="officeAddressLat"   value={officeAddr?.lat ?? ""} />
       <input type="hidden" name="officeAddressLng"   value={officeAddr?.lng ?? ""} />
       <input type="hidden" name="officeAddressId"    value={officeAddr?.addressId ?? ""} />
+
+      {/* Hidden municipality fields */}
+      <input type="hidden" name="municipalityName"     value={municipality?.name ?? ""} />
+      <input type="hidden" name="municipalityId"       value={municipality?.id ?? ""} />
+      <input type="hidden" name="municipalityBoundary" value={municipalityBoundary ? JSON.stringify(municipalityBoundary) : ""} />
 
       <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
 
@@ -287,6 +354,27 @@ export function GeneralSettingsForm({
             </svg>
             Add another date
           </button>
+        </div>
+
+        {/* Municipality */}
+        <div className="px-5 py-5">
+          <p className="text-sm font-semibold text-slate-700 mb-1.5">Municipality</p>
+          <p className="text-xs text-slate-400 mb-3">
+            The Ontario municipality where this campaign is running.
+          </p>
+          <MunicipalitySelector
+            value={municipality}
+            onChange={handleMunicipalityChange}
+            placeholder="Search Ontario municipalities…"
+          />
+          <div className="mt-3">
+            <MunicipalityMap
+              boundary={municipalityBoundary}
+              municipalityName={municipality?.name ?? null}
+              center={municipality?.center}
+              loading={loadingBoundary}
+            />
+          </div>
         </div>
 
       </div>

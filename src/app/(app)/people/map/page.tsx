@@ -9,6 +9,7 @@ import { isContactMapEnabled } from "@/lib/plan-limits";
 import { UpgradeCard } from "@/components/upgrade-card";
 import { FEATURE_METADATA } from "@/lib/feature-metadata";
 import type { Role } from "@/types";
+import type { Polygon, MultiPolygon } from "geojson";
 
 export const metadata: Metadata = { title: "Contact Map" };
 
@@ -47,14 +48,15 @@ export default async function ContactMapPage() {
   const campaignRow = await db.campaign.findUnique({
     where: { id: activeCampaignId },
     select: {
-      officeAddressLat:         true,
-      officeAddressLng:         true,
+      officeAddressLat:          true,
+      officeAddressLng:          true,
       officeAddressStreetNumber: true,
       officeAddressStreetName:   true,
       officeAddressUnitNumber:   true,
       officeAddressCity:         true,
       officeAddressProvince:     true,
       officeAddressPostalCode:   true,
+      municipalityBoundary:      true,
     },
   });
 
@@ -90,6 +92,11 @@ export default async function ContactMapPage() {
     );
   }
 
+  const municipalityBoundary =
+    campaignRow?.municipalityBoundary != null
+      ? (campaignRow.municipalityBoundary as unknown as Polygon | MultiPolygon)
+      : null;
+
   return (
     <CampaignMapClient
       features={features}
@@ -98,6 +105,7 @@ export default async function ContactMapPage() {
       totalCount={totalCount}
       canCreate={canCreate}
       officePin={officePin}
+      municipalityBoundary={municipalityBoundary}
     />
   );
 }

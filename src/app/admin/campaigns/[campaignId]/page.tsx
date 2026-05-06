@@ -149,7 +149,13 @@ export default async function AdminCampaignDetailPage({
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-sm font-semibold text-slate-700 mb-4">Campaign Details</h2>
             <div className="flex flex-col gap-3">
-              <DetailRow label="Municipality" value={campaign.municipality ?? campaign.city} />
+              <DetailRow
+                label="Municipality"
+                value={campaign.municipalityName ?? campaign.municipality ?? campaign.city}
+              />
+              {campaign.municipalityName && campaign.municipalityId && (
+                <DetailRow label="Municipality ID" value={campaign.municipalityId} />
+              )}
               <DetailRow label="Province" value={campaign.province} />
               <DetailRow
                 label="Wards"

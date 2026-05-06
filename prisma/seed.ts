@@ -14,6 +14,8 @@
 
 import { PrismaClient, SupportLevel, CanvassOutcome, DonorStatus, OutreachChannel, SignStatus, SignLocationType, ListSource } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 const db = new PrismaClient();
 const VERIFIED = new Date();
@@ -236,6 +238,9 @@ async function main() {
   console.log("  ✓ Cleaned up existing data");
 
   // ── Campaign ──────────────────────────────────────────────────────────────
+  const portHopeBoundaryPath = resolve(process.cwd(), "public/data/boundaries/14022.json");
+  const portHopeBoundary = JSON.parse(readFileSync(portHopeBoundaryPath, "utf-8")) as object;
+
   const campaign = await db.campaign.create({
     data: {
       name:         "Owen Sound Ward 4 — 2026",
@@ -243,6 +248,9 @@ async function main() {
       officeSought: "Ward 4 Councillor",
       description:  "Municipal election campaign for Ward 4, Owen Sound, Ontario. Focus on affordable housing, active transportation, and neighbourhood safety.",
       municipality: "Owen Sound",
+      municipalityName:     "Municipality of Port Hope",
+      municipalityId:       "14022",
+      municipalityBoundary: portHopeBoundary,
       wards:        ["Ward 4"],
       city:         "Owen Sound",
       province:     "ON",
@@ -1615,7 +1623,8 @@ async function main() {
     { key: "arena_feature_canvass_script",         value: "true"  },
 
     // System
-    { key: "maintenance_mode", value: "false" },
+    { key: "maintenance_mode",              value: "false" },
+    { key: "municipality_selection_required", value: "false" },
   ];
 
   for (let i = 0; i < SETTINGS.length; i++) {

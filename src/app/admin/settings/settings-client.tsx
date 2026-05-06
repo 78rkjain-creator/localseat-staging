@@ -68,6 +68,24 @@ function SystemStatusSection({
   const [toggling, setToggling]           = useState(false);
   const [toggleError, setToggleError]     = useState("");
 
+  const [municipalityRequired, setMunicipalityRequired] = useState(
+    initialSettings["municipality_selection_required"] === "true",
+  );
+  const [municipalityToggling, setMunicipalityToggling] = useState(false);
+  const [municipalityToggleError, setMunicipalityToggleError] = useState("");
+
+  async function handleMunicipalityToggle(next: boolean) {
+    setMunicipalityToggling(true);
+    setMunicipalityToggleError("");
+    const result = await updatePlatformSettings({ municipality_selection_required: next ? "true" : "false" });
+    setMunicipalityToggling(false);
+    if (result.error) {
+      setMunicipalityToggleError(result.error);
+    } else {
+      setMunicipalityRequired(next);
+    }
+  }
+
   const [forceState, setForceState]       = useState<ForceLogoutState>("idle");
   const [forceError, setForceError]       = useState("");
 
@@ -162,6 +180,66 @@ function SystemStatusSection({
                 type="button"
                 role="switch"
                 aria-checked={maintenanceOn}
+                disabled
+                className="relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent bg-slate-200 opacity-60 cursor-not-allowed"
+              >
+                <span className="inline-block h-5 w-5 rounded-full bg-white shadow" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Municipality required row */}
+        <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <p className="text-sm font-semibold text-slate-800">Require municipality selection</p>
+              {municipalityRequired ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                  Required
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
+                  Optional
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+              {municipalityRequired
+                ? "Campaigns without a municipality set will be redirected to the municipality selection page before accessing the app."
+                : "Municipality selection is optional. Campaigns can access the app without selecting a municipality."}
+            </p>
+            {municipalityToggleError && (
+              <p className="mt-1.5 text-xs text-red-600">{municipalityToggleError}</p>
+            )}
+          </div>
+
+          <div className="flex-shrink-0">
+            {canEdit ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={municipalityRequired}
+                onClick={() => handleMunicipalityToggle(!municipalityRequired)}
+                disabled={municipalityToggling}
+                className={[
+                  "relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200",
+                  municipalityRequired ? "bg-brand-500" : "bg-slate-200",
+                  municipalityToggling ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                    municipalityRequired ? "translate-x-5" : "translate-x-0",
+                  ].join(" ")}
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={municipalityRequired}
                 disabled
                 className="relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent bg-slate-200 opacity-60 cursor-not-allowed"
               >

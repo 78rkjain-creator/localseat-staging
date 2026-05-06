@@ -34,7 +34,7 @@ export default function CreateCampaignPage() {
       await update({ refreshMemberships: true, activeCampaignId: result?.campaignId });
       // Wait for the session cookie to propagate before navigating
       await new Promise((resolve) => setTimeout(resolve, 500));
-      window.location.href = `/onboarding/choose-plan?campaignId=${result?.campaignId}`;
+      window.location.href = `/onboarding/select-municipality?campaignId=${result?.campaignId}&next=choose-plan`;
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

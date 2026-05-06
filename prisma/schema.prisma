@@ -176,7 +176,10 @@ model Campaign {
   ballotName   String?
   officeSought String?
   description  String?
-  municipality String?
+  municipality         String?
+  municipalityName     String?
+  municipalityId       String?
+  municipalityBoundary Json?
   wards        String[]
   city         String
   province     String   @default("ON")
