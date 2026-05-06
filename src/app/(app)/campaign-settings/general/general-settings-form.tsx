@@ -43,14 +43,6 @@ interface BoundaryIndex {
   [id: string]: string;
 }
 
-function bboxToPolygon(bbox: [number, number, number, number]): Polygon {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  return {
-    type: "Polygon",
-    coordinates: [[[minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat]]],
-  };
-}
-
 const initialState: GeneralSettingsState = {};
 
 function formatOfficeDisplay(a: OfficeAddr): string {
@@ -80,7 +72,7 @@ export function GeneralSettingsForm({
   );
   const [loadingBoundary, setLoadingBoundary] = useState(false);
 
-  async function fetchAndSetBoundary(id: string, bbox?: [number, number, number, number]) {
+  async function fetchAndSetBoundary(id: string) {
     setLoadingBoundary(true);
     try {
       const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
@@ -90,14 +82,17 @@ export function GeneralSettingsForm({
         if (path) {
           const geoRes = await fetch(path);
           if (geoRes.ok) {
-            setMunicipalityBoundary((await geoRes.json()) as Polygon | MultiPolygon);
+            const raw = await geoRes.json();
+            // Support both raw geometry and GeoJSON Feature wrapper
+            const geo = (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
+            setMunicipalityBoundary(geo);
             return;
           }
         }
       }
-      if (bbox) setMunicipalityBoundary(bboxToPolygon(bbox));
+      // No boundary file — show placeholder, don't draw a bbox rectangle
     } catch {
-      if (bbox) setMunicipalityBoundary(bboxToPolygon(bbox));
+      // Fetch failed — show placeholder
     } finally {
       setLoadingBoundary(false);
     }
@@ -107,10 +102,9 @@ export function GeneralSettingsForm({
     setMunicipality(value);
     setMunicipalityBoundary(null);
     if (value?.id) {
-      await fetchAndSetBoundary(value.id, value.bbox);
-    } else if (value?.bbox) {
-      setMunicipalityBoundary(bboxToPolygon(value.bbox));
+      await fetchAndSetBoundary(value.id);
     }
+    // Custom entries without an id get no boundary (placeholder shown)
   }
 
   function addDate() {

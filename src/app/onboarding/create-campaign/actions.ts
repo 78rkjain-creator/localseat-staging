@@ -3,7 +3,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Role } from "@prisma/client";
+import { Role, Prisma } from "@prisma/client";
 import { createAuditLog } from "@/lib/audit";
 
 interface CreateCampaignInput {
@@ -13,6 +13,9 @@ interface CreateCampaignInput {
   municipality?: string;
   wardsInput?: string;
   electionDate?: string;
+  municipalityName?: string;
+  municipalityId?: string;
+  municipalityBoundary?: string; // JSON string
 }
 
 export async function createCampaign(
@@ -38,6 +41,15 @@ export async function createCampaign(
   const electionDate = input.electionDate ? new Date(input.electionDate) : null;
   const year = electionDate ? electionDate.getFullYear() : new Date().getFullYear();
 
+  const municipalityName = input.municipalityName?.trim() || null;
+  const municipalityId   = input.municipalityId?.trim() || null;
+  let municipalityBoundary: Prisma.InputJsonValue | null = null;
+  if (input.municipalityBoundary?.trim()) {
+    try {
+      municipalityBoundary = JSON.parse(input.municipalityBoundary) as Prisma.InputJsonValue;
+    } catch { /* ignore malformed boundary */ }
+  }
+
   // Users creating their first campaign are candidates; users adding a
   // subsequent campaign (already have memberships) become campaign managers.
   const membershipRole =
@@ -45,12 +57,18 @@ export async function createCampaign(
       ? Role.campaign_manager
       : Role.candidate;
 
+  // Use municipalityName for city/municipality fields when available (new selector flow)
+  const cityValue = municipalityName ?? municipality;
+
   const campaign = await db.campaign.create({
     data: {
       name,
       ...(ballotName ? { ballotName } : {}),
       ...(officeSought ? { officeSought } : {}),
-      ...(municipality ? { municipality, city: municipality } : { city: "" }),
+      ...(cityValue ? { municipality: cityValue, city: cityValue } : { city: "" }),
+      ...(municipalityName ? { municipalityName } : {}),
+      ...(municipalityId   ? { municipalityId   } : {}),
+      ...(municipalityBoundary ? { municipalityBoundary } : {}),
       wards,
       province: "ON",
       year,

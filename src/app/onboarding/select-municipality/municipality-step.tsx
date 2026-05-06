@@ -22,21 +22,6 @@ interface Props {
 
 const initialState: SaveMunicipalityState = {};
 
-function bboxToPolygon(bbox: [number, number, number, number]): Polygon {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  return {
-    type: "Polygon",
-    coordinates: [
-      [
-        [minLng, minLat],
-        [maxLng, minLat],
-        [maxLng, maxLat],
-        [minLng, maxLat],
-        [minLng, minLat],
-      ],
-    ],
-  };
-}
 
 export function MunicipalityStep({
   campaignId,
@@ -54,14 +39,11 @@ export function MunicipalityStep({
   // attempt to fetch the boundary file on mount.
   useEffect(() => {
     if (initialBoundary || !initialMunicipality?.id) return;
-    void fetchBoundary(initialMunicipality.id, initialMunicipality.bbox);
+    void fetchBoundary(initialMunicipality.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchBoundary(
-    id: string,
-    bbox?: [number, number, number, number]
-  ) {
+  async function fetchBoundary(id: string) {
     setLoadingBoundary(true);
     try {
       const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
@@ -71,18 +53,17 @@ export function MunicipalityStep({
         if (path) {
           const geoRes = await fetch(path);
           if (geoRes.ok) {
-            const geo = (await geoRes.json()) as Polygon | MultiPolygon;
+            const raw = await geoRes.json();
+            // Support both raw geometry and GeoJSON Feature wrapper
+            const geo = (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
             setBoundary(geo);
             return;
           }
         }
       }
-      // Fallback: derive rectangle from bbox
-      if (bbox) {
-        setBoundary(bboxToPolygon(bbox));
-      }
+      // No boundary file — show placeholder, don't draw a bbox rectangle
     } catch {
-      if (bbox) setBoundary(bboxToPolygon(bbox));
+      // Fetch failed — show placeholder
     } finally {
       setLoadingBoundary(false);
     }
@@ -95,11 +76,9 @@ export function MunicipalityStep({
     if (!value) return;
 
     if (value.id) {
-      await fetchBoundary(value.id, value.bbox);
-    } else if (value.bbox) {
-      // Custom entry with bbox (shouldn't normally happen, but safe)
-      setBoundary(bboxToPolygon(value.bbox));
+      await fetchBoundary(value.id);
     }
+    // Custom entries without an id get no boundary (placeholder shown)
   }
 
   return (

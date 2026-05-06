@@ -6,17 +6,57 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCampaign } from "./actions";
 import { Logo } from "@/components/brand/Logo";
+import { MunicipalitySelector } from "@/components/ui/municipality-selector";
+import type { MunicipalitySelectorValue } from "@/components/ui/municipality-selector";
+import { MunicipalityMap } from "@/components/ui/municipality-map";
+import type { Polygon, MultiPolygon } from "geojson";
+
+interface BoundaryIndex {
+  [id: string]: string;
+}
+
+async function fetchBoundaryById(id: string): Promise<Polygon | MultiPolygon | null> {
+  try {
+    const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
+    if (indexRes?.ok) {
+      const index: BoundaryIndex = await indexRes.json();
+      const path = index[id];
+      if (path) {
+        const geoRes = await fetch(path);
+        if (geoRes.ok) {
+          const raw = await geoRes.json();
+          // Support both raw geometry and GeoJSON Feature wrapper
+          return (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
 
 export default function CreateCampaignPage() {
   const { update } = useSession();
   const [name, setName] = useState("");
   const [ballotName, setBallotName] = useState("");
   const [officeSought, setOfficeSought] = useState("");
-  const [municipality, setMunicipality] = useState("");
+  const [selected, setSelected] = useState<MunicipalitySelectorValue | null>(null);
+  const [boundary, setBoundary] = useState<Polygon | MultiPolygon | null>(null);
+  const [loadingBoundary, setLoadingBoundary] = useState(false);
   const [wardsInput, setWardsInput] = useState("");
   const [electionDate, setElectionDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
+    setSelected(value);
+    setBoundary(null);
+    if (value?.id) {
+      setLoadingBoundary(true);
+      const geo = await fetchBoundaryById(value.id);
+      setBoundary(geo);
+      setLoadingBoundary(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -24,7 +64,16 @@ export default function CreateCampaignPage() {
     setLoading(true);
 
     try {
-      const result = await createCampaign({ name, ballotName, officeSought, municipality, wardsInput, electionDate });
+      const result = await createCampaign({
+        name,
+        ballotName,
+        officeSought,
+        wardsInput,
+        electionDate,
+        municipalityName: selected?.name,
+        municipalityId: selected?.id ?? undefined,
+        municipalityBoundary: boundary ? JSON.stringify(boundary) : undefined,
+      });
       if (result?.error) {
         setError(result.error);
         setLoading(false);
@@ -34,7 +83,12 @@ export default function CreateCampaignPage() {
       await update({ refreshMemberships: true, activeCampaignId: result?.campaignId });
       // Wait for the session cookie to propagate before navigating
       await new Promise((resolve) => setTimeout(resolve, 500));
-      window.location.href = `/onboarding/select-municipality?campaignId=${result?.campaignId}&next=choose-plan`;
+      // Skip municipality onboarding step if already selected
+      if (selected?.name) {
+        window.location.href = `/onboarding/choose-plan?campaignId=${result?.campaignId}`;
+      } else {
+        window.location.href = `/onboarding/select-municipality?campaignId=${result?.campaignId}&next=choose-plan`;
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -92,13 +146,26 @@ export default function CreateCampaignPage() {
             placeholder="e.g. City Councillor, Mayor, School Board Trustee"
           />
 
-          <Input
-            label="Municipality"
-            type="text"
-            value={municipality}
-            onChange={(e) => setMunicipality(e.target.value)}
-            placeholder="Ottawa"
-          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Municipality
+            </label>
+            <MunicipalitySelector
+              value={selected}
+              onChange={handleMunicipalityChange}
+              placeholder="Search Ontario municipalities…"
+            />
+            {selected && (
+              <div className="mt-1">
+                <MunicipalityMap
+                  boundary={boundary}
+                  municipalityName={selected.name}
+                  center={selected.center}
+                  loading={loadingBoundary}
+                />
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <Input
