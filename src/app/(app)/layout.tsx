@@ -15,6 +15,7 @@ import { hasPendingRequest } from "@/lib/support-access";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
+import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -40,6 +41,24 @@ export default async function AppLayout({
     emailVerified,
     platformRole: sessionPlatformRole,
   } = session.user;
+
+  // Data suppliers get a stripped-down layout — supplier portal only.
+  // The proxy already redirects them from all other routes.
+  if (activeRole === "data_supplier") {
+    const activeMembership = memberships.find((m) => m.campaignId === activeCampaignId);
+    return (
+      <div className="flex flex-col min-h-screen bg-slate-50">
+        <SupplierTopBar
+          firstName={firstName}
+          lastName={lastName}
+          campaignName={activeMembership?.campaignName ?? null}
+        />
+        <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   // Fetch createdAt for the verification banner (only when needed).
   let accountCreatedAt: string | null = null;

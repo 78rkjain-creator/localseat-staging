@@ -19,6 +19,7 @@ enum Role {
   volunteer_coordinator
   finance_lead
   sign_installer
+  data_supplier
 }
 
 enum SupportLevel {
@@ -233,6 +234,8 @@ model Campaign {
   signatureRecords      SignatureRecord[]
   signatureConsentTypes SignatureConsentType[]
   supportAccessGrants   SupportAccessGrant[]
+  dataImports           DataImport[]
+  supplierAcknowledgements SupplierAcknowledgement[]
   promoCode             PromoCode?  @relation(fields: [promoCodeId], references: [id])
   promoCodeId           String?
 
@@ -292,6 +295,9 @@ model User {
   supportAccessApprovals    SupportAccessGrant[] @relation("SupportAccessApprovedBy")
   supportAccessRevocations  SupportAccessGrant[] @relation("SupportAccessRevokedBy")
   supportAccessDenials      SupportAccessGrant[] @relation("SupportAccessDeniedBy")
+  dataImportsUploaded       DataImport[]         @relation("DataImportUploadedBy")
+  dataImportsReviewed       DataImport[]         @relation("DataImportReviewedBy")
+  supplierAcknowledgementsSigned SupplierAcknowledgement[] @relation("SupplierAcknowledgementSigner")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -301,12 +307,15 @@ model User {
 // ─── Campaign Membership ──────────────────────────────────────────────────────
 
 model CampaignMembership {
-  id         String   @id @default(cuid())
-  userId     String
-  campaignId String
-  role       Role
-  createdAt  DateTime  @default(now())
-  deletedAt  DateTime?
+  id           String   @id @default(cuid())
+  userId       String
+  campaignId   String
+  role         Role
+  company      String?
+  companyPhone String?
+  companyEmail String?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
 
   user     User     @relation(fields: [userId], references: [id])
   campaign Campaign @relation(fields: [campaignId], references: [id])
@@ -1293,4 +1302,52 @@ model PromoCode {
   campaigns         Campaign[]
 
   @@map("promo_codes")
+}
+
+// ─── Data Supplier System ─────────────────────────────────────────────────────
+
+model DataImport {
+  id            String    @id @default(cuid())
+  campaignId    String
+  uploadedById  String
+  fileName      String
+  recordCount   Int
+  validCount    Int
+  errorCount    Int
+  status        String    @default("pending")
+  rawData       Json
+  errors        Json?
+  supplierNote  String?
+  reviewNote    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  uploadedBy  User     @relation("DataImportUploadedBy", fields: [uploadedById], references: [id])
+  reviewedBy  User?    @relation("DataImportReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([campaignId])
+  @@index([uploadedById])
+  @@map("data_imports")
+}
+
+model SupplierAcknowledgement {
+  id              String   @id @default(cuid())
+  campaignId      String
+  signedById      String
+  signedName      String
+  signedEmail     String
+  signatureData   String   @db.Text
+  supplierEmail   String
+  supplierCompany String?
+  createdAt       DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  signedBy User     @relation("SupplierAcknowledgementSigner", fields: [signedById], references: [id])
+
+  @@index([campaignId])
+  @@map("supplier_acknowledgements")
 }

@@ -10,7 +10,8 @@ export type Role =
   | "canvasser"
   | "volunteer_coordinator"
   | "finance_lead"
-  | "sign_installer";
+  | "sign_installer"
+  | "data_supplier";
 
 export type SupportLevel =
   | "strong_yes"
@@ -79,6 +80,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   volunteer_coordinator: "Volunteer Coordinator",
   finance_lead: "Finance Lead",
   sign_installer: "Sign Installer",
+  data_supplier: "Data Supplier",
 };
 
 export const SUPPORT_LEVEL_LABELS: Record<SupportLevel, string> = {

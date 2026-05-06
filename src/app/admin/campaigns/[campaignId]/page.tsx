@@ -16,6 +16,7 @@ import {
 import { OverridePanel } from "./override-panel";
 import { MembersTabs } from "./members-tabs";
 import { SupportAccessCard } from "./support-access-card";
+import { HardDeleteCampaignButton } from "./hard-delete-campaign-button";
 
 async function getCampaignDetail(campaignId: string) {
   const [campaign, voterCount, responseCount, donorCount, listCount] =
@@ -299,6 +300,17 @@ export default async function AdminCampaignDetailPage({
                 <p className="text-xs text-slate-400">
                   This campaign has been deleted. Only a Super User can restore it.
                 </p>
+              )}
+
+              {/* Hard delete — super_user only */}
+              {callerIsSuperUser && (
+                <>
+                  <div className="h-px bg-slate-100" />
+                  <HardDeleteCampaignButton
+                    campaignId={campaignId}
+                    campaignName={campaign.name}
+                  />
+                </>
               )}
             </div>
           </div>

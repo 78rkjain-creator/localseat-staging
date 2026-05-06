@@ -50,6 +50,16 @@ const SIGN_INSTALLER_ALLOW_PREFIXES = [
   "/api/auth",
 ];
 
+// Data suppliers can only access the supplier portal and account management.
+const DATA_SUPPLIER_ALLOW_PREFIXES = [
+  "/supplier-portal",
+  "/select-campaign",
+  "/onboarding",
+  "/account",
+  "/verify-email",
+  "/api/auth",
+];
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -106,6 +116,16 @@ export default withAuth(
       );
       if (!allowed) {
         return redirect("/signs");
+      }
+    }
+
+    // Data supplier deny-list — redirect to /supplier-portal for any disallowed route.
+    if (token.activeRole === "data_supplier") {
+      const allowed = DATA_SUPPLIER_ALLOW_PREFIXES.some((prefix) =>
+        pathname.startsWith(prefix)
+      );
+      if (!allowed) {
+        return redirect("/supplier-portal");
       }
     }
 

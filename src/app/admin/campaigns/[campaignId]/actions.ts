@@ -440,6 +440,119 @@ export async function revokeSupportAccessAdminAction(
   return {};
 }
 
+// ── Hard delete campaign (super_user only) ────────────────────────────────────
+
+export async function hardDeleteCampaign(
+  campaignId: string
+): Promise<{ error?: string }> {
+  const auth = await requireSuperUser();
+  if ("error" in auth) return auth;
+
+  const campaign = await db.campaign.findUnique({
+    where: { id: campaignId },
+    select: { name: true },
+  });
+  if (!campaign) return { error: "Campaign not found." };
+
+  try {
+    await db.$transaction(async (tx) => {
+      // Invalidate sessions for all campaign members
+      await tx.user.updateMany({
+        where: { memberships: { some: { campaignId } } },
+        data: { sessionVersion: { increment: 1 } },
+      });
+
+      // Children of CanvassResponse
+      await tx.surveyResponse.deleteMany({ where: { survey: { campaignId } } });
+      await tx.canvassResponse.deleteMany({
+        where: { assignment: { canvassList: { campaignId } } },
+      });
+
+      // Walk list children
+      await tx.canvassListEntry.deleteMany({ where: { canvassList: { campaignId } } });
+      await tx.canvassAssignment.deleteMany({ where: { canvassList: { campaignId } } });
+
+      // Events and event attendees
+      await tx.eventAttendee.deleteMany({ where: { event: { campaignId } } });
+      await tx.event.deleteMany({ where: { campaignId } });
+
+      // Walk lists (assignments + entries gone)
+      await tx.canvassList.deleteMany({ where: { campaignId } });
+
+      // Import records
+      await tx.personListMembership.deleteMany({ where: { campaignId } });
+      await tx.listImport.deleteMany({ where: { campaignId } });
+
+      // Person-scoped records
+      await tx.note.deleteMany({ where: { person: { campaignId } } });
+      await tx.task.deleteMany({ where: { campaignId } });
+      await tx.outreachLog.deleteMany({ where: { campaignId } });
+      await tx.addressChangeRequest.deleteMany({ where: { campaignId } });
+      await tx.voterChangeRequest.deleteMany({ where: { campaignId } });
+      await tx.votingRecord.deleteMany({ where: { campaignId } });
+
+      // Signatures
+      await tx.signatureConsent.deleteMany({
+        where: { signature: { campaignId } },
+      });
+      await tx.signatureRecord.deleteMany({ where: { campaignId } });
+
+      // Tags on people
+      await tx.personTag.deleteMany({ where: { person: { campaignId } } });
+
+      // Volunteer records and shifts
+      await tx.volunteerShiftAttendee.deleteMany({
+        where: { shift: { campaignId } },
+      });
+      await tx.volunteerRecord.deleteMany({ where: { campaignId } });
+      await tx.volunteerShift.deleteMany({ where: { campaignId } });
+
+      // Donors
+      await tx.donor.deleteMany({ where: { campaignId } });
+
+      // Surveys
+      await tx.surveyQuestion.deleteMany({ where: { survey: { campaignId } } });
+      await tx.survey.deleteMany({ where: { campaignId } });
+
+      // Miscellaneous campaign records
+      await tx.fieldMessage.deleteMany({ where: { campaignId } });
+      await tx.sign.deleteMany({ where: { campaignId } });
+      await tx.auditLog.deleteMany({ where: { campaignId } });
+      await tx.supportAccessGrant.deleteMany({ where: { campaignId } });
+      await tx.campaignMembership.deleteMany({ where: { campaignId } });
+      await tx.campaignCompetitor.deleteMany({ where: { campaignId } });
+      await tx.campaignOverride.deleteMany({ where: { campaignId } });
+      await tx.signatureConsentType.deleteMany({ where: { campaignId } });
+
+      // Core data (addresses last since households + signs depend on them)
+      await tx.person.deleteMany({ where: { campaignId } });
+      await tx.household.deleteMany({ where: { campaignId } });
+      await tx.address.deleteMany({ where: { campaignId } });
+      await tx.tag.deleteMany({ where: { campaignId } });
+
+      // Campaign itself
+      await tx.campaign.delete({ where: { id: campaignId } });
+    });
+  } catch (err) {
+    console.error("[hardDeleteCampaign] transaction failed:", err);
+    return { error: "Failed to delete campaign. Check server logs." };
+  }
+
+  // Platform-level audit record (campaignId: null so it outlives the campaign)
+  await db.auditLog.create({
+    data: {
+      campaignId: null,
+      userId: auth.session.user.id,
+      action: "CAMPAIGN_HARD_DELETED",
+      entityType: "campaign",
+      entityId: campaignId,
+      after: { campaignName: campaign.name },
+    },
+  });
+
+  return {};
+}
+
 export async function validateSupportEntry(
   campaignId: string,
   mode: "readonly" | "full"

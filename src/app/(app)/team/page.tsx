@@ -79,6 +79,7 @@ const ROLE_BADGE: Record<Role, string> = {
   canvasser:             "bg-sky-50 text-sky-700 border-sky-200",
   sign_installer:        "bg-orange-50 text-orange-700 border-orange-200",
   finance_lead:          "bg-amber-50 text-amber-700 border-amber-200",
+  data_supplier:         "bg-slate-100 text-slate-500 border-slate-200",
 };
 
 function sortMembers(members: TeamMember[]): TeamMember[] {

@@ -27,6 +27,8 @@ const ROLE_RANK: Record<Role, number> = {
   co_chair:               5,
   finance_lead:           5,
   sign_installer:         3,
+  // Supplier portal only — no campaign data access
+  data_supplier:          0,
 };
 
 // Returns true if role is at least as privileged as the minimum threshold.
@@ -274,4 +276,16 @@ export async function requirePlatformAdmin() {
     return { error: "Platform admin access required." } as const;
   }
   return { session } as const;
+}
+
+// ── Data supplier system ───────────────────────────────────────────────────────
+
+// candidate and campaign_manager can invite and manage data suppliers.
+export function canManageSuppliers(role: Role): boolean {
+  return role === Role.candidate || role === Role.campaign_manager;
+}
+
+// candidate, campaign_manager, and data_manager can review and approve data imports.
+export function canReviewDataImports(role: Role): boolean {
+  return FULL_ACCESS.includes(role);
 }
