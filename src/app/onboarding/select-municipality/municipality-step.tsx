@@ -8,10 +8,6 @@ import type { MunicipalitySelectorValue } from "@/components/ui/municipality-sel
 import { MunicipalityMap } from "@/components/ui/municipality-map";
 import type { Polygon, MultiPolygon } from "geojson";
 
-interface BoundaryIndex {
-  [municipalityId: string]: string;
-}
-
 interface Props {
   campaignId: string;
   required: boolean;
@@ -46,22 +42,14 @@ export function MunicipalityStep({
   async function fetchBoundary(id: string) {
     setLoadingBoundary(true);
     try {
-      const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
-      if (indexRes?.ok) {
-        const index: BoundaryIndex = await indexRes.json();
-        const path = index[id];
-        if (path) {
-          const geoRes = await fetch(path);
-          if (geoRes.ok) {
-            const raw = await geoRes.json();
-            // Support both raw geometry and GeoJSON Feature wrapper
-            const geo = (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
-            setBoundary(geo);
-            return;
-          }
-        }
+      const res = await fetch(`/data/boundaries/${id}.json`);
+      if (res.ok) {
+        const raw = await res.json();
+        // Support both raw geometry and GeoJSON Feature wrapper
+        const geo = (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
+        setBoundary(geo);
       }
-      // No boundary file — show placeholder, don't draw a bbox rectangle
+      // 404 or error — show placeholder, don't draw a bbox rectangle
     } catch {
       // Fetch failed — show placeholder
     } finally {

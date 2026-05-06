@@ -11,27 +11,16 @@ import type { MunicipalitySelectorValue } from "@/components/ui/municipality-sel
 import { MunicipalityMap } from "@/components/ui/municipality-map";
 import type { Polygon, MultiPolygon } from "geojson";
 
-interface BoundaryIndex {
-  [id: string]: string;
-}
-
 async function fetchBoundaryById(id: string): Promise<Polygon | MultiPolygon | null> {
   try {
-    const indexRes = await fetch("/data/boundaries/index.json").catch(() => null);
-    if (indexRes?.ok) {
-      const index: BoundaryIndex = await indexRes.json();
-      const path = index[id];
-      if (path) {
-        const geoRes = await fetch(path);
-        if (geoRes.ok) {
-          const raw = await geoRes.json();
-          // Support both raw geometry and GeoJSON Feature wrapper
-          return (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
-        }
-      }
-    }
-  } catch { /* ignore */ }
-  return null;
+    const res = await fetch(`/data/boundaries/${id}.json`);
+    if (!res.ok) return null;
+    const raw = await res.json();
+    // Support both raw geometry and GeoJSON Feature wrapper
+    return (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
+  } catch {
+    return null;
+  }
 }
 
 export default function CreateCampaignPage() {
