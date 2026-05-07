@@ -67,7 +67,7 @@ export async function saveGeneralSettings(
   const officeLatRaw       = (formData.get("officeAddressLat")   as string | null)?.trim() || null;
   const officeLngRaw       = (formData.get("officeAddressLng")   as string | null)?.trim() || null;
 
-  const hasOfficeAddress = !!(officeStreetNumber && officeStreetName);
+  const hasOfficeAddress = !!officeStreetName;
 
   let officeLat: number | null = null;
   let officeLng: number | null = null;

@@ -52,10 +52,10 @@ export default async function GeneralSettingsPage() {
       time: d.toISOString().slice(11, 16),
     }));
 
-  const hasOffice = !!(campaign.officeAddressStreetNumber && campaign.officeAddressStreetName);
+  const hasOffice = !!campaign.officeAddressStreetName;
   const initialOfficeAddr = hasOffice
     ? {
-        streetNumber: campaign.officeAddressStreetNumber!,
+        streetNumber: campaign.officeAddressStreetNumber ?? "",
         streetName:   campaign.officeAddressStreetName!,
         unitNumber:   campaign.officeAddressUnitNumber ?? "",
         city:         campaign.officeAddressCity ?? "",
@@ -67,8 +67,14 @@ export default async function GeneralSettingsPage() {
       }
     : null;
 
+  const streetLine = [
+    campaign.officeAddressStreetNumber,
+    campaign.officeAddressStreetName,
+    campaign.officeAddressUnitNumber ? `#${campaign.officeAddressUnitNumber}` : null,
+  ].filter(Boolean).join(" ");
   const initialOfficeDisplay = hasOffice
-    ? `${campaign.officeAddressStreetNumber} ${campaign.officeAddressStreetName}${campaign.officeAddressUnitNumber ? ` #${campaign.officeAddressUnitNumber}` : ""}, ${campaign.officeAddressCity}, ${campaign.officeAddressProvince} ${campaign.officeAddressPostalCode}`.trim()
+    ? [streetLine, campaign.officeAddressCity, campaign.officeAddressProvince, campaign.officeAddressPostalCode]
+        .filter(Boolean).join(", ")
     : "";
 
   return (
