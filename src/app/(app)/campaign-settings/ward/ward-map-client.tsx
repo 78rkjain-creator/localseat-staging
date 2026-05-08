@@ -43,12 +43,11 @@ function getBoundsFromGeometry(
 interface Props {
   wardBoundary: Polygon | MultiPolygon | null;
   wardBoundarySetAt: string | null;
-  municipalityBoundary: Polygon | MultiPolygon | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function WardMapClient({ wardBoundary, wardBoundarySetAt, municipalityBoundary }: Props) {
+export function WardMapClient({ wardBoundary, wardBoundarySetAt }: Props) {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,26 +250,6 @@ export function WardMapClient({ wardBoundary, wardBoundarySetAt, municipalityBou
       map.addControl(draw, "top-right");
 
       map.on("load", () => {
-        // Municipality boundary — bottommost reference layer
-        if (municipalityBoundary) {
-          map.addSource("municipality-boundary", {
-            type: "geojson",
-            data: { type: "Feature", properties: {}, geometry: municipalityBoundary },
-          });
-          map.addLayer({
-            id: "municipality-boundary-fill",
-            type: "fill",
-            source: "municipality-boundary",
-            paint: { "fill-color": "#94a3b8", "fill-opacity": 0.06 },
-          });
-          map.addLayer({
-            id: "municipality-boundary-line",
-            type: "line",
-            source: "municipality-boundary",
-            paint: { "line-color": "#94a3b8", "line-width": 1.5, "line-dasharray": [4, 3] },
-          });
-        }
-
         if (wardBoundary) {
           if (wardBoundary.type === "Polygon") {
             draw.add({ type: "Feature", geometry: wardBoundary, properties: {} });

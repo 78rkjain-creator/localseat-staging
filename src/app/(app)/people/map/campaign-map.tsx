@@ -51,7 +51,6 @@ interface OfficePin {
 interface Props {
   features: CampaignMapFeature[];
   wardBoundary: unknown | null;
-  municipalityBoundary?: unknown | null;
   campaignId: string;
   totalCount: number;
   canCreate: boolean;
@@ -130,7 +129,7 @@ function colorExpression(): unknown[] {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function CampaignMapClient({ features, wardBoundary, municipalityBoundary, campaignId, totalCount, canCreate, officePin }: Props) {
+export function CampaignMapClient({ features, wardBoundary, campaignId, totalCount, canCreate, officePin }: Props) {
   const mapContainer = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -163,7 +162,6 @@ export function CampaignMapClient({ features, wardBoundary, municipalityBoundary
   // Layer visibility
   const [enabled, setEnabled] = useState<EnabledLevels>(ALL_ENABLED);
   const [wardVisible, setWardVisible] = useState(true);
-  const [municipalityVisible, setMunicipalityVisible] = useState(true);
   const [overlayVisible, setOverlayVisible] = useState(true);
 
   // Overlay state
@@ -230,26 +228,6 @@ export function CampaignMapClient({ features, wardBoundary, municipalityBoundary
       mapRef.current = map;
 
       map.on("load", () => {
-        // ── Municipality boundary — bottommost reference layer ───────
-        if (municipalityBoundary) {
-          map.addSource("municipality-boundary", {
-            type: "geojson",
-            data: { type: "Feature", properties: {}, geometry: municipalityBoundary },
-          });
-          map.addLayer({
-            id: "municipality-boundary-fill",
-            type: "fill",
-            source: "municipality-boundary",
-            paint: { "fill-color": "#94a3b8", "fill-opacity": 0.06 },
-          });
-          map.addLayer({
-            id: "municipality-boundary-line",
-            type: "line",
-            source: "municipality-boundary",
-            paint: { "line-color": "#94a3b8", "line-width": 1.5, "line-dasharray": [4, 3] },
-          });
-        }
-
         // ── Ward boundary ────────────────────────────────────────────
         if (wardBoundary) {
           // Dashed outline only — no fill mask on the campaign-wide map
@@ -463,15 +441,6 @@ export function CampaignMapClient({ features, wardBoundary, municipalityBoundary
     mapRef.current.setLayoutProperty("ward-line", "visibility", vis);
   }, [wardVisible, wardBoundary]);
 
-  // ── Sync municipality visibility ───────────────────────────────────────
-
-  useEffect(() => {
-    if (!mapRef.current || !mapReadyRef.current || !municipalityBoundary) return;
-    const vis = municipalityVisible ? "visible" : "none";
-    mapRef.current.setLayoutProperty("municipality-boundary-fill", "visibility", vis);
-    mapRef.current.setLayoutProperty("municipality-boundary-line", "visibility", vis);
-  }, [municipalityVisible, municipalityBoundary]);
-
   // ── Sync overlay visibility ────────────────────────────────────────────
 
   useEffect(() => {
@@ -678,38 +647,25 @@ export function CampaignMapClient({ features, wardBoundary, municipalityBoundary
               </div>
             </div>
 
-            {/* Ward / municipality boundary toggles */}
-            {(wardBoundary != null || municipalityBoundary != null) && (
+            {/* Ward boundary toggle */}
+            {wardBoundary != null && (
               <div className="border-t border-slate-100 px-3 py-2">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Overlays</p>
-                {municipalityBoundary != null && (
-                  <label className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={municipalityVisible}
-                      onChange={(e) => setMunicipalityVisible(e.target.checked)}
-                      className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 h-3.5 w-3.5 flex-shrink-0"
-                    />
-                    <span className="text-xs text-slate-700">Municipality</span>
-                  </label>
-                )}
-                {wardBoundary != null && (
-                  <label className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={wardVisible}
-                      onChange={(e) => setWardVisible(e.target.checked)}
-                      className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 h-3.5 w-3.5 flex-shrink-0"
-                    />
-                    <span className="text-xs text-slate-700">Ward boundary</span>
-                  </label>
-                )}
+                <label className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={wardVisible}
+                    onChange={(e) => setWardVisible(e.target.checked)}
+                    className="rounded border-slate-300 text-brand-500 focus:ring-brand-500 h-3.5 w-3.5 flex-shrink-0"
+                  />
+                  <span className="text-xs text-slate-700">Ward boundary</span>
+                </label>
               </div>
             )}
 
             {/* GeoJSON overlay section */}
-            <div className={["border-t border-slate-100 px-3 py-2.5", wardBoundary || municipalityBoundary ? "" : "border-t"].join(" ")}>
-              {!wardBoundary && !municipalityBoundary && (
+            <div className="border-t border-slate-100 px-3 py-2.5">
+              {!wardBoundary && (
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Overlays</p>
               )}
               {overlayData ? (

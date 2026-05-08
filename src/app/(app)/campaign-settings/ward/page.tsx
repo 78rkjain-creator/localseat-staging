@@ -26,7 +26,7 @@ export default async function WardBoundaryPage() {
   const [campaign, flaggedCount] = await Promise.all([
     db.campaign.findUnique({
       where: { id: activeCampaignId },
-      select: { wardBoundary: true, wardBoundarySetAt: true, municipalityBoundary: true },
+      select: { wardBoundary: true, wardBoundarySetAt: true },
     }),
     db.person.count({
       where: {
@@ -48,11 +48,6 @@ export default async function WardBoundaryPage() {
     ? campaign.wardBoundarySetAt.toISOString()
     : null;
 
-  const municipalityBoundary =
-    campaign.municipalityBoundary !== null
-      ? (campaign.municipalityBoundary as unknown as Polygon | MultiPolygon)
-      : null;
-
   return (
     <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto">
       <div className="mb-6">
@@ -66,7 +61,6 @@ export default async function WardBoundaryPage() {
       <WardMapClient
         wardBoundary={wardBoundary}
         wardBoundarySetAt={wardBoundarySetAt}
-        municipalityBoundary={municipalityBoundary}
       />
 
       {flaggedCount > 0 && (

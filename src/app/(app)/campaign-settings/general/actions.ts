@@ -6,7 +6,6 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { checkSupportWriteAccess } from "@/lib/support-access";
-import { Prisma } from "@prisma/client";
 
 export interface GeneralSettingsState {
   error?: string;
@@ -94,16 +93,6 @@ export async function saveGeneralSettings(
 
   const municipalityName = (formData.get("municipalityName") as string | null)?.trim() || null;
   const municipalityId   = (formData.get("municipalityId")   as string | null)?.trim() || null;
-  const boundaryRaw      = (formData.get("municipalityBoundary") as string | null)?.trim() || null;
-
-  let municipalityBoundary: Prisma.InputJsonValue | typeof Prisma.JsonNull = Prisma.JsonNull;
-  if (boundaryRaw) {
-    try {
-      municipalityBoundary = JSON.parse(boundaryRaw) as Prisma.InputJsonValue;
-    } catch {
-      // ignore malformed boundary — don't block save
-    }
-  }
 
   try {
     await db.campaign.update({
@@ -123,7 +112,6 @@ export async function saveGeneralSettings(
         officeAddressLng:          hasOfficeAddress ? officeLng          : null,
         municipalityName,
         municipalityId,
-        municipalityBoundary,
       },
     });
   } catch {

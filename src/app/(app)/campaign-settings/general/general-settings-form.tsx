@@ -7,8 +7,6 @@ import { AddressPicker } from "@/components/ui/address-picker";
 import type { AddressPickerResult } from "@/components/ui/address-picker";
 import { MunicipalitySelector } from "@/components/ui/municipality-selector";
 import type { MunicipalitySelectorValue } from "@/components/ui/municipality-selector";
-import { MunicipalityMap } from "@/components/ui/municipality-map";
-import type { Polygon, MultiPolygon } from "geojson";
 
 interface VotingDate {
   date: string;
@@ -34,9 +32,6 @@ interface Props {
   advanceVotingDates: VotingDate[];
   initialOfficeAddr: OfficeAddr | null;
   initialOfficeDisplay: string;
-  initialMunicipalityName: string | null;
-  initialMunicipalityId: string | null;
-  initialMunicipalityBoundary: Polygon | MultiPolygon | null;
 }
 
 
@@ -53,47 +48,15 @@ export function GeneralSettingsForm({
   advanceVotingDates: initialAdvanceDates,
   initialOfficeAddr,
   initialOfficeDisplay,
-  initialMunicipalityName,
-  initialMunicipalityId,
-  initialMunicipalityBoundary,
 }: Props) {
   const [state, formAction, isPending] = useActionState(saveGeneralSettings, initialState);
   const [vDates, setVDates] = useState<VotingDate[]>(initialAdvanceDates);
   const [officeAddr, setOfficeAddr] = useState<OfficeAddr | null>(initialOfficeAddr);
   const [showPicker, setShowPicker] = useState(!initialOfficeAddr);
-  const [municipality, setMunicipality] = useState<MunicipalitySelectorValue | null>(
-    initialMunicipalityName ? { id: initialMunicipalityId, name: initialMunicipalityName } : null
-  );
-  const [municipalityBoundary, setMunicipalityBoundary] = useState<Polygon | MultiPolygon | null>(
-    initialMunicipalityBoundary
-  );
-  const [loadingBoundary, setLoadingBoundary] = useState(false);
+  const [municipality, setMunicipality] = useState<MunicipalitySelectorValue | null>(null);
 
-  async function fetchAndSetBoundary(id: string) {
-    setLoadingBoundary(true);
-    try {
-      const res = await fetch(`/data/boundaries/${id}.json`);
-      if (res.ok) {
-        const raw = await res.json();
-        // Support both raw geometry and GeoJSON Feature wrapper
-        const geo = (raw?.type === "Feature" ? raw.geometry : raw) as Polygon | MultiPolygon;
-        setMunicipalityBoundary(geo);
-      }
-      // 404 or error — show placeholder, don't draw a bbox rectangle
-    } catch {
-      // Fetch failed — show placeholder
-    } finally {
-      setLoadingBoundary(false);
-    }
-  }
-
-  async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
+  function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
     setMunicipality(value);
-    setMunicipalityBoundary(null);
-    if (value?.id) {
-      await fetchAndSetBoundary(value.id);
-    }
-    // Custom entries without an id get no boundary (placeholder shown)
   }
 
   function addDate() {
@@ -183,9 +146,8 @@ export function GeneralSettingsForm({
       <input type="hidden" name="officeAddressId"    value={officeAddr?.addressId ?? ""} />
 
       {/* Hidden municipality fields */}
-      <input type="hidden" name="municipalityName"     value={municipality?.name ?? ""} />
-      <input type="hidden" name="municipalityId"       value={municipality?.id ?? ""} />
-      <input type="hidden" name="municipalityBoundary" value={municipalityBoundary ? JSON.stringify(municipalityBoundary) : ""} />
+      <input type="hidden" name="municipalityName" value={municipality?.name ?? ""} />
+      <input type="hidden" name="municipalityId"   value={municipality?.id ?? ""} />
 
       <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
 
@@ -350,14 +312,6 @@ export function GeneralSettingsForm({
             onChange={handleMunicipalityChange}
             placeholder="Search Ontario municipalities…"
           />
-          <div className="mt-3">
-            <MunicipalityMap
-              boundary={municipalityBoundary}
-              municipalityName={municipality?.name ?? null}
-              center={municipality?.center}
-              loading={loadingBoundary}
-            />
-          </div>
         </div>
 
       </div>

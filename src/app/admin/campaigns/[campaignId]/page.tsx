@@ -151,11 +151,8 @@ export default async function AdminCampaignDetailPage({
             <div className="flex flex-col gap-3">
               <DetailRow
                 label="Municipality"
-                value={campaign.municipalityName ?? campaign.municipality ?? campaign.city}
+                value={campaign.municipality ?? campaign.city}
               />
-              {campaign.municipalityName && campaign.municipalityId && (
-                <DetailRow label="Municipality ID" value={campaign.municipalityId} />
-              )}
               <DetailRow label="Province" value={campaign.province} />
               <DetailRow
                 label="Wards"

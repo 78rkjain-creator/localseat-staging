@@ -98,11 +98,11 @@ export default async function AppLayout({
     if (municipalityRequired) {
       const campaignMunicipality = await db.campaign.findUnique({
         where:  { id: activeCampaignId },
-        select: { municipalityName: true, plan: true },
+        select: { municipality: true, plan: true },
       });
       // Demo campaigns and campaigns without a municipality bypass the gate
       const isDemo = campaignMunicipality?.plan === "demo";
-      if (!isDemo && !campaignMunicipality?.municipalityName) {
+      if (!isDemo && !campaignMunicipality?.municipality) {
         redirect(`/onboarding/select-municipality?campaignId=${activeCampaignId}&required=true`);
       }
     }
