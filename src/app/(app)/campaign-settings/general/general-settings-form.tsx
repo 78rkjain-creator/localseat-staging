@@ -32,6 +32,8 @@ interface Props {
   advanceVotingDates: VotingDate[];
   initialOfficeAddr: OfficeAddr | null;
   initialOfficeDisplay: string;
+  initialMunicipalityName: string | null;
+  initialMunicipalityId: string | null;
 }
 
 
@@ -48,12 +50,16 @@ export function GeneralSettingsForm({
   advanceVotingDates: initialAdvanceDates,
   initialOfficeAddr,
   initialOfficeDisplay,
+  initialMunicipalityName,
+  initialMunicipalityId,
 }: Props) {
   const [state, formAction, isPending] = useActionState(saveGeneralSettings, initialState);
   const [vDates, setVDates] = useState<VotingDate[]>(initialAdvanceDates);
   const [officeAddr, setOfficeAddr] = useState<OfficeAddr | null>(initialOfficeAddr);
   const [showPicker, setShowPicker] = useState(!initialOfficeAddr);
-  const [municipality, setMunicipality] = useState<MunicipalitySelectorValue | null>(null);
+  const [municipality, setMunicipality] = useState<MunicipalitySelectorValue | null>(
+    initialMunicipalityName ? { id: initialMunicipalityId, name: initialMunicipalityName } : null
+  );
 
   function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
     setMunicipality(value);
