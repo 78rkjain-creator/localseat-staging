@@ -1,0 +1,341 @@
+{
+  "Durham Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.durham.ca",
+    "municipalities": [
+      "Brock",
+      "Scugog",
+      "Uxbridge"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Halton Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.halton.ca",
+    "municipalities": [
+      "Halton Hills"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Peel Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.peelregion.ca",
+    "municipalities": [
+      "Caledon"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "York Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://open.york.ca",
+    "municipalities": [
+      "Georgina",
+      "King",
+      "Whitchurch-Stouffville"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Waterloo Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://open-data.regionofwaterloo.ca",
+    "municipalities": [
+      "Wellesley",
+      "Wilmot",
+      "Woolwich"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Niagara Region": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://niagaraopendata.ca",
+    "municipalities": [
+      "Fort Erie",
+      "Lincoln",
+      "Pelham",
+      "Port Colborne",
+      "Thorold",
+      "Wainfleet",
+      "West Lincoln"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Simcoe County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data-simcoe.opendata.arcgis.com",
+    "municipalities": [
+      "Adjala-Tosorontio",
+      "Bradford West Gwillimbury",
+      "Clearview",
+      "Essa",
+      "Innisfil",
+      "Midland",
+      "New Tecumseth",
+      "Oro-Medonte",
+      "Ramara",
+      "Severn",
+      "Springwater",
+      "Tay",
+      "Tiny"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Grey County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.grey.ca",
+    "municipalities": [
+      "Blue Mountains",
+      "Chatsworth",
+      "Georgian Bluffs",
+      "Grey Highlands",
+      "Meaford",
+      "Southgate",
+      "West Grey"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Bruce County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.brucecounty.on.ca",
+    "municipalities": [
+      "Arran-Elderslie",
+      "Brockton",
+      "Huron-Kinloss",
+      "Kincardine",
+      "South Bruce",
+      "South Bruce Peninsula"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Huron County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data-huron.opendata.arcgis.com",
+    "municipalities": [
+      "Ashfield-Colborne-Wawanosh",
+      "Bluewater",
+      "Central Huron",
+      "Howick",
+      "Huron East",
+      "North Huron",
+      "South Huron"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Wellington County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.wellington.ca",
+    "municipalities": [
+      "Centre Wellington",
+      "Erin",
+      "Guelph/Eramosa",
+      "Mapleton",
+      "Minto",
+      "Wellington North"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Oxford County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.oxfordcounty.ca",
+    "municipalities": [
+      "East Zorra-Tavistock",
+      "Norwich",
+      "Zorra"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Perth County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.perthcounty.ca",
+    "municipalities": [
+      "North Perth",
+      "Perth East",
+      "West Perth"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Middlesex County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.middlesex.ca",
+    "municipalities": [
+      "Middlesex Centre",
+      "North Middlesex",
+      "Thames Centre"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Lambton County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.lambtononline.ca",
+    "municipalities": [
+      "Lambton Shores",
+      "Plympton-Wyoming",
+      "St. Clair",
+      "Warwick"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Essex County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.countyofessex.ca",
+    "municipalities": [
+      "Amherstburg",
+      "Essex",
+      "Lakeshore",
+      "Tecumseh"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Elgin County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://www.elgincounty.ca",
+    "municipalities": [
+      "Bayham",
+      "Central Elgin",
+      "Malahide"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Northumberland County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://northumberland.opendata.arcgis.com",
+    "municipalities": [
+      "Alnwick/Haldimand",
+      "Brighton",
+      "Cramahe",
+      "Hamilton Township",
+      "Port Hope",
+      "Trent Hills"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Hastings County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://hastingscounty.com",
+    "municipalities": [
+      "Centre Hastings",
+      "Hastings Highlands",
+      "Marmora and Lake",
+      "Stirling-Rawdon",
+      "Tyendinaga"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Frontenac County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.frontenacmaps.ca",
+    "municipalities": [
+      "Central Frontenac",
+      "Frontenac Islands",
+      "North Frontenac",
+      "South Frontenac"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Renfrew County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.renfrewcounty.ca",
+    "municipalities": [
+      "Bonnechere Valley",
+      "Greater Madawaska",
+      "Laurentian Valley",
+      "Madawaska Valley",
+      "McNab/Braeside",
+      "Petawawa",
+      "Whitewater Region"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Lanark County": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.lanarkcounty.ca",
+    "municipalities": [
+      "Beckwith",
+      "Drummond/North Elmsley",
+      "Lanark Highlands",
+      "Mississippi Mills",
+      "Montague",
+      "Tay Valley"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Quinte West": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://geodata-quintewest.opendata.arcgis.com",
+    "municipalities": [
+      "Quinte West"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Belleville": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata-bellevillegis.hub.arcgis.com",
+    "municipalities": [
+      "Belleville"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Timmins": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.timmins.ca",
+    "municipalities": [
+      "Timmins"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Innisfil": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.innisfil.ca",
+    "municipalities": [
+      "Innisfil"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Milton": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.milton.ca",
+    "municipalities": [
+      "Milton"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Cobourg": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.cobourg.ca",
+    "municipalities": [
+      "Cobourg"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Pembroke": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.pembroke.ca",
+    "municipalities": [
+      "Pembroke"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "LaSalle": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://opendata.lasalle.ca",
+    "municipalities": [
+      "LaSalle"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Saugeen Shores": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.saugeenshores.ca",
+    "municipalities": [
+      "Saugeen Shores"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  },
+  "Strathroy-Caradoc": {
+    "status": "NOT_FOUND_VIA_API",
+    "portal_url": "https://data.strathroy-caradoc.ca",
+    "municipalities": [
+      "Strathroy-Caradoc"
+    ],
+    "note": "Ward data may exist - check portal manually"
+  }
+}
