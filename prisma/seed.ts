@@ -238,8 +238,11 @@ async function main() {
   console.log("  ✓ Cleaned up existing data");
 
   // ── Campaign ──────────────────────────────────────────────────────────────
-  const portHopeBoundaryPath = resolve(process.cwd(), "public/data/boundaries/14022.json");
-  const portHopeBoundary = JSON.parse(readFileSync(portHopeBoundaryPath, "utf-8")) as object;
+  const owenSoundBoundaryPath = resolve(process.cwd(), "public/data/boundaries/42059.json");
+  const owenSoundBoundaryRaw = JSON.parse(readFileSync(owenSoundBoundaryPath, "utf-8")) as { type: string; geometry?: object };
+  const owenSoundBoundary = owenSoundBoundaryRaw.type === "Feature" && owenSoundBoundaryRaw.geometry
+    ? owenSoundBoundaryRaw.geometry
+    : owenSoundBoundaryRaw;
 
   const campaign = await db.campaign.create({
     data: {
@@ -248,9 +251,9 @@ async function main() {
       officeSought: "Ward 4 Councillor",
       description:  "Municipal election campaign for Ward 4, Owen Sound, Ontario. Focus on affordable housing, active transportation, and neighbourhood safety.",
       municipality: "Owen Sound",
-      municipalityName:     "Municipality of Port Hope",
-      municipalityId:       "14022",
-      municipalityBoundary: portHopeBoundary,
+      municipalityName:     "City of Owen Sound",
+      municipalityId:       "42059",
+      municipalityBoundary: owenSoundBoundary,
       wards:        ["Ward 4"],
       city:         "Owen Sound",
       province:     "ON",
