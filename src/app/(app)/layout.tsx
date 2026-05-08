@@ -13,7 +13,6 @@ import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import { hasPendingRequest } from "@/lib/support-access";
 import { isMaintenanceMode } from "@/lib/maintenance";
-import { getPlatformSettings } from "@/app/admin/settings/actions";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
@@ -89,8 +88,13 @@ export default async function AppLayout({
   // Municipality gate — redirect to municipality selection if the platform
   // setting requires it and the campaign hasn't selected one yet.
   if (activeCampaignId && !inSupportMode) {
-    const platformSettings = await getPlatformSettings();
-    const municipalityRequired = platformSettings["municipality_selection_required"] === "true";
+    const platformSettingsRows = await db.platformSettings.findMany({
+      where: { key: "municipality_selection_required" },
+      select: { key: true, value: true },
+    });
+    const municipalityRequired = platformSettingsRows.find(
+      (r) => r.key === "municipality_selection_required"
+    )?.value === "true";
     if (municipalityRequired) {
       const campaignMunicipality = await db.campaign.findUnique({
         where:  { id: activeCampaignId },
