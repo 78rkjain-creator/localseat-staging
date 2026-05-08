@@ -41,7 +41,7 @@ export function MunicipalityMap({ boundary, municipalityName, center, loading }:
 
     let cancelled = false;
 
-    import("mapbox-gl").then((mod) => {
+    Promise.all([import("mapbox-gl"), import("mapbox-gl/dist/mapbox-gl.css")]).then(([mod]) => {
       if (cancelled || !containerRef.current) return;
       const mapboxgl = mod.default;
       const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
