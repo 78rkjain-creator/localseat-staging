@@ -36,6 +36,12 @@ interface ActiveTurf {
   canvasserName: string | null;
 }
 
+interface OfficePin {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
 interface Props {
   addresses: AddressPoint[];
   campaignId: string;
@@ -45,6 +51,7 @@ interface Props {
   geocodingInProgress: boolean;
   assignedAddressIds: string[];
   existingTurfs: ExistingTurf[];
+  officePin?: OfficePin | null;
 }
 
 // ── Existing turf overlay color palette ────────────────────────────────────
@@ -135,6 +142,7 @@ export function TurfMapClient({
   geocodingInProgress,
   assignedAddressIds,
   existingTurfs,
+  officePin,
 }: Props) {
   const router = useRouter();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -415,6 +423,39 @@ export function TurfMapClient({
             "circle-stroke-color": "#ffffff",
           },
         });
+
+        // ── Campaign office pin ──────────────────────────────────────
+        if (officePin) {
+          const el = document.createElement("div");
+          el.style.cssText = [
+            "width:22px",
+            "height:22px",
+            "border-radius:5px",
+            "background:#8b5cf6",
+            "border:3px solid #ffffff",
+            "box-shadow:0 2px 6px rgba(0,0,0,0.3)",
+            "cursor:pointer",
+          ].join(";");
+
+          const officeMarker = new mapboxgl.default.Marker({ element: el })
+            .setLngLat([officePin.lng, officePin.lat])
+            .addTo(map);
+
+          el.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            new mapboxgl.default.Popup({ offset: 16, maxWidth: "220px" })
+              .setLngLat([officePin.lng, officePin.lat])
+              .setHTML(`
+                <div style="font-family:system-ui,sans-serif;padding:4px 2px;min-width:160px;">
+                  <p style="margin:0 0 2px;font-weight:700;font-size:13px;color:#0f172a;">Campaign office</p>
+                  <p style="margin:0;font-size:11px;color:#94a3b8;">${officePin.address}</p>
+                </div>
+              `)
+              .addTo(map);
+          });
+
+          map.once("remove", () => officeMarker.remove());
+        }
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -564,7 +605,7 @@ export function TurfMapClient({
           )}
 
           {/* Map legend */}
-          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-4">
+          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-4 flex-wrap">
             <span className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="h-2.5 w-2.5 rounded-full bg-blue-500 flex-shrink-0" />
               Assigned to list
@@ -573,6 +614,12 @@ export function TurfMapClient({
               <span className="h-2.5 w-2.5 rounded-full bg-slate-300 flex-shrink-0" />
               Unassigned
             </span>
+            {officePin && (
+              <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span className="h-2.5 w-2.5 rounded flex-shrink-0" style={{ backgroundColor: "#8b5cf6" }} />
+                Campaign office
+              </span>
+            )}
           </div>
 
           {/* Selection feedback */}

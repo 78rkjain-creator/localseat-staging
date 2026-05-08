@@ -26,6 +26,7 @@ export default async function TurfPage() {
     totalCount,
     listEntriesForAddressIds,
     turfLists,
+    campaignRow,
   ] = await Promise.all([
     db.address.findMany({
       where: {
@@ -101,9 +102,38 @@ export default async function TurfPage() {
         },
       },
     }),
+    db.campaign.findUnique({
+      where: { id: activeCampaignId },
+      select: {
+        officeAddressLat:          true,
+        officeAddressLng:          true,
+        officeAddressStreetNumber: true,
+        officeAddressStreetName:   true,
+        officeAddressUnitNumber:   true,
+        officeAddressCity:         true,
+        officeAddressProvince:     true,
+        officeAddressPostalCode:   true,
+      },
+    }),
   ]);
 
   const geocodingInProgress = recentUngeocodedCount > 0;
+
+  const officePin =
+    campaignRow?.officeAddressLat != null && campaignRow?.officeAddressLng != null
+      ? {
+          lat: campaignRow.officeAddressLat,
+          lng: campaignRow.officeAddressLng,
+          address: [
+            campaignRow.officeAddressStreetNumber,
+            campaignRow.officeAddressStreetName,
+            campaignRow.officeAddressUnitNumber ? `#${campaignRow.officeAddressUnitNumber}` : null,
+            campaignRow.officeAddressCity,
+            campaignRow.officeAddressProvince,
+            campaignRow.officeAddressPostalCode,
+          ].filter(Boolean).join(" "),
+        }
+      : null;
 
   const assignedAddressIds = [
     ...new Set(
@@ -145,6 +175,7 @@ export default async function TurfPage() {
       geocodingInProgress={geocodingInProgress}
       assignedAddressIds={assignedAddressIds}
       existingTurfs={existingTurfs}
+      officePin={officePin}
     />
   );
 }
