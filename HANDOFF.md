@@ -1,6 +1,6 @@
 # LocalSeat.io — Handoff Notes
 
-_Last updated: May 5, 2026 — Batch 17: Bulk checkbox delete, touches feature, reports section, events & scheduling merge, volunteer availability._
+_Last updated: May 8, 2026 — Batch 18: Office pin on canvassing turf map, municipality boundary fixes, Mapbox CSS warning fix._
 
 ## How I Work
 - Provide prompts for VS Code Claude plugin — not raw source code
@@ -1144,6 +1144,8 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 - Seed data: Downtown East Route has 38 entries but seed creates ~139 canvass responses (~3.6 per door). Not a bug — distinct-personId counting handles it correctly. Just an artifact of the seed data volume.
 - After `prisma migrate dev` reset, team Person backfill must be run manually — migration backfill runs before seed data exists. Use backfill.sql at repo root.
 - Duplicate migration names can occur if Prisma prompts for a new migration name after reset — delete the duplicate folder and resolve with `prisma migrate resolve --rolled-back`.
+- After `npx prisma migrate reset --force`, clear cookies for localhost:3000 (DevTools → Application → Cookies → Clear) — the sign-out menu becomes unresponsive because the JWT references user IDs that no longer exist in the freshly seeded DB. Production is unaffected because production never reseeds.
+- The seed loads boundary JSON from `public/data/boundaries/<id>.json` and now defensively unwraps the GeoJSON Feature wrapper before storing on Campaign.municipalityBoundary. Any future seed code loading boundaries should follow the same pattern: check for `{type: "Feature", geometry: ...}` and store only the geometry. The MunicipalityMap component reads geometry.coordinates directly and crashes on a Feature wrapper.
 
 ---
 
@@ -1301,6 +1303,11 @@ Invalid roles (e.g. "Captain") are caught at parse time and routed to the `missi
 | Events & Scheduling — renamed sidebar item from "Events" to "Events & Scheduling"; removed separate Volunteers schedule nav item; `/volunteers/schedule` redirects to `/events` | May 5, 2026 |
 | Reports section — new sidebar group with three pages: Touches report (`/reports/touches`) with summary stats + distribution table, Support Levels report (`/reports/support-levels`) with count/percentage breakdown, Export Data hub (`/reports/export`) with download cards for People/Volunteers/Donors/Outreach; permission-gated via `canViewReports(role)` | May 5, 2026 |
 | Volunteer availability field — `availability String?` on Person model; editable on person detail page when volunteer interest flagged; displayed on Volunteers tab under People; included in people CSV export; migration `20260505000001_add_person_availability` | May 5, 2026 |
+| Office pin marker on /canvassing/turf — same purple square + popup treatment as /people/map; conditional legend entry; null-guard on missing lat/lng | May 8, 2026 |
+| Seed fix — Owen Sound campaign now loads the Owen Sound boundary file (42059.json) instead of Port Hope (14022.json); also unwraps GeoJSON Feature wrapper before storing on Campaign.municipalityBoundary so MunicipalityMap.getBounds() doesn't crash | May 8, 2026 |
+| Mapbox GL CSS imported in MunicipalityMap component — silences the "missing CSS declarations" console warning that appeared on every page using the component | May 8, 2026 |
+| BOM removed from backfill.sql — psql can now parse the file without "syntax error at or near 'INSERT'" | May 8, 2026 |
+| boundary-collector/output/ added to .gitignore — build artifacts from the collector script no longer show up as untracked files | May 8, 2026 |
 
 ### High Priority
 _(none)_
