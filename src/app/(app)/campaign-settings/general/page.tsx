@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { GeneralSettingsForm } from "./general-settings-form";
 import { SupportAccessSection } from "../support-access/support-access-section";
+import type { Polygon, MultiPolygon } from "geojson";
 
 export const metadata: Metadata = { title: "General Settings" };
 
@@ -32,6 +33,9 @@ export default async function GeneralSettingsPage() {
       officeAddressPostalCode: true,
       officeAddressLat: true,
       officeAddressLng: true,
+      municipalityName: true,
+      municipalityId: true,
+      municipalityBoundary: true,
     },
   });
   if (!campaign) redirect("/dashboard");
@@ -99,6 +103,11 @@ export default async function GeneralSettingsPage() {
         advanceVotingDates={advanceVotingDates}
         initialOfficeAddr={initialOfficeAddr}
         initialOfficeDisplay={initialOfficeDisplay}
+        initialMunicipalityName={campaign.municipalityName ?? null}
+        initialMunicipalityId={campaign.municipalityId ?? null}
+        initialMunicipalityBoundary={
+          (campaign.municipalityBoundary as unknown as Polygon | MultiPolygon | null) ?? null
+        }
       />
 
       {(activeRole === "candidate" || activeRole === "campaign_manager") && (

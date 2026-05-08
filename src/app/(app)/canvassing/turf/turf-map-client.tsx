@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createTurfCanvassList } from "../actions";
-import { getWardBoundary } from "../[listId]/map/actions";
+import { getWardBoundary, getMunicipalityBoundary } from "../[listId]/map/actions";
 import type { Polygon } from "geojson";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
@@ -216,7 +216,8 @@ export function TurfMapClient({
       import("mapbox-gl/dist/mapbox-gl.css"),
       import("@mapbox/mapbox-gl-draw"),
       getWardBoundary(),
-    ]).then(([mapboxgl, , MapboxDraw, wardBoundary]) => {
+      getMunicipalityBoundary(),
+    ]).then(([mapboxgl, , MapboxDraw, wardBoundary, municipalityBoundary]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
@@ -280,6 +281,26 @@ export function TurfMapClient({
       map.addControl(draw, "top-right");
 
       map.on("load", () => {
+        // Municipality boundary — bottommost reference layer
+        if (municipalityBoundary) {
+          map.addSource("municipality-boundary", {
+            type: "geojson",
+            data: { type: "Feature", properties: {}, geometry: municipalityBoundary },
+          });
+          map.addLayer({
+            id: "municipality-boundary-fill",
+            type: "fill",
+            source: "municipality-boundary",
+            paint: { "fill-color": "#94a3b8", "fill-opacity": 0.06 },
+          });
+          map.addLayer({
+            id: "municipality-boundary-line",
+            type: "line",
+            source: "municipality-boundary",
+            paint: { "line-color": "#94a3b8", "line-width": 1.5, "line-dasharray": [4, 3] },
+          });
+        }
+
         // Ward boundary — added above municipality so it sits below turf and dots
         if (wardBoundary) {
           addWardBoundaryLayers(map, wardBoundary);

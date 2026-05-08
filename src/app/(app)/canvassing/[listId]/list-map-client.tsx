@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { CanvassOutcome, SupportLevel } from "@/types";
 import type { Polygon } from "geojson";
-import { getWardBoundary } from "./map/actions";
+import { getWardBoundary, getMunicipalityBoundary } from "./map/actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -172,7 +172,8 @@ export function ListMapClient({ entries, listId, listName, ungeocodedCount = 0 }
       import("mapbox-gl"),
       import("mapbox-gl/dist/mapbox-gl.css"),
       getWardBoundary(),
-    ]).then(([mapboxgl, , wardBoundary]) => {
+      getMunicipalityBoundary(),
+    ]).then(([mapboxgl, , wardBoundary, municipalityBoundary]) => {
       mapboxgl.default.accessToken = token;
 
       map = new mapboxgl.default.Map({
@@ -185,6 +186,26 @@ export function ListMapClient({ entries, listId, listName, ungeocodedCount = 0 }
       mapRef.current = map;
 
       map.on("load", () => {
+        // Municipality boundary — bottommost reference layer
+        if (municipalityBoundary) {
+          map.addSource("municipality-boundary", {
+            type: "geojson",
+            data: { type: "Feature", properties: {}, geometry: municipalityBoundary },
+          });
+          map.addLayer({
+            id: "municipality-boundary-fill",
+            type: "fill",
+            source: "municipality-boundary",
+            paint: { "fill-color": "#94a3b8", "fill-opacity": 0.06 },
+          });
+          map.addLayer({
+            id: "municipality-boundary-line",
+            type: "line",
+            source: "municipality-boundary",
+            paint: { "line-color": "#94a3b8", "line-width": 1.5, "line-dasharray": [4, 3] },
+          });
+        }
+
         // Ward boundary layers (mask + border) — added before markers so
         // markers always render on top.
         if (wardBoundary) {
