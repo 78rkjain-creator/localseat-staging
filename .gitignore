@@ -47,3 +47,6 @@ tsc_output.txt
 .claude/
 test-template.xlsx
 
+
+# Boundary collector build artifacts
+boundary-collector/output/
