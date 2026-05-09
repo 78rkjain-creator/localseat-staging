@@ -261,3 +261,160 @@ export async function generateKnockList(
   revalidatePath("/canvassing");
   return { listId: list.id };
 }
+
+// ── Haversine distance ────────────────────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── Auto chase list generator ─────────────────────────────────────────────────
+
+interface PersonWithCoords {
+  id: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+function nearestNeighborSort(people: PersonWithCoords[]): PersonWithCoords[] {
+  const geocoded = people.filter((p): p is PersonWithCoords & { lat: number; lng: number } =>
+    p.lat !== null && p.lng !== null
+  );
+  const ungeo = people.filter((p) => p.lat === null || p.lng === null);
+
+  if (geocoded.length === 0) return people;
+
+  const ordered: typeof geocoded = [];
+  const remaining = new Set(geocoded);
+
+  const first = geocoded[0];
+  remaining.delete(first);
+  ordered.push(first);
+
+  while (remaining.size > 0) {
+    const last = ordered[ordered.length - 1];
+    let nearest = geocoded[0];
+    let nearestDist = Infinity;
+
+    for (const candidate of remaining) {
+      const dist = haversineKm(last.lat, last.lng, candidate.lat, candidate.lng);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = candidate;
+      }
+    }
+
+    remaining.delete(nearest);
+    ordered.push(nearest);
+  }
+
+  return [...ordered, ...ungeo];
+}
+
+function clusterByProximity(
+  people: PersonWithCoords[],
+  maxPerCluster: number
+): PersonWithCoords[][] {
+  const sorted = nearestNeighborSort(people);
+  const clusters: PersonWithCoords[][] = [];
+  for (let i = 0; i < sorted.length; i += maxPerCluster) {
+    const chunk = sorted.slice(i, i + maxPerCluster);
+    clusters.push(nearestNeighborSort(chunk));
+  }
+  return clusters;
+}
+
+export async function generateAutoChaseListsAction(
+  maxPerList: number
+): Promise<{ error?: string; listsCreated?: number; totalPeople?: number }> {
+  const auth = await requireCampaignManager();
+  if ("error" in auth) return auth;
+  const { session, campaignId } = auth;
+
+  if (maxPerList < 5 || maxPerList > 500) {
+    return { error: "Max per list must be between 5 and 500." };
+  }
+
+  const supporters = await db.person.findMany({
+    where: {
+      campaignId,
+      deletedAt: null,
+      supportLevel: { in: ["strong_yes", "soft_yes"] },
+      pollStrikes: { none: {} },
+    },
+    select: {
+      id: true,
+      household: {
+        select: {
+          address: {
+            select: { lat: true, lng: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (supporters.length === 0) {
+    return { error: "No remaining supporters to chase. Everyone has voted!" };
+  }
+
+  const peopleWithCoords: PersonWithCoords[] = supporters.map((s) => ({
+    id: s.id,
+    lat: s.household?.address?.lat ?? null,
+    lng: s.household?.address?.lng ?? null,
+  }));
+
+  const clusters = clusterByProximity(peopleWithCoords, maxPerList);
+
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+  const timeLabel = now.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+
+  let listsCreated = 0;
+
+  for (let i = 0; i < clusters.length; i++) {
+    const cluster = clusters[i];
+
+    const list = await db.canvassList.create({
+      data: {
+        campaignId,
+        name: `GOTV Chase ${i + 1} — ${dateLabel} ${timeLabel}`,
+        description: `Auto-generated: ${cluster.length} supporters, walk-optimized.`,
+        status: "active",
+        isGotvList: true,
+      },
+    });
+
+    await db.canvassListEntry.createMany({
+      data: cluster.map((p: PersonWithCoords, idx: number) => ({
+        canvassListId: list.id,
+        personId: p.id,
+        addedById: session.user.id,
+        sortOrder: idx,
+      })),
+    });
+
+    listsCreated++;
+  }
+
+  await createAuditLog({
+    campaignId,
+    userId: session.user.id,
+    action: "gotv_auto_chase_lists_generated",
+    entityType: "campaign",
+    entityId: campaignId,
+    details: { listsCreated, totalPeople: supporters.length, maxPerList },
+  });
+
+  revalidatePath("/gotv");
+  revalidatePath("/canvassing");
+  return { listsCreated, totalPeople: supporters.length };
+}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { toggleGotvMode, generateChaseList, generateKnockList } from "./actions";
+import { toggleGotvMode, generateChaseList, generateKnockList, generateAutoChaseListsAction } from "./actions";
 import type { GotvStats, ChaseListPerson } from "@/lib/gotv";
 
 interface RideRequest {
@@ -38,6 +38,7 @@ export function GotvDashboard({
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [streetFilter, setStreetFilter] = useState("");
+  const [maxPerList, setMaxPerList] = useState("40");
   const [activeTab, setActiveTab] = useState<"overview" | "chase" | "rides">("overview");
 
   const winPct =
@@ -246,34 +247,89 @@ export function GotvDashboard({
         <div className="flex flex-col gap-3">
           {isManager && (
             <>
-              <button
-                type="button"
-                onClick={handleGenerateChaseList}
-                disabled={isPending}
-                className="w-full h-12 bg-white border-2 border-brand-200 text-brand-600 hover:bg-brand-50 text-sm font-semibold rounded-2xl transition-colors disabled:opacity-50"
-              >
-                Generate chase list
-              </button>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={streetFilter}
-                  onChange={(e) => setStreetFilter(e.target.value)}
-                  placeholder="Street name filter (optional)"
-                  className="flex-1 h-11 px-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
+              {/* Auto chase list generator */}
+              <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+                <p className="text-sm font-semibold text-slate-700 mb-1">
+                  Auto-generate walk lists
+                </p>
+                <p className="text-xs text-slate-400 mb-3">
+                  Creates walk-optimized GOTV lists from all unvoted supporters, grouped by proximity.
+                </p>
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                      Max people per list
+                    </label>
+                    <input
+                      type="number"
+                      value={maxPerList}
+                      onChange={(e) => setMaxPerList(e.target.value)}
+                      min={5}
+                      max={500}
+                      className="w-full h-11 px-4 mt-1 rounded-2xl border border-slate-200 bg-slate-50 text-sm tabular-nums placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col justify-end">
+                    <p className="text-xs text-slate-400 mb-1">
+                      {chaseTotalCount > 0 && maxPerList
+                        ? `≈ ${Math.ceil(chaseTotalCount / (parseInt(maxPerList, 10) || 40))} lists`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={handleGenerateKnockList}
+                  onClick={() => {
+                    const max = parseInt(maxPerList, 10) || 40;
+                    startTransition(async () => {
+                      const result = await generateAutoChaseListsAction(max);
+                      if (result.error) setFeedback(result.error);
+                      else setFeedback(
+                        `Created ${result.listsCreated} walk lists with ${result.totalPeople} people total.`
+                      );
+                      setTimeout(() => setFeedback(null), 5000);
+                    });
+                  }}
                   disabled={isPending}
-                  className="h-11 px-4 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold rounded-2xl transition-colors disabled:opacity-50 flex-shrink-0"
+                  className="w-full h-12 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-2xl transition-colors disabled:opacity-50"
                 >
-                  Knock list
+                  {isPending ? "Generating…" : "Generate walk lists"}
                 </button>
               </div>
 
-              <hr className="border-slate-100 my-2" />
+              {/* Single chase / knock list */}
+              <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+                <p className="text-sm font-semibold text-slate-700 mb-3">
+                  Single list
+                </p>
+                <button
+                  type="button"
+                  onClick={handleGenerateChaseList}
+                  disabled={isPending}
+                  className="w-full h-10 bg-white border-2 border-brand-200 text-brand-600 hover:bg-brand-50 text-sm font-medium rounded-2xl transition-colors disabled:opacity-50 mb-2"
+                >
+                  Full chase list (all remaining)
+                </button>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={streetFilter}
+                    onChange={(e) => setStreetFilter(e.target.value)}
+                    placeholder="Street name (optional)"
+                    className="flex-1 h-10 px-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateKnockList}
+                    disabled={isPending}
+                    className="h-10 px-4 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-2xl transition-colors disabled:opacity-50 flex-shrink-0"
+                  >
+                    Knock list
+                  </button>
+                </div>
+              </div>
+
+              <hr className="border-slate-100 my-1" />
 
               <button
                 type="button"
