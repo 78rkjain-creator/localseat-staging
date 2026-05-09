@@ -87,6 +87,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
     supportRate, totalPeople, contactedOnce, contactedTwice, contactedThreePlus,
     doorsToday, signsOut, totalRaised, fundraisingGoal, electionDate, campaignName,
     doorsSeries, supportRateSeries, signsSeries, donorsSeries, doorsAvg7Day,
+    gotvModeEnabled,
   } = hero;
 
   const {
@@ -159,6 +160,23 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
               <p className={["text-[11px] font-normal text-white/50", nameLine2 ? "mt-3" : "mt-1"].join(" ")}>
                 {daysToElection > 0 ? `${daysToElection} days to election` : "Election day!"}
               </p>
+            )}
+            {(role === "candidate" || role === "campaign_manager" || role === "data_manager") && (
+              <Link
+                href="/gotv"
+                className={[
+                  "mt-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-semibold transition-colors",
+                  gotvModeEnabled
+                    ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                    : "bg-white/10 text-white/50 hover:bg-white/15 hover:text-white/70",
+                ].join(" ")}
+              >
+                <span className={[
+                  "h-1.5 w-1.5 rounded-full",
+                  gotvModeEnabled ? "bg-emerald-400 animate-pulse" : "bg-white/30",
+                ].join(" ")} />
+                {gotvModeEnabled ? "GOTV active" : "GOTV"}
+              </Link>
             )}
           </div>
 
