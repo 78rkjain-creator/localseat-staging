@@ -61,6 +61,7 @@ export async function createCanvassList(
   }
 
   const status = statusForRole(activeRole);
+  const isGotvList = formData.get("isGotvList") === "true";
 
   const list = await db.canvassList.create({
     data: {
@@ -68,6 +69,7 @@ export async function createCanvassList(
       name,
       description,
       status,
+      isGotvList,
       dynamicFilters: dynamicFilters as Prisma.InputJsonValue | undefined,
     },
   });

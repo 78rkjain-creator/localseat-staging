@@ -17,6 +17,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   tags?: Tag[];
+  gotvMode?: boolean;
 }
 
 const SUPPORT_OPTIONS = [
@@ -33,7 +34,7 @@ const WARD_OPTIONS = [
   { value: "outside_accepted", label: "Outside (accepted)" },
 ];
 
-export function NewListModal({ open, onClose, tags = [] }: Props) {
+export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
 
   // Dynamic list state
   const [isDynamic, setIsDynamic] = useState(false);
+  const [isGotvList, setIsGotvList] = useState(gotvMode);
   const [supportLevels, setSupportLevels] = useState<string[]>([]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [canvassStatus, setCanvassStatus] = useState<DynamicFilters["canvassStatus"]>("");
@@ -107,6 +109,10 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
       formData.set("isDynamic", "false");
     }
 
+    if (isGotvList) {
+      formData.set("isGotvList", "true");
+    }
+
     startTransition(async () => {
       const result = await createCanvassList(formData);
       if (result?.error) setError(result.error);
@@ -117,6 +123,7 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
     formRef.current?.reset();
     setError(null);
     setIsDynamic(false);
+    setIsGotvList(gotvMode);
     setSupportLevels([]);
     setTagIds([]);
     setCanvassStatus("");
@@ -149,6 +156,35 @@ export function NewListModal({ open, onClose, tags = [] }: Props) {
             maxLength={500}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 resize-none hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
           />
+        </div>
+
+        {/* GOTV list toggle */}
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">GOTV list</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Mark as a get-out-the-vote list. Canvassers see a simplified strike screen instead of the full canvass form.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isGotvList}
+              onClick={() => setIsGotvList((v) => !v)}
+              className={[
+                "relative flex-shrink-0 h-6 w-11 rounded-full transition-colors focus:outline-none",
+                isGotvList ? "bg-emerald-500" : "bg-slate-300",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                  isGotvList ? "translate-x-5" : "translate-x-0",
+                ].join(" ")}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Dynamic list toggle */}
