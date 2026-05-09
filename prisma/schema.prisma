@@ -87,6 +87,12 @@ enum ElectionType {
   municipal
 }
 
+enum PollStrikeType {
+  advance_poll
+  election_day
+  mail_in
+}
+
 enum SignStatus {
   to_be_installed
   installed
@@ -194,6 +200,8 @@ model Campaign {
   dailySummaryEmail    String?
   dataRetentionMonths  Int?
   advanceVotingDates   DateTime[]
+  voteTarget           Int?
+  gotvModeEnabled      Boolean   @default(false)
   officeAddressStreetNumber String?
   officeAddressStreetName   String?
   officeAddressUnitNumber   String?
@@ -239,6 +247,7 @@ model Campaign {
   supportAccessGrants   SupportAccessGrant[]
   dataImports           DataImport[]
   supplierAcknowledgements SupplierAcknowledgement[]
+  pollStrikes              PollStrike[]
   promoCode             PromoCode?  @relation(fields: [promoCodeId], references: [id])
   promoCodeId           String?
 
@@ -301,6 +310,7 @@ model User {
   dataImportsUploaded       DataImport[]         @relation("DataImportUploadedBy")
   dataImportsReviewed       DataImport[]         @relation("DataImportReviewedBy")
   supplierAcknowledgementsSigned SupplierAcknowledgement[] @relation("SupplierAcknowledgementSigner")
+  pollStrikesRecorded            PollStrike[]              @relation("PollStriker")
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -403,6 +413,8 @@ model Person {
   needsDistrictClassification  Boolean                      @default(false)
   customFieldValues   Json?
   availability        String?
+  needsRide           Boolean   @default(false)
+  votingPlanTime      String?   // "morning" | "afternoon" | "evening" — self-reported
   voterId             String?
   anonymizedAt        DateTime?
   createdAt   DateTime  @default(now())
@@ -427,6 +439,7 @@ model Person {
   listMemberships       PersonListMembership[]
   surveyResponses       SurveyResponse[]
   signatureRecords      SignatureRecord[]
+  pollStrikes           PollStrike[]
 
   @@unique([userId, campaignId])
   @@unique([campaignId, voterId])
@@ -1353,4 +1366,27 @@ model SupplierAcknowledgement {
 
   @@index([campaignId])
   @@map("supplier_acknowledgements")
+}
+
+// ─── Poll Strike ─────────────────────────────────────────────────────────────
+// Election-day tracking: records that a confirmed supporter has voted.
+
+model PollStrike {
+  id           String        @id @default(cuid())
+  campaignId   String
+  personId     String
+  strikeType   PollStrikeType @default(election_day)
+  struckById   String
+  struckAt     DateTime      @default(now())
+  notes        String?
+  createdAt    DateTime      @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  person   Person   @relation(fields: [personId], references: [id])
+  struckBy User     @relation("PollStriker", fields: [struckById], references: [id])
+
+  @@unique([campaignId, personId])
+  @@index([campaignId])
+  @@index([personId])
+  @@map("poll_strikes")
 }

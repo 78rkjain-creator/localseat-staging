@@ -84,6 +84,7 @@ function getTabsForRole(role: Role | string | null | undefined): Tab[] {
 }
 
 const MANAGER_MORE_LINKS: Tab[] = [
+  tab("GOTV", "/gotv", <CheckSquare size={ICON_SIZE} />),
   tab("Donors", "/donors", <Heart size={ICON_SIZE} />),
   tab("Volunteers", "/volunteers", <UserCheck size={ICON_SIZE} />),
   tab("Outreach", "/outreach", <Megaphone size={ICON_SIZE} />),
