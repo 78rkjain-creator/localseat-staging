@@ -538,6 +538,7 @@ model CanvassList {
   status          CanvassListStatus @default(active)
   rejectionReason String?
   dynamicFilters  Json?             // DynamicFilters JSON when isDynamic; null for static lists
+  isGotvList      Boolean           @default(false)
   lastRefreshedAt DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt

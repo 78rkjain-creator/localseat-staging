@@ -4,9 +4,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCanvassingQueue } from "@/lib/canvassing";
 import { db } from "@/lib/db";
+import { isGotvMode } from "@/lib/gotv";
 import { getActiveFieldMessages } from "@/lib/field-messages";
 import { getActiveSurveyForCanvass } from "@/lib/surveys";
 import { CanvassScreen } from "./canvass-screen";
+import { GotvCanvassScreen } from "./gotv-canvass-screen";
 
 interface PageProps {
   params: Promise<{ listId: string }>;
@@ -26,7 +28,7 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign, fieldMessages, activeSurvey, consentTypes] = await Promise.all([
+  const [queue, campaign, fieldMessages, activeSurvey, consentTypes, gotvEnabled] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
     getActiveFieldMessages(activeCampaignId),
@@ -36,6 +38,7 @@ export default async function CanvassPage({ params }: PageProps) {
       select: { id: true, label: true },
       orderBy: { sortOrder: "asc" },
     }),
+    isGotvMode(activeCampaignId),
   ]);
   if (!queue) notFound();
 
@@ -62,6 +65,18 @@ export default async function CanvassPage({ params }: PageProps) {
         appointmentsByPersonId[appt.personId] = appt.dueDate.toISOString();
       }
     }
+  }
+
+  if (gotvEnabled) {
+    return (
+      <GotvCanvassScreen
+        listId={listId}
+        listName={queue.listName}
+        assignmentId={queue.assignmentId}
+        campaignId={activeCampaignId}
+        entries={queue.entries}
+      />
+    );
   }
 
   return (

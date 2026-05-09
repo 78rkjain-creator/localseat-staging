@@ -13,6 +13,7 @@ import { getPendingVoterChangeCount } from "@/lib/voter-change-requests";
 import { getEffectiveLimits } from "@/lib/plan-limits";
 import { hasPendingRequest } from "@/lib/support-access";
 import { isMaintenanceMode } from "@/lib/maintenance";
+import { isGotvMode } from "@/lib/gotv";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
@@ -203,6 +204,8 @@ export default async function AppLayout({
     }
   }
 
+  const gotvMode = activeCampaignId ? await isGotvMode(activeCampaignId) : false;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {supportMode && (
@@ -250,7 +253,7 @@ export default async function AppLayout({
           {children}
         </main>
       </div>
-      <MobileNav />
+      <MobileNav gotvMode={gotvMode} />
       <PwaInstallPrompt />
     </div>
   );

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAssignedLists } from "@/lib/canvassing";
 import { getActiveFieldMessages } from "@/lib/field-messages";
 import { FieldMessagesBanner } from "@/components/field-messages-banner";
+import { isGotvMode } from "@/lib/gotv";
 
 interface Props {
   userId: string;
@@ -10,7 +11,165 @@ interface Props {
   firstName: string;
 }
 
+// ── GOTV-specific assigned lists (only isGotvList) ────────────────────────────
+
+async function getGotvAssignedLists(canvasserId: string, campaignId: string) {
+  const assignments = await db.canvassAssignment.findMany({
+    where: {
+      canvasserId,
+      deletedAt: null,
+      canvassList: { campaignId, deletedAt: null, status: "active", isGotvList: true },
+    },
+    include: {
+      canvassList: {
+        include: { _count: { select: { entries: true } } },
+      },
+      responses: { select: { personId: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return assignments.map((a) => {
+    const respondedCount = new Set(a.responses.map((r) => r.personId)).size;
+    return {
+      assignmentId: a.id,
+      list: {
+        id: a.canvassList.id,
+        name: a.canvassList.name,
+        description: a.canvassList.description,
+      },
+      totalEntries: a.canvassList._count.entries,
+      totalResponses: respondedCount,
+    };
+  });
+}
+
 export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
+  const gotvEnabled = await isGotvMode(campaignId);
+
+  // ── GOTV MODE ──────────────────────────────────────────────────────────────
+  if (gotvEnabled) {
+    const [gotvLists, pollStrikesToday, fieldMessages] = await Promise.all([
+      getGotvAssignedLists(userId, campaignId),
+      db.pollStrike.count({
+        where: {
+          campaignId,
+          struckById: userId,
+          struckAt: { gte: (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })() },
+        },
+      }),
+      getActiveFieldMessages(campaignId),
+    ]);
+
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const initials = firstName.slice(0, 2).toUpperCase();
+
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {/* GOTV Hero */}
+        <div
+          className="px-4 pt-5 pb-5"
+          style={{ background: "linear-gradient(135deg, #065f46, #047857)" }}
+        >
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-[13px] text-white/60">{greeting},</p>
+              <p className="text-[22px] font-bold text-white leading-tight">{firstName}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                <p className="text-[11px] font-semibold text-emerald-200 uppercase tracking-widest">
+                  GOTV mode
+                </p>
+              </div>
+            </div>
+            <div
+              className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+              style={{ background: "#10b981" }}
+            >
+              {initials}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <p className="text-[30px] font-medium text-white leading-none">{pollStrikesToday}</p>
+              <p className="text-[11px] uppercase text-white/75 mt-1 leading-none">Voted today</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <p className="text-[30px] font-medium text-white leading-none">{gotvLists.length}</p>
+              <p className="text-[11px] uppercase text-white/75 mt-1 leading-none">GOTV lists</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+          {fieldMessages.length > 0 && <FieldMessagesBanner messages={fieldMessages} />}
+
+          {/* Poll strike button */}
+          <Link
+            href="/gotv/strike"
+            className="flex items-center justify-center gap-2 w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-base font-bold rounded-2xl transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Poll strike
+          </Link>
+
+          {/* GOTV walk lists */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              GOTV walk lists
+            </p>
+
+            {gotvLists.length === 0 ? (
+              <div className="bg-white rounded-xl border border-slate-200 p-5 text-center">
+                <p className="text-sm font-medium text-slate-700 mb-1">No GOTV lists assigned yet</p>
+                <p className="text-xs text-slate-400">
+                  Your organizer will assign you a GOTV walk list to pull the vote.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {gotvLists.map((a) => {
+                  const pct = a.totalEntries > 0
+                    ? Math.min(100, Math.round((a.totalResponses / a.totalEntries) * 100))
+                    : 0;
+
+                  return (
+                    <div key={a.assignmentId} className="bg-white rounded-xl border border-slate-200 border-l-[3px] border-l-emerald-400 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className="text-sm font-medium text-slate-800 truncate">{a.list.name}</p>
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 bg-emerald-50 text-emerald-700">
+                          {pct}%
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mb-2">
+                        {a.totalEntries} doors · {a.totalResponses} done
+                      </p>
+                      <div className="h-1 rounded-full bg-slate-100 overflow-hidden mb-3">
+                        <div className="h-full rounded-full bg-emerald-400" style={{ width: `${pct}%` }} />
+                      </div>
+                      <Link
+                        href={`/canvassing/${a.list.id}/canvass`}
+                        className="flex items-center justify-center h-10 w-full rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                      >
+                        Pull the vote
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── NORMAL MODE ────────────────────────────────────────────────────────────
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const sevenDaysAgo = new Date(todayStart);

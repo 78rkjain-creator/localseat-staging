@@ -31,9 +31,16 @@ function tab(label: string, href: string, icon: React.ReactNode): Tab {
   return { label, href, icon };
 }
 
-function getTabsForRole(role: Role | string | null | undefined): Tab[] {
+function getTabsForRole(role: Role | string | null | undefined, gotvMode: boolean): Tab[] {
   switch (role) {
     case "canvasser":
+      if (gotvMode) {
+        return [
+          tab("GOTV", "/gotv/strike", <CheckSquare size={ICON_SIZE} />),
+          tab("Dashboard", "/dashboard", <LayoutDashboard size={ICON_SIZE} />),
+          tab("Account", "/account", <User size={ICON_SIZE} />),
+        ];
+      }
       return [
         tab("Canvassing", "/canvassing", <MapPin size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
@@ -97,13 +104,13 @@ function useShowMore(role: Role | string | null | undefined): boolean {
   return role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair";
 }
 
-export function MobileNav() {
+export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const role = session?.user?.activeRole;
-  const tabs = getTabsForRole(role);
+  const tabs = getTabsForRole(role, gotvMode);
   const showMore = useShowMore(role);
 
   function isActive(href: string): boolean {

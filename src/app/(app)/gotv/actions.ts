@@ -159,6 +159,7 @@ export async function generateChaseList(): Promise<{
       name: `GOTV Chase — ${dateLabel}`,
       description: `Auto-generated chase list: ${supporters.length} supporters who haven't voted yet.`,
       status: "active",
+      isGotvList: true,
     },
   });
 
@@ -234,6 +235,7 @@ export async function generateKnockList(
       name: `GOTV Knock ${timeLabel}${suffix}`,
       description: `Knock list: ${people.length} people to get to the polls.`,
       status: "active",
+      isGotvList: true,
     },
   });
 
