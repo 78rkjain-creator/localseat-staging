@@ -5,21 +5,21 @@ import { useRouter } from "next/navigation";
 import { strikePerson } from "@/app/(app)/gotv/actions";
 
 interface Entry {
+  entryId: string;
   person: {
     id: string;
     firstName: string;
     lastName: string;
     phoneHome: string | null;
     phoneMobile: string | null;
-    household: {
-      address: {
-        streetNumber: string | null;
-        streetName: string | null;
-        unitNumber: string | null;
-      } | null;
+    address: {
+      streetNumber: string | null;
+      streetName: string | null;
+      unitNumber: string | null;
     } | null;
-    canvassResponses: { id: string }[];
   };
+  visitCount: number;
+  lastResponse: { id: string } | null;
 }
 
 interface Props {
@@ -32,7 +32,7 @@ interface Props {
 
 export function GotvCanvassScreen({ listId, listName, entries, campaignId }: Props) {
   // Filter to people who haven't been canvassed yet on this assignment
-  const remaining = entries.filter((e) => e.person.canvassResponses.length === 0);
+  const remaining = entries.filter((e) => e.visitCount === 0 && !e.lastResponse);
   const done = entries.length - remaining.length;
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -90,7 +90,7 @@ export function GotvCanvassScreen({ listId, listName, entries, campaignId }: Pro
     }
   }
 
-  const addr = current?.person.household?.address;
+  const addr = current?.person.address;
   const addrStr = addr
     ? [addr.unitNumber, addr.streetNumber, addr.streetName].filter(Boolean).join(" ")
     : null;
