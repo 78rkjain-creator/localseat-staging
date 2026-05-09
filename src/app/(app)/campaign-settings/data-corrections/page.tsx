@@ -52,13 +52,13 @@ export default async function DataCorrectionsPage({ searchParams }: PageProps) {
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-slate-100 rounded-xl p-1">
         <TabLink
-          href="/data-corrections?tab=record-changes"
+          href="/campaign-settings/data-corrections?tab=record-changes"
           active={activeTab === "record-changes"}
           label="Record changes"
           count={voterChangeCount}
         />
         <TabLink
-          href="/data-corrections?tab=address-changes"
+          href="/campaign-settings/data-corrections?tab=address-changes"
           active={activeTab === "address-changes"}
           label="Address changes"
           count={addressChangeCount}

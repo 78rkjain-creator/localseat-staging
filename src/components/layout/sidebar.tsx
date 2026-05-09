@@ -10,14 +10,11 @@ import {
   canViewDonors,
   canViewVolunteers,
   canViewSigns,
-  canViewTeam,
   canManageVoterList,
   canAccessImportHub,
   canViewReports,
-  canManageSuppliers,
-  canReviewDataImports,
 } from "@/lib/permissions";
-import { ClipboardList, ShieldCheck, Settings } from "lucide-react";
+import { Compass } from "lucide-react";
 import { CampaignSwitcher } from "@/components/layout/campaign-switcher";
 import { Wordmark } from "@/components/brand/Wordmark";
 
@@ -76,28 +73,46 @@ function NavLink({
 export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null, tagUsage = null }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [fieldOpsOpen, setFieldOpsOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+  const peopleGroupRef = useRef<HTMLDivElement>(null);
+  const fieldOpsGroupRef = useRef<HTMLDivElement>(null);
+  const reportsGroupRef = useRef<HTMLDivElement>(null);
 
   const isPeoplePath = pathname.startsWith("/people");
   useEffect(() => {
-    if (isPeoplePath) setPeopleOpen(true);
+    if (isPeoplePath) {
+      setPeopleOpen(true);
+      setFieldOpsOpen(false);
+      setReportsOpen(false);
+    }
   }, [isPeoplePath]);
-
-  const isAdminPath =
-    pathname.startsWith("/campaign-settings") ||
-    pathname.startsWith("/data-corrections") ||
-    pathname.startsWith("/team");
-  useEffect(() => {
-    if (isAdminPath) setAdminOpen(true);
-  }, [isAdminPath]);
 
   const isReportsPath = pathname.startsWith("/reports");
   useEffect(() => {
-    if (isReportsPath) setReportsOpen(true);
+    if (isReportsPath) {
+      setReportsOpen(true);
+      setPeopleOpen(false);
+      setFieldOpsOpen(false);
+    }
   }, [isReportsPath]);
+
+  const isFieldOpsPath =
+    pathname.startsWith("/canvassing") ||
+    pathname.startsWith("/events") ||
+    pathname.startsWith("/follow-ups") ||
+    pathname.startsWith("/outreach") ||
+    pathname.startsWith("/field-messages") ||
+    pathname.startsWith("/signs");
+  useEffect(() => {
+    if (isFieldOpsPath) {
+      setFieldOpsOpen(true);
+      setPeopleOpen(false);
+      setReportsOpen(false);
+    }
+  }, [isFieldOpsPath]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -111,156 +126,85 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [accountOpen]);
 
-  // Admin sub-items — only shown to candidate, campaign_manager, data_manager, and co_chair.
-  const adminItems: NavItem[] = [
-    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager"
-      ? [
-          {
-            href: "/campaign-settings/general",
-            label: "General",
-            icon: <Settings size={16} />,
-          },
-        ]
+  useEffect(() => {
+    if (peopleOpen) peopleGroupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [peopleOpen]);
+
+  useEffect(() => {
+    if (fieldOpsOpen) fieldOpsGroupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [fieldOpsOpen]);
+
+  useEffect(() => {
+    if (reportsOpen) reportsGroupRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [reportsOpen]);
+
+  // Field Ops sub-items
+  const fieldOpsItems: NavItem[] = [
+    ...(role && (canViewAllPeople(role) || role === "canvasser" || role === "volunteer_coordinator")
+      ? [{
+          href: "/canvassing",
+          label: "Canvassing",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          ),
+        }]
       : []),
-    ...(role && canViewTeam(role)
-      ? [
-          {
-            href: "/team",
-            label: "Team Setup",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            ),
-          },
-        ]
+    ...(role && canViewAllPeople(role) && eventsEnabled
+      ? [{
+          href: "/events",
+          label: "Events & Scheduling",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          ),
+        }]
       : []),
-    {
-      href: "/data-corrections",
-      label: "Data Corrections",
-      badge: pendingDataCorrectionsCount > 0 ? pendingDataCorrectionsCount : undefined,
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-      ),
-    },
-    {
-      href: "/campaign-settings/ward",
-      label: "Ward Boundary",
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-        </svg>
-      ),
-    },
-    {
-      href: "/campaign-settings/competitors",
-      label: "Competitors",
-      icon: (
-        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-      ),
-    },
-    ...(canvassScriptEnabled && (role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair")
-      ? [
-          {
-            href: "/campaign-settings/script",
-            label: "Canvassing Script",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            ),
-          },
-        ]
+    ...(role && canViewAllPeople(role) && eventsEnabled && followUpQueueEnabled
+      ? [{
+          href: "/follow-ups",
+          label: "Follow-ups",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          ),
+        }]
       : []),
-    ...(reportsEnabled && (role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair")
-      ? [
-          {
-            href: "/campaign-settings/reports",
-            label: "Email Reports",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            ),
-          },
-        ]
+    ...(role && canViewAllPeople(role) && eventsEnabled
+      ? [{
+          href: "/outreach",
+          label: "Outreach",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          ),
+        }]
       : []),
-    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager"
-      ? [
-          ...(customFieldsEnabled
-            ? [{
-                href: "/campaign-settings/custom-fields",
-                label: "Custom Fields",
-                icon: (
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h10M4 18h6" />
-                  </svg>
-                ),
-              }]
-            : []),
-          {
-            href: "/campaign-settings/tags",
-            label: "Custom Tags",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-            ),
-          },
-          ...(surveysEnabled
-            ? [{
-                href: "/campaign-settings/surveys",
-                label: "Surveys",
-                icon: <ClipboardList size={16} />,
-              }]
-            : []),
-          ...(digitalSignaturesEnabled
-            ? [{
-                href: "/campaign-settings/signature-consents",
-                label: "Consent Types",
-                icon: (
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                ),
-              }]
-            : []),
-          {
-            href: "/campaign-settings/privacy",
-            label: "Privacy & Data",
-            icon: <ShieldCheck size={16} />,
-          },
-        ]
+    ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "field_organizer"
+      ? [{
+          href: "/field-messages",
+          label: "Field Messages",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+            </svg>
+          ),
+        }]
       : []),
-    ...(role && canManageSuppliers(role)
-      ? [
-          {
-            href: "/campaign-settings/suppliers",
-            label: "Data Suppliers",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-            ),
-          },
-        ]
-      : []),
-    ...(role && canReviewDataImports(role)
-      ? [
-          {
-            href: "/campaign-settings/imports",
-            label: "Data Imports",
-            icon: (
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            ),
-          },
-        ]
+    ...(role && canViewSigns(role) && signTrackingEnabled
+      ? [{
+          href: "/signs",
+          label: "Signs",
+          icon: (
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          ),
+        }]
       : []),
   ];
 
@@ -341,140 +285,6 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     );
   }
 
-  // Nav items grouped for visual section dividers.
-  // Groups: [Overview] [People & Field] [Operations]
-  const navGroups: NavItem[][] = [
-    // Group 1 — Overview
-    [
-      {
-        href: "/dashboard",
-        label: "Today",
-        icon: (
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-        ),
-      },
-      ...((role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair") && analyticsEnabled
-        ? [
-            {
-              href: "/analytics",
-              label: "Analytics",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-    ],
-    // Group 2 — Field Operations (People section rendered separately)
-    [
-      ...(role && canAccessImportHub(role)
-        ? [
-            {
-              href: "/import",
-              label: "Import & Data Management",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-      ...(role && (canViewAllPeople(role) || role === "canvasser" || role === "volunteer_coordinator")
-        ? [
-            {
-              href: "/canvassing",
-              label: "Canvassing",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-      ...(role && canViewAllPeople(role) && eventsEnabled
-        ? [
-            {
-              href: "/events",
-              label: "Events & Scheduling",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              ),
-            },
-            ...(followUpQueueEnabled
-              ? [{
-                  href: "/follow-ups",
-                  label: "Follow-ups",
-                  icon: (
-                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  ),
-                }]
-              : []),
-            {
-              href: "/outreach",
-              label: "Outreach",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-      ...(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "field_organizer"
-        ? [
-            {
-              href: "/field-messages",
-              label: "Field Messages",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-    ],
-    // Group 3 — Operations
-    [
-      ...(role && canViewDonors(role) && role !== "field_organizer" && donorTrackingEnabled
-        ? [
-            {
-              href: "/donors",
-              label: "Donors",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-      ...(role && canViewSigns(role) && signTrackingEnabled
-        ? [
-            {
-              href: "/signs",
-              label: "Signs",
-              icon: (
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              ),
-            },
-          ]
-        : []),
-    ],
-  ];
-
   return (
     <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
       {/* Brand */}
@@ -488,21 +298,42 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto min-h-0">
         {/* Dashboard */}
-        {navGroups[0].map((item) => (
-          <NavLink
-            key={item.href}
-            {...item}
-            active={pathname === item.href || pathname.startsWith(item.href + "/")}
-          />
-        ))}
+        <NavLink
+          href="/dashboard"
+          label="Dashboard"
+          active={pathname === "/dashboard" || pathname.startsWith("/dashboard/")}
+          icon={
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          }
+        />
 
-        {/* People section — expandable, auto-opens on /people/* */}
+        {/* Analytics */}
+        {(role === "candidate" || role === "campaign_manager" || role === "data_manager" || role === "co_chair") && analyticsEnabled && (
+          <NavLink
+            href="/analytics"
+            label="Analytics"
+            active={pathname === "/analytics" || pathname.startsWith("/analytics/")}
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            }
+          />
+        )}
+
+        {/* People — collapsible */}
         {role && canViewAllPeople(role) && (
-          <>
+          <div ref={peopleGroupRef}>
             <div className="h-px bg-slate-100 my-1" />
             <button
               type="button"
-              onClick={() => setPeopleOpen((v) => !v)}
+              onClick={() => {
+                const next = !peopleOpen;
+                setPeopleOpen(next);
+                if (next) { setFieldOpsOpen(false); setReportsOpen(false); }
+              }}
               className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
             >
               <span className="flex items-center gap-3">
@@ -514,7 +345,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 People
               </span>
               <svg
-                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (peopleOpen || isPeoplePath) ? "rotate-180" : ""].join(" ")}
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", peopleOpen ? "rotate-180" : ""].join(" ")}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -551,7 +382,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                       key={item.label}
                       href={item.href}
                       className={[
-                        "flex items-center justify-between px-3 py-2 text-sm rounded-r-xl transition-colors",
+                        "flex items-center justify-between px-3 py-1.5 text-sm rounded-r-xl transition-colors",
                         isActive
                           ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
                           : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
@@ -568,30 +399,108 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* Field & Operations groups */}
-        {navGroups.slice(1).filter((g) => g.length > 0).map((group, gi) => (
-          <div key={gi}>
-            <div className="h-px bg-slate-100 my-1" />
-            {group.map((item) => (
-              <NavLink
-                key={item.href}
-                {...item}
-                active={pathname === item.href || pathname.startsWith(item.href + "/")}
-              />
-            ))}
-          </div>
-        ))}
-
-        {/* Reports collapsible section */}
-        {role && canViewReports(role) && (
-          <>
+        {/* Field Ops — collapsible */}
+        {fieldOpsItems.length > 0 && (
+          <div ref={fieldOpsGroupRef}>
             <div className="h-px bg-slate-100 my-1" />
             <button
               type="button"
-              onClick={() => setReportsOpen((v) => !v)}
+              onClick={() => {
+                const next = !fieldOpsOpen;
+                setFieldOpsOpen(next);
+                if (next) { setPeopleOpen(false); setReportsOpen(false); }
+              }}
+              className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
+            >
+              <span className="flex items-center gap-3">
+                <span className="h-5 w-5 flex-shrink-0">
+                  <Compass size={20} />
+                </span>
+                Field Ops
+              </span>
+              <svg
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", fieldOpsOpen ? "rotate-180" : ""].join(" ")}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {fieldOpsOpen && (
+              <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
+                {fieldOpsItems.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={[
+                        "flex items-center gap-3 px-3 py-1.5 text-sm rounded-r-xl transition-colors",
+                        isActive
+                          ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                      ].join(" ")}
+                    >
+                      <span className="h-4 w-4 flex-shrink-0">{item.icon}</span>
+                      <span className="flex-1">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Import & Data Management — standalone */}
+        {role && canAccessImportHub(role) && (
+          <>
+            <div className="h-px bg-slate-100 my-1" />
+            <NavLink
+              href="/import"
+              label="Import & Data Management"
+              active={pathname === "/import" || pathname.startsWith("/import/")}
+              icon={
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4" />
+                </svg>
+              }
+            />
+          </>
+        )}
+
+        {/* Donors — standalone */}
+        {role && canViewDonors(role) && role !== "field_organizer" && donorTrackingEnabled && (
+          <>
+            <div className="h-px bg-slate-100 my-1" />
+            <NavLink
+              href="/donors"
+              label="Donors"
+              active={pathname === "/donors" || pathname.startsWith("/donors/")}
+              icon={
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
+            />
+          </>
+        )}
+
+        {/* Reports — collapsible */}
+        {role && canViewReports(role) && (
+          <div ref={reportsGroupRef}>
+            <div className="h-px bg-slate-100 my-1" />
+            <button
+              type="button"
+              onClick={() => {
+                const next = !reportsOpen;
+                setReportsOpen(next);
+                if (next) { setPeopleOpen(false); setFieldOpsOpen(false); }
+              }}
               className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
             >
               <span className="flex items-center gap-3">
@@ -603,7 +512,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 Reports
               </span>
               <svg
-                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (reportsOpen || isReportsPath) ? "rotate-180" : ""].join(" ")}
+                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", reportsOpen ? "rotate-180" : ""].join(" ")}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -712,7 +621,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                       key={item.href}
                       href={item.href}
                       className={[
-                        "flex items-center gap-3 px-3 py-2 text-sm rounded-r-xl transition-colors",
+                        "flex items-center gap-3 px-3 py-1.5 text-sm rounded-r-xl transition-colors",
                         isActive
                           ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
                           : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
@@ -725,140 +634,34 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
                 })}
               </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* Audit log — candidate / campaign_manager / data_manager */}
-        {(role === "candidate" || role === "campaign_manager" || role === "data_manager") && (
+        {/* Admin — single link into campaign settings */}
+        {showAdmin && (
           <>
             <div className="h-px bg-slate-100 my-1" />
             <NavLink
-              href="/audit-log"
-              label="Audit Log"
-              active={pathname === "/audit-log" || pathname.startsWith("/audit-log/")}
+              href="/campaign-settings"
+              label="Admin"
+              active={
+                pathname.startsWith("/campaign-settings") ||
+                pathname.startsWith("/team") ||
+                pathname.startsWith("/audit-log")
+              }
               icon={
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               }
             />
           </>
         )}
-
-        {/* Admin collapsible section */}
-        {showAdmin && (
-          <>
-            <div className="h-px bg-slate-100 my-1" />
-            <button
-              type="button"
-              onClick={() => setAdminOpen((v) => !v)}
-              className="flex items-center justify-between px-3 py-2.5 w-full text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
-            >
-              <span className="flex items-center gap-3">
-                <span className="h-5 w-5 flex-shrink-0">
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </span>
-                Admin
-              </span>
-              <svg
-                className={["h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-200", (adminOpen || isAdminPath) ? "rotate-180" : ""].join(" ")}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {adminOpen && (
-              <div className="ml-3 border-l border-slate-200 pl-2 flex flex-col gap-0.5 mt-0.5">
-                {adminItems.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={[
-                        "flex items-center gap-3 px-3 py-2 text-sm rounded-r-xl transition-colors",
-                        isActive
-                          ? "bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
-                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
-                      ].join(" ")}
-                    >
-                      <span className="h-4 w-4 flex-shrink-0">{item.icon}</span>
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge !== undefined && (
-                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-semibold bg-brand-500 text-white">
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
       </nav>
-
-      {/* Usage indicators */}
-      {(constituentUsage || tagUsage) && (
-        <div className="px-3 py-2 mx-0 flex flex-col gap-2">
-          {constituentUsage && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-slate-400">Records</span>
-                <span className="text-[10px] font-medium text-slate-500 tabular-nums">
-                  {constituentUsage.count.toLocaleString()} / {constituentUsage.limit.toLocaleString()}
-                </span>
-              </div>
-              <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className={[
-                    "h-full rounded-full transition-all",
-                    constituentUsage.count / constituentUsage.limit >= 0.9
-                      ? "bg-red-400"
-                      : constituentUsage.count / constituentUsage.limit >= 0.75
-                      ? "bg-amber-400"
-                      : "bg-slate-400",
-                  ].join(" ")}
-                  style={{ width: `${Math.min(100, Math.round((constituentUsage.count / constituentUsage.limit) * 100))}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {tagUsage && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-slate-400">Tags</span>
-                <span className="text-[10px] font-medium text-slate-500 tabular-nums">
-                  {tagUsage.count.toLocaleString()} / {tagUsage.limit.toLocaleString()}
-                </span>
-              </div>
-              <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className={[
-                    "h-full rounded-full transition-all",
-                    tagUsage.count / tagUsage.limit >= 0.9
-                      ? "bg-red-400"
-                      : tagUsage.count / tagUsage.limit >= 0.75
-                      ? "bg-amber-400"
-                      : "bg-slate-400",
-                  ].join(" ")}
-                  style={{ width: `${Math.min(100, Math.round((tagUsage.count / tagUsage.limit) * 100))}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* User */}
       <div className="border-t border-slate-100 pt-3 mt-3 relative" ref={accountRef}>
-        {/* Account menu — opens above the user row */}
         {accountOpen && (
           <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <Link
@@ -893,7 +696,6 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
           </div>
         )}
 
-        {/* User row — toggles the menu */}
         <button
           onClick={() => setAccountOpen((v) => !v)}
           className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-xl transition-colors"
