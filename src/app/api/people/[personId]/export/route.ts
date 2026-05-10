@@ -34,24 +34,23 @@ export async function GET(
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
+          outcome: true,
           supportLevel: true,
           signRequest: true,
           volunteerInterest: true,
           donorInterest: true,
-          notHome: true,
-          moved: true,
-          deceased: true,
-          refused: true,
           notes: true,
+          needsFollowUp: true,
           createdAt: true,
         },
       },
       outreachLogs: {
-        orderBy: { contactDate: "desc" },
+        where: { deletedAt: null },
+        orderBy: { date: "desc" },
         select: {
           id: true,
-          contactType: true,
-          contactDate: true,
+          channel: true,
+          date: true,
           outcome: true,
           notes: true,
         },
@@ -61,8 +60,8 @@ export async function GET(
           id: true,
           status: true,
           amount: true,
-          pledgeDate: true,
-          receivedDate: true,
+          donationDate: true,
+          paymentMethod: true,
           notes: true,
         },
       },
@@ -83,7 +82,7 @@ export async function GET(
         select: {
           id: true,
           title: true,
-          status: true,
+          completed: true,
           dueDate: true,
           createdAt: true,
         },
@@ -150,10 +149,10 @@ export async function GET(
   if (person.canvassResponses.length > 0) {
     lines.push("");
     lines.push("=== CANVASS RESPONSES ===");
-    lines.push("Date,Support Level,Sign Requested,Volunteer Interest,Donor Interest,Not Home,Notes");
+    lines.push("Date,Outcome,Support Level,Sign Request,Volunteer Interest,Donor Interest,Follow-up,Notes");
     for (const r of person.canvassResponses) {
       lines.push(
-        `"${r.createdAt.toISOString().split("T")[0]}","${esc(r.supportLevel)}","${r.signRequest ? "Yes" : "No"}","${r.volunteerInterest ? "Yes" : "No"}","${r.donorInterest ? "Yes" : "No"}","${r.notHome ? "Yes" : "No"}","${esc(r.notes)}"`
+        `"${r.createdAt.toISOString().split("T")[0]}","${esc(r.outcome)}","${esc(r.supportLevel)}","${r.signRequest ? "Yes" : "No"}","${r.volunteerInterest ? "Yes" : "No"}","${r.donorInterest ? "Yes" : "No"}","${r.needsFollowUp ? "Yes" : "No"}","${esc(r.notes)}"`
       );
     }
   }
@@ -162,10 +161,10 @@ export async function GET(
   if (person.outreachLogs.length > 0) {
     lines.push("");
     lines.push("=== OUTREACH LOGS ===");
-    lines.push("Date,Type,Outcome,Notes");
+    lines.push("Date,Channel,Outcome,Notes");
     for (const o of person.outreachLogs) {
       lines.push(
-        `"${o.contactDate.toISOString().split("T")[0]}","${esc(o.contactType)}","${esc(o.outcome)}","${esc(o.notes)}"`
+        `"${o.date.toISOString().split("T")[0]}","${esc(o.channel)}","${esc(o.outcome)}","${esc(o.notes)}"`
       );
     }
   }
@@ -174,10 +173,10 @@ export async function GET(
   if (person.linkedDonors.length > 0) {
     lines.push("");
     lines.push("=== DONOR RECORDS ===");
-    lines.push("Status,Amount,Pledge Date,Received Date,Notes");
+    lines.push("Status,Amount,Donation Date,Payment Method,Notes");
     for (const d of person.linkedDonors) {
       lines.push(
-        `"${esc(d.status)}","${d.amount ?? ""}","${d.pledgeDate ? d.pledgeDate.toISOString().split("T")[0] : ""}","${d.receivedDate ? d.receivedDate.toISOString().split("T")[0] : ""}","${esc(d.notes)}"`
+        `"${esc(d.status)}","${d.amount ?? ""}","${d.donationDate ? d.donationDate.toISOString().split("T")[0] : ""}","${esc(d.paymentMethod)}","${esc(d.notes)}"`
       );
     }
   }
@@ -199,10 +198,10 @@ export async function GET(
   if (person.tasks.length > 0) {
     lines.push("");
     lines.push("=== FOLLOW-UP TASKS ===");
-    lines.push("Title,Status,Due Date,Created");
+    lines.push("Title,Completed,Due Date,Created");
     for (const t of person.tasks) {
       lines.push(
-        `"${esc(t.title)}","${esc(t.status)}","${t.dueDate ? t.dueDate.toISOString().split("T")[0] : ""}","${t.createdAt.toISOString().split("T")[0]}"`
+        `"${esc(t.title)}","${t.completed ? "Yes" : "No"}","${t.dueDate ? t.dueDate.toISOString().split("T")[0] : ""}","${t.createdAt.toISOString().split("T")[0]}"`
       );
     }
   }
