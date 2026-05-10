@@ -17,6 +17,10 @@ import type { ActiveSurvey } from "@/lib/surveys";
 import { SignatureModal } from "@/components/signature-modal";
 import { saveSignature } from "@/app/(app)/people/[personId]/signature-actions";
 import { DemoHint } from "@/components/demo/demo-hint";
+import { SUPPORT_LEVEL_LABELS } from "@/types";
+
+type SortMode = "default" | "nearest";
+type ParityFilter = "all" | "even" | "odd";
 
 function formatVisitDate(iso: string | Date): string {
   const d = new Date(iso);
@@ -262,6 +266,8 @@ export function CanvassScreen({
   // Refs so async transitions always see current values
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+  const displayEntriesRef = useRef(displayEntries);
+  displayEntriesRef.current = displayEntries;
   const savedSetRef = useRef(savedSet);
   savedSetRef.current = savedSet;
 
@@ -278,6 +284,55 @@ export function CanvassScreen({
 
   const [showNotHomeMenu, setShowNotHomeMenu] = useState(false);
   const [surveyAnswers, setSurveyAnswers] = useState<Record<string, unknown>>({});
+
+  // ── Sort & filter controls ──────────────────────────────────────────────
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [parityFilter, setParityFilter] = useState<ParityFilter>("all");
+  const [gpsPosition, setGpsPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsError, setGpsError] = useState(false);
+
+  // Request GPS when user switches to "nearest" sort
+  useEffect(() => {
+    if (sortMode !== "nearest") return;
+    if (gpsPosition) return; // already have it
+    if (!navigator.geolocation) { setGpsError(true); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setGpsPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setGpsError(true),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [sortMode, gpsPosition]);
+
+  // Derive the sorted + filtered entry list
+  const displayEntries = (() => {
+    let list = [...entries];
+
+    // Parity filter
+    if (parityFilter !== "all") {
+      list = list.filter((e) => {
+        const num = parseInt(e.person.address?.streetNumber ?? "0", 10);
+        if (isNaN(num)) return true; // keep entries without a parseable number
+        return parityFilter === "even" ? num % 2 === 0 : num % 2 !== 0;
+      });
+    }
+
+    // Sort by proximity to GPS
+    if (sortMode === "nearest" && gpsPosition) {
+      list.sort((a, b) => {
+        const aAddr = a.person.address;
+        const bAddr = b.person.address;
+        const aDist = aAddr?.lat && aAddr?.lng
+          ? haversineKm(gpsPosition.lat, gpsPosition.lng, aAddr.lat, aAddr.lng)
+          : Infinity;
+        const bDist = bAddr?.lat && bAddr?.lng
+          ? haversineKm(gpsPosition.lat, gpsPosition.lng, bAddr.lat, bAddr.lng)
+          : Infinity;
+        return aDist - bDist;
+      });
+    }
+
+    return list;
+  })();
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
 
@@ -296,7 +351,7 @@ export function CanvassScreen({
       .catch(() => { clearTimeout(t); setSwFailure(true); });
   }, []);
 
-  const current = entries[currentIndex];
+  const current = displayEntries[currentIndex];
   const totalCount = entries.length;
   const doneCount = savedSet.size;
   const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
@@ -324,7 +379,7 @@ export function CanvassScreen({
       });
     }
 
-    const currentEntries = entriesRef.current;
+    const currentEntries = displayEntriesRef.current;
     for (let i = fromIndex + 1; i < currentEntries.length; i++) {
       if (!newSaved.has(currentEntries[i].person.id)) {
         setCurrentIndex(i);
@@ -340,7 +395,7 @@ export function CanvassScreen({
 
   function handleSkip() {
     setError(null);
-    const currentEntries = entriesRef.current;
+    const currentEntries = displayEntriesRef.current;
     for (let i = currentIndex + 1; i < currentEntries.length; i++) {
       if (!savedSetRef.current.has(currentEntries[i].person.id)) {
         setCurrentIndex(i);
@@ -355,7 +410,7 @@ export function CanvassScreen({
   function handlePrevious() {
     if (currentIndex <= 0) return;
     const prevIndex = currentIndex - 1;
-    const prevEntry = entries[prevIndex];
+    const prevEntry = displayEntries[prevIndex];
     setCurrentIndex(prevIndex);
     setDraft(draftFromLastResponse(prevEntry.lastResponse));
     setError(null);
@@ -665,7 +720,7 @@ export function CanvassScreen({
     : null;
 
   // "Navigate to next" — walking directions from current stop to next stop
-  const nextEntry = entries[currentIndex + 1] ?? null;
+  const nextEntry = displayEntries[currentIndex + 1] ?? null;
   const nextAddr = nextEntry?.person?.address ?? null;
   const navToNextUrl =
     addr && nextAddr
@@ -673,7 +728,7 @@ export function CanvassScreen({
       : null;
 
   // Walk estimate to next stop — Haversine distance at 5 km/h walking speed
-  const isLastEntry = currentIndex >= entries.length - 1;
+  const isLastEntry = currentIndex >= displayEntries.length - 1;
   const walkMinutes = (() => {
     if (!addr?.lat || !addr?.lng || !nextAddr?.lat || !nextAddr?.lng) return null;
     const km = haversineKm(addr.lat, addr.lng, nextAddr.lat, nextAddr.lng);
@@ -765,9 +820,68 @@ export function CanvassScreen({
         </span>
       </header>
 
+      {/* ── Sort & filter bar ── */}
+      <div className="flex-none bg-white border-b border-slate-100 px-4 py-1.5 flex items-center gap-2 overflow-x-auto">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest flex-shrink-0">Sort</span>
+        <button
+          type="button"
+          onClick={() => { setSortMode("default"); setCurrentIndex(0); }}
+          className={`h-7 px-3 rounded-full text-xs font-medium border transition-colors flex-shrink-0 ${
+            sortMode === "default"
+              ? "bg-slate-800 text-white border-slate-800"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          Address
+        </button>
+        <button
+          type="button"
+          onClick={() => { setSortMode("nearest"); setCurrentIndex(0); }}
+          className={`h-7 px-3 rounded-full text-xs font-medium border transition-colors flex-shrink-0 ${
+            sortMode === "nearest"
+              ? "bg-slate-800 text-white border-slate-800"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          Nearest
+        </button>
+
+        <span className="w-px h-4 bg-slate-200 flex-shrink-0" />
+
+        <button
+          type="button"
+          onClick={() => { setParityFilter(parityFilter === "all" ? "even" : parityFilter === "even" ? "odd" : "all"); setCurrentIndex(0); }}
+          className={`h-7 px-3 rounded-full text-xs font-medium border transition-colors flex-shrink-0 ${
+            parityFilter !== "all"
+              ? "bg-brand-500 text-white border-brand-500"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          {parityFilter === "all" ? "Even/Odd" : parityFilter === "even" ? "Even only" : "Odd only"}
+        </button>
+
+        {gpsError && sortMode === "nearest" && (
+          <span className="text-[10px] text-red-500 flex-shrink-0">GPS unavailable</span>
+        )}
+      </div>
+
       {/* ── Zone 2: Controls — flex-1, scrollable for survey ── */}
       <main className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-4 pt-1.5 pb-4 max-w-lg mx-auto">
+
+          {/* No entries after filter */}
+          {displayEntries.length === 0 && entries.length > 0 && (
+            <div className="text-center py-12">
+              <p className="text-slate-500 text-sm">No {parityFilter} addresses on this list.</p>
+              <button
+                type="button"
+                onClick={() => setParityFilter("all")}
+                className="mt-2 text-brand-600 text-sm font-medium"
+              >
+                Show all addresses
+              </button>
+            </div>
+          )}
 
           {/* ── Household hero ── */}
           <div className="bg-gradient-to-r from-slate-50 to-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
@@ -817,6 +931,28 @@ export function CanvassScreen({
                 {isLastEntry ? "Last stop on route" : `~${walkMinutes} min walk to next`}
               </p>
             )}
+            {/* Prior contact history */}
+            {(current as LocalEntry & { priorContact?: { supportLevel: string | null; outcome: string | null; respondedAt: Date | string; canvasserName: string } | null }).priorContact && (() => {
+              const pc = (current as LocalEntry & { priorContact: { supportLevel: string | null; outcome: string | null; respondedAt: Date | string; canvasserName: string } }).priorContact;
+              const levelLabel = pc.supportLevel
+                ? (SUPPORT_LEVEL_LABELS[pc.supportLevel as SupportLevel] ?? pc.supportLevel)
+                : pc.outcome === "not_home" ? "Not home"
+                : pc.outcome ?? "Contacted";
+              const dateStr = formatVisitDate(pc.respondedAt);
+              const isPositive = pc.supportLevel === "strong_yes" || pc.supportLevel === "soft_yes";
+              const isNegative = pc.supportLevel === "strong_no" || pc.supportLevel === "soft_no";
+              const badgeColor = isPositive
+                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                : isNegative
+                  ? "bg-red-50 border-red-200 text-red-700"
+                  : "bg-slate-50 border-slate-200 text-slate-600";
+              return (
+                <div className={`mt-1.5 rounded-xl border px-3 py-1.5 ${badgeColor}`}>
+                  <p className="text-xs font-medium">{levelLabel} · {dateStr}</p>
+                  <p className="text-[10px] opacity-75">by {pc.canvasserName}</p>
+                </div>
+              );
+            })()}
             {current.person.doNotContact && (
               <div className="mt-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-center gap-2">
                 <svg className="h-4 w-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

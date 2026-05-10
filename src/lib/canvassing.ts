@@ -394,6 +394,32 @@ export async function getCanvassingQueue(
     }),
   ]);
 
+  // Fetch the most recent campaign-wide canvass response per person (across all
+  // assignments/lists) so canvassers can see prior contact history.
+  const personIds = entries.map((e) => e.person.id);
+  const priorResponses = personIds.length > 0
+    ? await db.canvassResponse.findMany({
+        where: {
+          personId: { in: personIds },
+          assignment: { canvassList: { campaignId } },
+        },
+        orderBy: { respondedAt: "desc" },
+        distinct: ["personId"],
+        select: {
+          personId: true,
+          supportLevel: true,
+          outcome: true,
+          respondedAt: true,
+          assignment: {
+            select: {
+              canvasser: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      })
+    : [];
+  const priorByPerson = new Map(priorResponses.map((r) => [r.personId, r]));
+
   // Sort entries so units within the same building are adjacent and ordered numerically.
   // Prisma's string sort would put "10" before "2"; this corrects that.
   const sortedEntries = [...entries].sort((a, b) => {
@@ -424,27 +450,39 @@ export async function getCanvassingQueue(
     assignmentId: assignment.id,
     listName: listRecord?.name ?? "",
     competitors,
-    entries: sortedEntries.map((e) => ({
-      entryId: e.id,
-      person: {
-        id: e.person.id,
-        firstName: e.person.firstName,
-        lastName: e.person.lastName,
-        phoneHome: e.person.phoneHome,
-        phoneMobile: e.person.phoneMobile,
-        email: e.person.email,
-        birthDate: e.person.birthDate,
-        doNotContact: e.person.doNotContact,
-        address: e.person.household?.address ?? null,
-        coResidents: (e.person.household?.people ?? []).filter(
-          (p) => p.id !== e.person.id
-        ),
-      },
-      visitCount: e.person.canvassResponses.length,
-      lastResponse: e.person.canvassResponses.length > 0
-        ? e.person.canvassResponses[0]
-        : null,
-    })),
+    entries: sortedEntries.map((e) => {
+      const prior = priorByPerson.get(e.person.id);
+      return {
+        entryId: e.id,
+        person: {
+          id: e.person.id,
+          firstName: e.person.firstName,
+          lastName: e.person.lastName,
+          phoneHome: e.person.phoneHome,
+          phoneMobile: e.person.phoneMobile,
+          email: e.person.email,
+          birthDate: e.person.birthDate,
+          doNotContact: e.person.doNotContact,
+          address: e.person.household?.address ?? null,
+          coResidents: (e.person.household?.people ?? []).filter(
+            (p) => p.id !== e.person.id
+          ),
+        },
+        visitCount: e.person.canvassResponses.length,
+        lastResponse: e.person.canvassResponses.length > 0
+          ? e.person.canvassResponses[0]
+          : null,
+        // Campaign-wide prior contact (from any walk list / canvasser)
+        priorContact: prior
+          ? {
+              supportLevel: prior.supportLevel,
+              outcome: prior.outcome,
+              respondedAt: prior.respondedAt,
+              canvasserName: `${prior.assignment.canvasser.firstName} ${prior.assignment.canvasser.lastName}`,
+            }
+          : null,
+      };
+    }),
   };
 }
 
