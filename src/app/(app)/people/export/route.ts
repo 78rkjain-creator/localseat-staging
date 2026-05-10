@@ -7,20 +7,10 @@ import { db } from "@/lib/db";
 import { canExportData } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
+import { csvRow, streamingCsvResponse } from "@/lib/csv-stream";
 import type { Role, SupportLevel } from "@/types";
 
-function esc(val: string | number | null | undefined): string {
-  if (val == null) return "";
-  const s = String(val);
-  if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
-function row(fields: (string | number | null | undefined)[]): string {
-  return fields.map(esc).join(",");
-}
+const CHUNK_SIZE = 500;
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -32,7 +22,6 @@ export async function GET() {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  // Re-verify the user still has an active membership in this campaign.
   const membership = await db.campaignMembership.findFirst({
     where: { userId: session.user.id, campaignId: activeCampaignId, deletedAt: null },
     select: { id: true },
@@ -40,75 +29,81 @@ export async function GET() {
   if (!membership) return new NextResponse("Forbidden", { status: 403 });
 
   const campaignId = activeCampaignId;
-
-  try {
-  const people = await db.person.findMany({
-    where: { campaignId, deletedAt: null },
-    include: {
-      household: {
-        include: { address: true },
-      },
-      tags: { include: { tag: true } },
-      notes: { select: { id: true } },
-      canvassResponses: {
-        orderBy: { respondedAt: "desc" },
-        take: 1,
-        select: { supportLevel: true },
-      },
-      outreachLogs: { where: { deletedAt: null }, select: { id: true } },
-      _count: { select: { canvassResponses: true } },
-    },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
-
-  const headers = row([
-    "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
-    "Street", "Unit", "City", "Province", "Postal Code",
-    "Tags", "Support Level", "Notes Count", "Touches", "Availability", "Created Date",
-  ]);
-
-  const rows = people.map((p) => {
-    const addr = p.household?.address;
-    const street = addr
-      ? `${addr.streetNumber} ${addr.streetName}`
-      : "";
-    const tags = p.tags.map(({ tag }) => tag.name).join("; ");
-    const rawLevel = p.canvassResponses[0]?.supportLevel;
-    const supportLevel = rawLevel
-      ? (SUPPORT_LEVEL_LABELS[rawLevel as SupportLevel] ?? rawLevel)
-      : "";
-
-    const touches = p._count.canvassResponses + p.outreachLogs.length;
-
-    return row([
-      p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
-      street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
-      tags, supportLevel, p.notes.length, touches, p.availability,
-      p.createdAt.toISOString().slice(0, 10),
-    ]);
-  });
-
-  await createAuditLog({
-    campaignId,
-    userId: session.user.id,
-    action: "EXPORT_VOTER_LIST",
-    entityType: "export",
-    details: {
-      rowCount: people.length,
-      userRole: session.user.activeRole ?? null,
-      format: "csv",
-    },
-  });
-
-  const csv = [headers, ...rows].join("\r\n");
   const date = new Date().toISOString().slice(0, 10);
 
-  return new NextResponse(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="people-export-${date}.csv"`,
-    },
-  });
+  try {
+    let totalRows = 0;
+
+    const response = streamingCsvResponse(
+      `people-export-${date}.csv`,
+      [
+        "First Name", "Last Name", "Email", "Phone (home)", "Phone (mobile)",
+        "Street", "Unit", "City", "Province", "Postal Code",
+        "Tags", "Support Level", "Notes Count", "Touches", "Availability", "Created Date",
+      ],
+      async (enqueue) => {
+        let cursor: string | undefined;
+
+        while (true) {
+          const people = await db.person.findMany({
+            where: { campaignId, deletedAt: null },
+            include: {
+              household: { include: { address: true } },
+              tags: { include: { tag: true } },
+              notes: { select: { id: true } },
+              canvassResponses: {
+                orderBy: { respondedAt: "desc" },
+                take: 1,
+                select: { supportLevel: true },
+              },
+              outreachLogs: { where: { deletedAt: null }, select: { id: true } },
+              _count: { select: { canvassResponses: true } },
+            },
+            orderBy: { id: "asc" },
+            take: CHUNK_SIZE,
+            ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          });
+
+          if (people.length === 0) break;
+
+          for (const p of people) {
+            const addr = p.household?.address;
+            const street = addr ? `${addr.streetNumber} ${addr.streetName}` : "";
+            const tags = p.tags.map(({ tag }) => tag.name).join("; ");
+            const rawLevel = p.canvassResponses[0]?.supportLevel;
+            const supportLevel = rawLevel
+              ? (SUPPORT_LEVEL_LABELS[rawLevel as SupportLevel] ?? rawLevel)
+              : "";
+            const touches = p._count.canvassResponses + p.outreachLogs.length;
+
+            enqueue(csvRow([
+              p.firstName, p.lastName, p.email, p.phoneHome, p.phoneMobile,
+              street, addr?.unitNumber, addr?.city, addr?.province, addr?.postalCode,
+              tags, supportLevel, p.notes.length, touches, p.availability,
+              p.createdAt.toISOString().slice(0, 10),
+            ]));
+          }
+
+          totalRows += people.length;
+          cursor = people[people.length - 1].id;
+          if (people.length < CHUNK_SIZE) break;
+        }
+
+        await createAuditLog({
+          campaignId,
+          userId: session.user.id,
+          action: "EXPORT_VOTER_LIST",
+          entityType: "export",
+          details: {
+            rowCount: totalRows,
+            userRole: session.user.activeRole ?? null,
+            format: "csv",
+          },
+        });
+      }
+    );
+
+    return response;
   } catch {
     return NextResponse.json({ error: "Export failed." }, { status: 500 });
   }

@@ -15,21 +15,42 @@ function startOfToday(): Date {
 export async function getCandidateDashboardData(campaignId: string) {
   const todayStart = startOfToday();
 
-  const allResponses = await db.canvassResponse.findMany({
-    where: { assignment: { canvassList: { campaignId } } },
-    select: { personId: true, supportLevel: true, outcome: true, respondedAt: true },
-    orderBy: { respondedAt: "desc" },
-  });
-  const latestMap = new Map<string, typeof allResponses[number]>();
-  for (const r of allResponses) {
-    if (!latestMap.has(r.personId)) {
-      latestMap.set(r.personId, r);
-    }
-  }
-  const latestResponses = Array.from(latestMap.values());
+  // Voter ID breakdown — computed in SQL using a lateral join to get the
+  // latest response per person, then aggregating into support buckets.
+  // This replaces the previous approach of loading all responses into memory.
+  const voterIdBreakdown = db.$queryRaw<
+    { category: string; count: bigint }[]
+  >`
+    WITH latest_response AS (
+      SELECT DISTINCT ON (cr."personId")
+        cr."personId",
+        cr."supportLevel",
+        cr."outcome"
+      FROM canvass_responses cr
+      JOIN canvass_assignments ca ON ca.id = cr."assignmentId"
+      JOIN canvass_lists cl ON cl.id = ca."canvassListId"
+      WHERE cl."campaignId" = ${campaignId}
+      ORDER BY cr."personId", cr."respondedAt" DESC
+    )
+    SELECT category, COUNT(*)::bigint AS count FROM (
+      SELECT
+        CASE
+          WHEN lr."personId" IS NULL THEN 'uncontacted'
+          WHEN lr."outcome" = 'other_candidate' THEN 'againstUs'
+          WHEN lr."supportLevel" IN ('strong_yes', 'soft_yes') THEN 'forUs'
+          WHEN lr."supportLevel" IN ('strong_no', 'soft_no') THEN 'againstUs'
+          WHEN lr."supportLevel" = 'undecided' THEN 'undecided'
+          ELSE 'notHome'
+        END AS category
+      FROM people p
+      LEFT JOIN latest_response lr ON lr."personId" = p.id
+      WHERE p."campaignId" = ${campaignId} AND p."deletedAt" IS NULL
+    ) breakdown
+    GROUP BY category
+  `;
 
   const [
-    allPeople,
+    totalPeople,
     doorsTotal,
     doorsToday,
     walkLists,
@@ -41,10 +62,10 @@ export async function getCandidateDashboardData(campaignId: string) {
     canvassersOutTodayRaw,
     competitorGroupsRaw,
     votersWithHistory,
+    voterIdRows,
   ] = await Promise.all([
-    db.person.findMany({
+    db.person.count({
       where: { campaignId, deletedAt: null },
-      select: { id: true },
     }),
     db.canvassResponse.count({
       where: { assignment: { canvassList: { campaignId } } },
@@ -146,20 +167,17 @@ export async function getCandidateDashboardData(campaignId: string) {
     .filter((x): x is { name: string; count: number } => x !== null)
     .sort((a, b) => b.count - a.count);
 
-  // Voter ID breakdown
-  const latestByPerson = new Map(
-    latestResponses.map((r) => [r.personId, { supportLevel: r.supportLevel, outcome: r.outcome }])
-  );
-  let forUs = 0, againstUs = 0, undecided = 0, notHome = 0, uncontacted = 0;
-  for (const { id } of allPeople) {
-    if (!latestByPerson.has(id)) { uncontacted++; continue; }
-    const { supportLevel: level, outcome } = latestByPerson.get(id)!;
-    if ((outcome as string) === "other_candidate") { againstUs++; continue; }
-    if (level === "strong_yes" || level === "soft_yes") forUs++;
-    else if (level === "strong_no" || level === "soft_no") againstUs++;
-    else if (level === "undecided") undecided++;
-    else notHome++;
+  // Voter ID breakdown from SQL results
+  const breakdown: Record<string, number> = {};
+  for (const row of voterIdRows) {
+    breakdown[row.category] = Number(row.count);
   }
+  const forUs = breakdown.forUs ?? 0;
+  const againstUs = breakdown.againstUs ?? 0;
+  const undecided = breakdown.undecided ?? 0;
+  const notHome = breakdown.notHome ?? 0;
+  const uncontacted = breakdown.uncontacted ?? 0;
+
   const walkListProgress = walkLists.map((l) => {
     const entryPersonIds = new Set(l.entries.map((e) => e.personId));
     const respondedEntryIds = new Set(
@@ -182,7 +200,7 @@ export async function getCandidateDashboardData(campaignId: string) {
   }
 
   return {
-    total: allPeople.length,
+    total: totalPeople,
     forUs,
     againstUs,
     undecided,
