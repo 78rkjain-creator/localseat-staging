@@ -55,3 +55,42 @@ export async function anonymizePerson(personId: string): Promise<{ error?: strin
   revalidatePath(`/people/${personId}`);
   return {};
 }
+
+// ── Toggle do-not-contact ─────────────────────────────────────────────────────
+
+export async function toggleDoNotContact(
+  personId: string,
+  doNotContact: boolean
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+  if (activeRole !== "candidate" && activeRole !== "campaign_manager" && activeRole !== "data_manager") {
+    return { error: "Not authorized." };
+  }
+
+  const person = await db.person.findFirst({
+    where: { id: personId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!person) return { error: "Person not found." };
+
+  await db.person.update({
+    where: { id: personId },
+    data: { doNotContact },
+  });
+
+  await createAuditLog({
+    campaignId: activeCampaignId,
+    userId: session.user.id,
+    action: doNotContact ? "DO_NOT_CONTACT_SET" : "DO_NOT_CONTACT_REMOVED",
+    entityType: "person",
+    entityId: personId,
+    details: {},
+  });
+
+  revalidatePath(`/people/${personId}`);
+  return {};
+}

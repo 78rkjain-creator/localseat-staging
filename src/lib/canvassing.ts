@@ -223,6 +223,9 @@ export async function previewPeopleFilter({
   // Hard exclude: out-of-district people cannot appear in walk lists regardless of override.
   where.isOutOfDistrict = false;
 
+  // Hard exclude: do-not-contact people never appear in walk lists.
+  where.doNotContact = false;
+
   // Soft exclude: manual and team records are excluded unless explicitly overridden.
   where.OR = [
     { includeInWalkLists: true },
@@ -343,6 +346,7 @@ export async function getCanvassingQueue(
             phoneMobile: true,
             email: true,
             birthDate: true,
+            doNotContact: true,
             household: {
               select: {
                 address: {

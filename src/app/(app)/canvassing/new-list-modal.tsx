@@ -13,11 +13,17 @@ interface Tag {
   color: string | null;
 }
 
+interface Survey {
+  id: string;
+  name: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   tags?: Tag[];
   gotvMode?: boolean;
+  surveys?: Survey[];
 }
 
 const SUPPORT_OPTIONS = [
@@ -34,7 +40,7 @@ const WARD_OPTIONS = [
   { value: "outside_accepted", label: "Outside (accepted)" },
 ];
 
-export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Props) {
+export function NewListModal({ open, onClose, tags = [], gotvMode = false, surveys = [] }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +49,7 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Pro
   // Dynamic list state
   const [isDynamic, setIsDynamic] = useState(false);
   const [isGotvList, setIsGotvList] = useState(gotvMode);
+  const [selectedSurveyId, setSelectedSurveyId] = useState<string>("");
   const [supportLevels, setSupportLevels] = useState<string[]>([]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [canvassStatus, setCanvassStatus] = useState<DynamicFilters["canvassStatus"]>("");
@@ -113,6 +120,10 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Pro
       formData.set("isGotvList", "true");
     }
 
+    if (selectedSurveyId) {
+      formData.set("surveyId", selectedSurveyId);
+    }
+
     startTransition(async () => {
       const result = await createCanvassList(formData);
       if (result?.error) setError(result.error);
@@ -124,6 +135,7 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Pro
     setError(null);
     setIsDynamic(false);
     setIsGotvList(gotvMode);
+    setSelectedSurveyId("");
     setSupportLevels([]);
     setTagIds([]);
     setCanvassStatus("");
@@ -186,6 +198,28 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false }: Pro
             </button>
           </div>
         </div>
+
+        {/* Survey assignment (optional) */}
+        {surveys.length > 0 && !isGotvList && (
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <label className="text-sm font-semibold text-slate-900 block mb-1">
+              Survey
+            </label>
+            <p className="text-xs text-slate-500 mb-2">
+              Optionally attach a survey to this list. Canvassers will see it instead of the campaign default.
+            </p>
+            <select
+              value={selectedSurveyId}
+              onChange={(e) => setSelectedSurveyId(e.target.value)}
+              className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="">Campaign default</option>
+              {surveys.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Dynamic list toggle */}
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

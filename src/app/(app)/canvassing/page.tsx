@@ -7,6 +7,7 @@ import { canCanvass, canManageWalkLists } from "@/lib/permissions";
 import { getCanvassLists, getAssignedLists } from "@/lib/canvassing";
 import { getCampaignTags } from "@/lib/people";
 import { isGotvMode } from "@/lib/gotv";
+import { getSurveyList } from "@/lib/surveys";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NewListButton } from "./new-list-button";
@@ -32,11 +33,14 @@ export default async function CanvassingPage() {
     redirect("/dashboard");
   }
 
-  const [allLists, tags, gotvEnabled] = await Promise.all([
+  const [allLists, tags, gotvEnabled, surveyList] = await Promise.all([
     getCanvassLists(activeCampaignId),
     getCampaignTags(activeCampaignId),
     isGotvMode(activeCampaignId),
+    getSurveyList(activeCampaignId),
   ]);
+
+  const surveys = surveyList.map((s) => ({ id: s.id, name: s.name }));
 
   const canManage = activeRole ? canManageWalkLists(activeRole as Role) : false;
   const isApprover = activeRole === "candidate" || activeRole === "campaign_manager" || activeRole === "data_manager" || activeRole === "co_chair";
@@ -81,7 +85,7 @@ export default async function CanvassingPage() {
               </svg>
               Create walk list from map
             </Link>
-            <NewListButton tags={tags} gotvMode={gotvEnabled} />
+            <NewListButton tags={tags} gotvMode={gotvEnabled} surveys={surveys} />
           </div>
         )}
         {!canManage && (
@@ -178,7 +182,7 @@ export default async function CanvassingPage() {
         <EmptyState
           title="No walk lists yet"
           description="Create a walk list to start assigning canvassers and tracking door knocks."
-          action={canManage ? <NewListButton tags={tags} gotvMode={gotvEnabled} /> : undefined}
+          action={canManage ? <NewListButton tags={tags} gotvMode={gotvEnabled} surveys={surveys} /> : undefined}
         />
       ) : visibleLists.length === 0 ? null : (
         <>

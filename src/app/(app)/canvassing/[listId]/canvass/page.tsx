@@ -28,7 +28,7 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign, fieldMessages, activeSurvey, consentTypes, gotvEnabled] = await Promise.all([
+  const [queue, campaign, fieldMessages, activeSurvey, consentTypes, gotvEnabled, listSurveyRecord] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
     getActiveFieldMessages(activeCampaignId),
@@ -39,8 +39,33 @@ export default async function CanvassPage({ params }: PageProps) {
       orderBy: { sortOrder: "asc" },
     }),
     isGotvMode(activeCampaignId),
+    // Check for per-list survey override
+    db.canvassList.findFirst({
+      where: { id: listId, campaignId: activeCampaignId, surveyId: { not: null } },
+      select: {
+        survey: {
+          include: { questions: { orderBy: { sortOrder: "asc" } } },
+        },
+      },
+    }),
   ]);
   if (!queue) notFound();
+
+  // Use list-specific survey if assigned, otherwise fall back to campaign default
+  const effectiveSurvey = listSurveyRecord?.survey
+    ? {
+        id: listSurveyRecord.survey.id,
+        name: listSurveyRecord.survey.name,
+        questions: listSurveyRecord.survey.questions.map((q) => ({
+          id: q.id,
+          label: q.label,
+          questionType: q.questionType,
+          options: Array.isArray(q.options) ? (q.options as string[]) : null,
+          sortOrder: q.sortOrder,
+          required: q.required,
+        })),
+      }
+    : activeSurvey;
 
   // Fetch upcoming appointments for people on this list
   const personIds = queue.entries.map((e) => e.person.id);
@@ -91,7 +116,7 @@ export default async function CanvassPage({ params }: PageProps) {
       competitors={queue.competitors}
       appointmentsByPersonId={appointmentsByPersonId}
       fieldMessages={fieldMessages}
-      activeSurvey={activeSurvey}
+      activeSurvey={effectiveSurvey}
       consentTypes={consentTypes}
       demoMode={process.env.DEMO_MODE === "true"}
     />

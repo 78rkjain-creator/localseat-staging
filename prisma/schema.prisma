@@ -202,6 +202,7 @@ model Campaign {
   advanceVotingDates   DateTime[]
   voteTarget           Int?
   gotvModeEnabled      Boolean   @default(false)
+  logoUrl              String?
   officeAddressStreetNumber String?
   officeAddressStreetName   String?
   officeAddressUnitNumber   String?
@@ -417,6 +418,7 @@ model Person {
   votingPlanTime      String?   // "morning" | "afternoon" | "evening" — self-reported
   voterId             String?
   anonymizedAt        DateTime?
+  doNotContact        Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -539,12 +541,14 @@ model CanvassList {
   rejectionReason String?
   dynamicFilters  Json?             // DynamicFilters JSON when isDynamic; null for static lists
   isGotvList      Boolean           @default(false)
+  surveyId        String?
   lastRefreshedAt DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   deletedAt       DateTime?
 
   campaign    Campaign            @relation(fields: [campaignId], references: [id])
+  survey      Survey?             @relation(fields: [surveyId], references: [id])
   assignments CanvassAssignment[]
   entries     CanvassListEntry[]
   events      Event[]
@@ -1178,6 +1182,7 @@ model Survey {
   createdBy  User             @relation("SurveyCreator", fields: [createdById], references: [id])
   questions  SurveyQuestion[]
   responses  SurveyResponse[]
+  canvassLists CanvassList[]
 
   @@index([campaignId])
   @@index([deletedAt])

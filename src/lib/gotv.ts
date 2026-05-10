@@ -126,6 +126,7 @@ export async function getChaseList(
   const where = {
     campaignId,
     deletedAt: null,
+    doNotContact: false,
     supportLevel: { in: SUPPORTER_LEVELS },
     pollStrikes: { none: {} },
     ...(options?.needsRideOnly ? { needsRide: true } : {}),

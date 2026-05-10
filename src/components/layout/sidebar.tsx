@@ -28,6 +28,7 @@ interface SidebarProps {
   lastName: string;
   role: Role | null;
   campaignName: string | null;
+  campaignLogoUrl?: string | null;
   campaignCount?: number;
   pendingDataCorrectionsCount?: number;
   donorTrackingEnabled?: boolean;
@@ -74,7 +75,7 @@ function NavLink({
   );
 }
 
-export function Sidebar({ firstName, lastName, role, campaignName, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null, tagUsage = null }: SidebarProps) {
+export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoUrl, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true, constituentUsage = null, tagUsage = null }: SidebarProps) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -291,7 +292,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     return (
       <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
         <div className="flex flex-col gap-1 px-3 mb-6">
-          <Wordmark size={28} tone="ink" />
+          {campaignLogoUrl ? (
+            <img src={campaignLogoUrl} alt="Campaign logo" className="h-7 w-auto object-contain object-left" />
+          ) : (
+            <Wordmark size={28} tone="ink" />
+          )}
           {campaignName && (
             <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
           )}
@@ -493,7 +498,11 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignCount
     <aside className="hidden md:flex flex-col w-60 h-full bg-white border-r border-slate-100 px-3 py-5 overflow-hidden flex-shrink-0">
       {/* Brand */}
       <div className="flex flex-col gap-1 px-3 mb-6">
-        <Wordmark size={28} tone="ink" />
+        {campaignLogoUrl ? (
+          <img src={campaignLogoUrl} alt="Campaign logo" className="h-7 w-auto object-contain object-left" />
+        ) : (
+          <Wordmark size={28} tone="ink" />
+        )}
         {campaignName && (
           <CampaignSwitcher campaignName={campaignName} campaignCount={campaignCount} />
         )}

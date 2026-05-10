@@ -25,6 +25,8 @@ import { OutOfDistrictControl } from "./out-of-district-control";
 import { SignatureSection } from "./signature-section";
 import { saveSignature } from "./signature-actions";
 import { AnonymizeButton } from "./anonymize-button";
+import { DoNotContactToggle } from "./do-not-contact-toggle";
+import { ExportDataButton } from "./export-data-button";
 import { TeamLinkButton } from "./team-link-button";
 import { GeocodeButton } from "./geocode-button";
 import { PromoteToUserButton } from "./promote-to-user-button";
@@ -192,9 +194,10 @@ export default async function PersonDetailPage({ params }: PageProps) {
   const isVolunteer = person.volunteerRecords.length > 0;
   const canPromoteToUser = canAnonymize && isVolunteer && !isTeamMember && !!person.email;
 
-  const p = person as typeof person & { anonymizedAt: Date | null };
+  const p = person as typeof person & { anonymizedAt: Date | null; doNotContact: boolean };
 
   const isAnonymized = !!p.anonymizedAt;
+  const isDoNotContact = !!p.doNotContact;
   const readOnly = baseReadOnly || isAnonymized;
 
   return (
@@ -240,6 +243,11 @@ export default async function PersonDetailPage({ params }: PageProps) {
             {isAnonymized && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
                 Anonymized
+              </span>
+            )}
+            {isDoNotContact && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
+                Do not contact
               </span>
             )}
             <ListSourceBadge source={person.listSource as ListSource} />
@@ -298,7 +306,9 @@ export default async function PersonDetailPage({ params }: PageProps) {
             </p>
           )}
           {canAnonymize && !isAnonymized && (
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-2">
+              <DoNotContactToggle personId={person.id} doNotContact={isDoNotContact} />
+              <ExportDataButton personId={person.id} />
               <AnonymizeButton
                 personId={person.id}
                 personName={`${person.firstName} ${person.lastName}`}

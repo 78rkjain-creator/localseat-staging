@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { GeneralSettingsForm } from "./general-settings-form";
 import { SupportAccessSection } from "../support-access/support-access-section";
+import { CampaignLogoUpload } from "@/components/campaign-logo-upload";
 import type { Polygon, MultiPolygon } from "geojson";
 
 export const metadata: Metadata = { title: "General Settings" };
@@ -36,6 +37,7 @@ export default async function GeneralSettingsPage() {
       municipalityName: true,
       municipalityId: true,
       municipalityBoundary: true,
+      logoUrl: true,
     },
   });
   if (!campaign) redirect("/dashboard");
@@ -109,6 +111,13 @@ export default async function GeneralSettingsPage() {
           (campaign.municipalityBoundary as unknown as Polygon | MultiPolygon | null) ?? null
         }
       />
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+          Branding
+        </h2>
+        <CampaignLogoUpload currentLogoUrl={campaign.logoUrl ?? null} />
+      </div>
 
       {(activeRole === "candidate" || activeRole === "campaign_manager") && (
         <div className="mt-8">

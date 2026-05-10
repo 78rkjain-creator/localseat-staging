@@ -13,9 +13,10 @@ interface Tag {
 interface Props {
   tags?: Tag[];
   gotvMode?: boolean;
+  surveys?: { id: string; name: string }[];
 }
 
-export function NewListButton({ tags = [], gotvMode = false }: Props) {
+export function NewListButton({ tags = [], gotvMode = false, surveys = [] }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -23,7 +24,7 @@ export function NewListButton({ tags = [], gotvMode = false }: Props) {
       <Button onClick={() => setOpen(true)} size="md">
         Create list from addresses
       </Button>
-      <NewListModal open={open} onClose={() => setOpen(false)} tags={tags} gotvMode={gotvMode} />
+      <NewListModal open={open} onClose={() => setOpen(false)} tags={tags} gotvMode={gotvMode} surveys={surveys} />
     </>
   );
 }

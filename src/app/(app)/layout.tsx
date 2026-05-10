@@ -130,6 +130,14 @@ export default async function AppLayout({
     (m) => m.campaignId === activeCampaignId
   );
 
+  // Fetch campaign logo for sidebar branding
+  const campaignLogoUrl = activeCampaignId
+    ? (await db.campaign.findUnique({
+        where: { id: activeCampaignId },
+        select: { logoUrl: true },
+      }))?.logoUrl ?? null
+    : null;
+
   const demoMode = process.env.DEMO_MODE === "true";
 
   const pendingDataCorrectionsCount = activeCampaignId && activeRole && canReviewAddressChanges(activeRole as Role)
@@ -233,6 +241,7 @@ export default async function AppLayout({
           lastName={lastName}
           role={activeRole as Role | null}
           campaignName={activeMembership?.campaignName ?? null}
+          campaignLogoUrl={campaignLogoUrl}
           campaignCount={memberships.length}
           pendingDataCorrectionsCount={pendingDataCorrectionsCount}
           donorTrackingEnabled={donorTrackingEnabled}
