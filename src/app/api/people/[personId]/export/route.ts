@@ -35,7 +35,7 @@ export async function GET(
         select: {
           id: true,
           supportLevel: true,
-          signRequested: true,
+          signRequest: true,
           volunteerInterest: true,
           donorInterest: true,
           notHome: true,
@@ -153,7 +153,7 @@ export async function GET(
     lines.push("Date,Support Level,Sign Requested,Volunteer Interest,Donor Interest,Not Home,Notes");
     for (const r of person.canvassResponses) {
       lines.push(
-        `"${r.createdAt.toISOString().split("T")[0]}","${esc(r.supportLevel)}","${r.signRequested ? "Yes" : "No"}","${r.volunteerInterest ? "Yes" : "No"}","${r.donorInterest ? "Yes" : "No"}","${r.notHome ? "Yes" : "No"}","${esc(r.notes)}"`
+        `"${r.createdAt.toISOString().split("T")[0]}","${esc(r.supportLevel)}","${r.signRequest ? "Yes" : "No"}","${r.volunteerInterest ? "Yes" : "No"}","${r.donorInterest ? "Yes" : "No"}","${r.notHome ? "Yes" : "No"}","${esc(r.notes)}"`
       );
     }
   }
