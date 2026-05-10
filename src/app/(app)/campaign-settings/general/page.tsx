@@ -112,12 +112,16 @@ export default async function GeneralSettingsPage() {
         }
       />
 
-      <div className="mt-8">
+      <hr className="my-10 border-slate-200" />
+
+      <div>
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
           Branding
         </h2>
         <CampaignLogoUpload currentLogoUrl={campaign.logoUrl ?? null} />
       </div>
+
+      <hr className="my-10 border-slate-200" />
 
       {(activeRole === "candidate" || activeRole === "campaign_manager") && (
         <div className="mt-8">
