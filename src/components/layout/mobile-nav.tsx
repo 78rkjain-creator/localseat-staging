@@ -92,7 +92,6 @@ function getTabsForRole(role: Role | string | null | undefined, gotvMode: boolea
 }
 
 const MANAGER_MORE_LINKS: Tab[] = [
-  tab("GOTV", "/gotv", <CheckSquare size={ICON_SIZE} />),
   tab("Leaderboard", "/leaderboard", <BarChart3 size={ICON_SIZE} />),
   tab("Donors", "/donors", <Heart size={ICON_SIZE} />),
   tab("Volunteers", "/volunteers", <UserCheck size={ICON_SIZE} />),
