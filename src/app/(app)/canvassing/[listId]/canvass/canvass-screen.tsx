@@ -266,8 +266,6 @@ export function CanvassScreen({
   // Refs so async transitions always see current values
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
-  const displayEntriesRef = useRef(displayEntries);
-  displayEntriesRef.current = displayEntries;
   const savedSetRef = useRef(savedSet);
   savedSetRef.current = savedSet;
 
@@ -333,6 +331,8 @@ export function CanvassScreen({
 
     return list;
   })();
+  const displayEntriesRef = useRef(displayEntries);
+  displayEntriesRef.current = displayEntries;
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
 
