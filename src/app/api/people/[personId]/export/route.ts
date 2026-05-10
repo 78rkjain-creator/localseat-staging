@@ -66,12 +66,8 @@ export async function GET(
         },
       },
       surveyResponses: {
-        include: {
-          survey: { select: { name: true } },
-        },
         select: {
           id: true,
-          surveyId: true,
           answers: true,
           createdAt: true,
           survey: { select: { name: true } },
