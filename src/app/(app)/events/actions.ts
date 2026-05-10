@@ -441,3 +441,35 @@ export async function cancelRsvp(
   revalidatePath("/dashboard");
   return {};
 }
+
+// ── Add guest attendee (non-team member) ──────────────────────────────────────
+
+export async function addGuestAttendee(
+  eventId: string,
+  guestName: string,
+  guestEmail: string | null
+): Promise<{ error?: string }> {
+  const auth = await requireEventManager();
+  if ("error" in auth) return auth;
+  const { campaignId } = auth;
+
+  const event = await db.event.findFirst({
+    where: { id: eventId, campaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!event) return { error: "Event not found." };
+
+  if (!guestName.trim()) return { error: "Guest name is required." };
+
+  await db.eventAttendee.create({
+    data: {
+      eventId,
+      guestName: guestName.trim(),
+      guestEmail: guestEmail?.trim() || null,
+      status: "confirmed",
+    },
+  });
+
+  revalidatePath(`/events/${eventId}`);
+  return {};
+}

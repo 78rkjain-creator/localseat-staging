@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { checkInAttendee, addAttendee, removeAttendee } from "../actions";
+import { checkInAttendee, addAttendee, removeAttendee, addGuestAttendee } from "../actions";
 import type { EventAttendeeStatus } from "@prisma/client";
 
 interface Attendee {
@@ -9,7 +9,9 @@ interface Attendee {
   status: EventAttendeeStatus;
   checkedInAt: Date | null;
   notes: string | null;
-  user: { id: string; firstName: string; lastName: string; email: string };
+  guestName: string | null;
+  guestEmail: string | null;
+  user: { id: string; firstName: string; lastName: string; email: string } | null;
 }
 
 interface Member {
@@ -27,12 +29,29 @@ interface Props {
   canManage: boolean;
 }
 
+function getDisplayName(a: Attendee): string {
+  if (a.user) return `${a.user.firstName} ${a.user.lastName}`;
+  return a.guestName ?? "Guest";
+}
+
+function getInitials(a: Attendee): string {
+  if (a.user) return `${a.user.firstName[0]}${a.user.lastName[0]}`;
+  if (a.guestName) {
+    const parts = a.guestName.trim().split(/\s+/);
+    return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : a.guestName.slice(0, 2);
+  }
+  return "G";
+}
+
 export function AttendeePanel({ eventId, attendees, members, canManage }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [showGuestForm, setShowGuestForm] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
 
-  const attendeeUserIds = new Set(attendees.map((a) => a.user.id));
+  const attendeeUserIds = new Set(attendees.filter((a) => a.user).map((a) => a.user!.id));
   const eligibleMembers = members.filter((m) => !attendeeUserIds.has(m.id));
 
   function handleCheckIn(attendeeId: string) {
@@ -51,6 +70,19 @@ export function AttendeePanel({ eventId, attendees, members, canManage }: Props)
     });
   }
 
+  function handleAddGuest() {
+    if (!guestName.trim()) return;
+    startTransition(async () => {
+      const result = await addGuestAttendee(eventId, guestName.trim(), guestEmail.trim() || null);
+      if (result.error) setError(result.error);
+      else {
+        setGuestName("");
+        setGuestEmail("");
+        setShowGuestForm(false);
+      }
+    });
+  }
+
   function handleRemove(attendeeId: string) {
     startTransition(async () => {
       const result = await removeAttendee(attendeeId, eventId);
@@ -60,6 +92,8 @@ export function AttendeePanel({ eventId, attendees, members, canManage }: Props)
 
   const attended = attendees.filter((a) => a.status === "attended");
   const confirmed = attendees.filter((a) => a.status !== "attended");
+  const guestCount = attendees.filter((a) => !a.user).length;
+  const teamCount = attendees.filter((a) => !!a.user).length;
 
   return (
     <div>
@@ -70,36 +104,94 @@ export function AttendeePanel({ eventId, attendees, members, canManage }: Props)
       )}
 
       {/* Add attendee */}
-      {canManage && eligibleMembers.length > 0 && (
-        <div className="flex gap-2 mb-6">
-          <select
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-            className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            <option value="">Add a team member…</option>
-            {eligibleMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.firstName} {m.lastName}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={!selectedUserId || isPending}
-            className="h-10 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            Add
-          </button>
+      {canManage && (
+        <div className="mb-6">
+          {eligibleMembers.length > 0 && (
+            <div className="flex gap-2 mb-2">
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="">Add a team member…</option>
+                {eligibleMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.firstName} {m.lastName}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={!selectedUserId || isPending}
+                className="h-10 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          )}
+
+          {!showGuestForm ? (
+            <button
+              type="button"
+              onClick={() => setShowGuestForm(true)}
+              className="text-xs text-brand-500 hover:text-brand-600 font-medium transition-colors"
+            >
+              + Add a guest (not on the team)
+            </button>
+          ) : (
+            <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Add guest
+              </p>
+              <div className="flex flex-col gap-2 mb-2">
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Full name"
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <input
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="Email (optional)"
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddGuest}
+                  disabled={!guestName.trim() || isPending}
+                  className="h-9 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  Add guest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowGuestForm(false); setGuestName(""); setGuestEmail(""); }}
+                  className="h-9 px-4 rounded-xl border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {attendees.length > 0 && guestCount > 0 && (
+        <p className="text-xs text-slate-400 mb-3">
+          {teamCount} team · {guestCount} guest{guestCount !== 1 ? "s" : ""}
+        </p>
       )}
 
       {attendees.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-6">No attendees yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {/* Attended */}
           {attended.length > 0 && (
             <div className="mb-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
@@ -118,7 +210,6 @@ export function AttendeePanel({ eventId, attendees, members, canManage }: Props)
             </div>
           )}
 
-          {/* Confirmed / invited */}
           {confirmed.length > 0 && (
             <div>
               {attended.length > 0 && (
@@ -151,30 +242,39 @@ function AttendeeRow({
   onCheckIn,
   onRemove,
 }: {
-  attendee: { id: string; status: EventAttendeeStatus; checkedInAt: Date | null; user: { firstName: string; lastName: string } };
+  attendee: Attendee;
   canManage: boolean;
   isPending: boolean;
   onCheckIn: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
   const isAttended = attendee.status === "attended";
+  const displayName = getDisplayName(attendee);
+  const initials = getInitials(attendee);
+  const isGuest = !attendee.user;
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-slate-100 mb-1.5">
       <div className={[
         "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold",
-        isAttended ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
+        isAttended ? "bg-emerald-100 text-emerald-700" : isGuest ? "bg-violet-100 text-violet-600" : "bg-slate-100 text-slate-500",
       ].join(" ")}>
-        {attendee.user.firstName[0]}{attendee.user.lastName[0]}
+        {initials.toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-900">
-          {attendee.user.firstName} {attendee.user.lastName}
+          {displayName}
+          {isGuest && (
+            <span className="text-[10px] text-violet-500 font-normal ml-1">Guest</span>
+          )}
         </p>
         {isAttended && attendee.checkedInAt && (
           <p className="text-xs text-slate-400">
             Checked in {new Date(attendee.checkedInAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
           </p>
+        )}
+        {isGuest && attendee.guestEmail && (
+          <p className="text-xs text-slate-400">{attendee.guestEmail}</p>
         )}
       </div>
       {canManage && (

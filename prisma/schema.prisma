@@ -1127,7 +1127,9 @@ model Event {
 model EventAttendee {
   id          String              @id @default(cuid())
   eventId     String
-  userId      String
+  userId      String?
+  guestName   String?
+  guestEmail  String?
   status      EventAttendeeStatus @default(confirmed)
   checkedInAt DateTime?
   notes       String?
@@ -1136,7 +1138,7 @@ model EventAttendee {
   deletedAt   DateTime?
 
   event Event @relation(fields: [eventId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
 
   @@index([eventId])
   @@index([userId])

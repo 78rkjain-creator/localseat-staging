@@ -77,7 +77,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0;
 
   // Check if current user has RSVP'd
-  const myAttendee = event.attendees.find((a) => a.user.id === session.user.id);
+  const myAttendee = event.attendees.find((a) => a.user?.id === session.user.id);
   const hasRsvpd = !!myAttendee;
 
   return (
@@ -148,7 +148,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       </div>
 
       {/* Status actions */}
-      {canManage && event.status !== "cancelled" && (
+      {canManage && (
         <div className="mb-8 flex flex-wrap gap-2">
           {event.status === "upcoming" && (
             <form action={async () => {
@@ -170,14 +170,26 @@ export default async function EventDetailPage({ params }: PageProps) {
               </button>
             </form>
           )}
-          <form action={async () => {
-            "use server";
-            await updateEventStatus(eventId, "cancelled");
-          }}>
-            <button type="submit" className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors">
-              Cancel event
-            </button>
-          </form>
+          {(event.status === "completed" || event.status === "cancelled") && (
+            <form action={async () => {
+              "use server";
+              await updateEventStatus(eventId, "upcoming");
+            }}>
+              <button type="submit" className="h-9 px-4 rounded-xl border border-brand-200 bg-white text-brand-600 text-sm font-medium hover:bg-brand-50 transition-colors">
+                Reopen as upcoming
+              </button>
+            </form>
+          )}
+          {event.status !== "cancelled" && (
+            <form action={async () => {
+              "use server";
+              await updateEventStatus(eventId, "cancelled");
+            }}>
+              <button type="submit" className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors">
+                Cancel event
+              </button>
+            </form>
+          )}
         </div>
       )}
 

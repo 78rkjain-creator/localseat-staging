@@ -27,7 +27,9 @@ export interface EventDetail extends EventSummary {
     status: EventAttendeeStatus;
     checkedInAt: Date | null;
     notes: string | null;
-    user: { id: string; firstName: string; lastName: string; email: string };
+    guestName: string | null;
+    guestEmail: string | null;
+    user: { id: string; firstName: string; lastName: string; email: string } | null;
   }[];
 }
 
@@ -92,6 +94,8 @@ export async function getEvent(
       status: a.status,
       checkedInAt: a.checkedInAt,
       notes: a.notes,
+      guestName: a.guestName,
+      guestEmail: a.guestEmail,
       user: a.user,
     })),
   };
