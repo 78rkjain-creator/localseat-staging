@@ -225,6 +225,19 @@ export function CanvassScreen({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(firstPending < 0 && entries.length > 0);
 
+  // Shift summary: track what was already done when the session started
+  const [sessionStartTime] = useState(() => new Date());
+  const [preSavedIds] = useState(
+    () => new Set(entries.filter((e) => e.lastResponse).map((e) => e.person.id))
+  );
+  const [sessionStats, setSessionStats] = useState({
+    contacted: 0,
+    notHome: 0,
+    supportYes: 0,
+    signs: 0,
+    volunteers: 0,
+  });
+
   // Who the canvasser is speaking with at this door
   const [selectedPersonId, setSelectedPersonId] = useState<string>(
     () => entries[firstPending >= 0 ? firstPending : 0]?.person.id ?? ""
@@ -292,8 +305,24 @@ export function CanvassScreen({
 
   function markSavedAndAdvance(entryPersonId: string, fromIndex: number) {
     const newSaved = new Set(savedSetRef.current);
+    const isNewSave = !preSavedIds.has(entryPersonId);
     newSaved.add(entryPersonId);
     setSavedSet(newSaved);
+
+    // Track session stats for the shift summary
+    if (isNewSave) {
+      setSessionStats((prev) => {
+        const d = draft;
+        const isContacted = !d.otherOutcome || d.otherOutcome === undefined;
+        return {
+          contacted: prev.contacted + (isContacted ? 1 : 0),
+          notHome: prev.notHome + (isContacted ? 0 : 1),
+          supportYes: prev.supportYes + ((d.supportLevel === "strong_yes" || d.supportLevel === "soft_yes") ? 1 : 0),
+          signs: prev.signs + (d.signRequest ? 1 : 0),
+          volunteers: prev.volunteers + (d.volunteerInterest ? 1 : 0),
+        };
+      });
+    }
 
     const currentEntries = entriesRef.current;
     for (let i = fromIndex + 1; i < currentEntries.length; i++) {
@@ -477,35 +506,131 @@ export function CanvassScreen({
   // ── Done screen ───────────────────────────────────────────────────────────
 
   if (done || entries.length === 0) {
+    // Calculate shift stats from this session
+    const sessionDoors = Array.from(savedSet).filter((id) => !preSavedIds.has(id)).length;
+    const sessionMinutes = Math.round((Date.now() - sessionStartTime.getTime()) / 60000);
+    const sessionHours = Math.floor(sessionMinutes / 60);
+    const sessionMins = sessionMinutes % 60;
+    const timeLabel = sessionHours > 0 ? `${sessionHours}h ${sessionMins}m` : `${sessionMins}m`;
+    const doorsPerHour = sessionMinutes > 0 ? Math.round((sessionDoors / sessionMinutes) * 60) : 0;
+
+    const { contacted, notHome, supportYes, signs, volunteers } = sessionStats;
+
     return (
-      <div className="h-screen bg-slate-50 flex flex-col items-center justify-center px-6 text-center">
-        <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mb-6">
-          <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6">
         {entries.length === 0 ? (
-          <>
+          <div className="text-center">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-6 mx-auto">
+              <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
             <h1 className="text-xl font-bold text-slate-900 mb-2">No people on this list</h1>
             <p className="text-slate-500 text-sm mb-8">The list doesn&apos;t have any entries yet.</p>
-          </>
+            <Link href="/canvassing" className="inline-flex items-center gap-2 h-12 px-6 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-2xl text-sm transition-colors">
+              Back to my lists
+            </Link>
+          </div>
         ) : (
-          <>
-            <h1 className="text-xl font-bold text-slate-900 mb-2">All done!</h1>
-            <p className="text-slate-500 text-sm mb-2">
-              You recorded responses for{" "}
-              <span className="font-semibold text-slate-700">{doneCount}</span> of{" "}
-              <span className="font-semibold text-slate-700">{totalCount}</span> people.
-            </p>
-            <p className="text-slate-400 text-xs mb-8">Great work today.</p>
-          </>
+          <div className="w-full max-w-sm">
+            {/* Shift summary card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 text-center" style={{ background: "linear-gradient(135deg, #065f46, #047857)" }}>
+                <div className="h-14 w-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                  <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h1 className="text-xl font-bold text-white">Shift complete</h1>
+                <p className="text-emerald-200 text-sm mt-1">Great work out there.</p>
+              </div>
+
+              {/* Stats */}
+              <div className="px-6 py-5">
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-slate-900 tabular-nums">{sessionDoors}</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Doors</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-slate-900 tabular-nums">{timeLabel}</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Time</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-slate-900 tabular-nums">{doorsPerHour}</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Per hour</p>
+                  </div>
+                </div>
+
+                {sessionDoors > 0 && (
+                  <div className="space-y-2">
+                    {contacted > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600">Contacted</span>
+                        <span className="font-semibold text-slate-900">{contacted}</span>
+                      </div>
+                    )}
+                    {notHome > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600">Not home / other</span>
+                        <span className="font-semibold text-slate-900">{notHome}</span>
+                      </div>
+                    )}
+                    {supportYes > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-emerald-600">Supporters found</span>
+                        <span className="font-semibold text-emerald-700">{supportYes}</span>
+                      </div>
+                    )}
+                    {signs > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600">Sign requests</span>
+                        <span className="font-semibold text-slate-900">{signs}</span>
+                      </div>
+                    )}
+                    {volunteers > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600">Volunteer interest</span>
+                        <span className="font-semibold text-slate-900">{volunteers}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Progress */}
+                <div className="mt-5 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+                    <span>List progress</span>
+                    <span className="font-semibold tabular-nums">{doneCount}/{totalCount}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 rounded-full transition-all"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center justify-center h-12 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-2xl text-sm transition-colors"
+              >
+                Back to dashboard
+              </Link>
+              <Link
+                href="/canvassing"
+                className="flex items-center justify-center h-12 border border-slate-200 bg-white text-slate-700 font-medium rounded-2xl text-sm hover:bg-slate-50 transition-colors"
+              >
+                My walk lists
+              </Link>
+            </div>
+          </div>
         )}
-        <Link
-          href="/canvassing"
-          className="inline-flex items-center gap-2 h-12 px-6 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-2xl text-sm transition-colors"
-        >
-          Back to my lists
-        </Link>
       </div>
     );
   }
