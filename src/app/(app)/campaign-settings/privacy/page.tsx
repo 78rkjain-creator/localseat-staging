@@ -41,8 +41,11 @@ export default async function PrivacyPage() {
     withEmailCount,
     canvassedCount,
     anonymizedCount,
+    doNotContactCount,
     campaign,
     recentSignatures,
+    consentTypeCount,
+    auditLogCount,
   ] = await Promise.all([
     db.person.count({ where: { campaignId: activeCampaignId, deletedAt: null } }),
     db.person.count({
@@ -61,6 +64,13 @@ export default async function PrivacyPage() {
         campaignId: activeCampaignId,
         deletedAt: null,
         anonymizedAt: { not: null },
+      },
+    }),
+    db.person.count({
+      where: {
+        campaignId: activeCampaignId,
+        deletedAt: null,
+        doNotContact: true,
       },
     }),
     db.campaign.findUnique({
@@ -82,6 +92,12 @@ export default async function PrivacyPage() {
       orderBy: { collectedAt: "desc" },
       take: 25,
     }),
+    db.signatureConsentType.count({
+      where: { campaignId: activeCampaignId, deletedAt: null },
+    }),
+    db.auditLog.count({
+      where: { campaignId: activeCampaignId },
+    }),
   ]);
 
   const currentRetention = campaign?.dataRetentionMonths ?? null;
@@ -94,6 +110,7 @@ export default async function PrivacyPage() {
     { label: "With email", value: withEmailCount, sub: pct(withEmailCount, totalCount) },
     { label: "Canvassed", value: canvassedCount, sub: pct(canvassedCount, totalCount) },
     { label: "Anonymized", value: anonymizedCount, sub: pct(anonymizedCount, totalCount) },
+    { label: "Do not contact", value: doNotContactCount, sub: pct(doNotContactCount, totalCount) },
   ];
 
   async function saveRetention(formData: FormData) {
@@ -175,6 +192,99 @@ export default async function PrivacyPage() {
             Current policy:{" "}
             <span className="text-slate-600 font-medium">{currentRetentionLabel}</span>
           </p>
+        </div>
+      </section>
+
+      {/* ── PIPEDA compliance checklist ── */}
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+          Privacy compliance
+        </h2>
+        <p className="text-xs text-slate-400 mb-3">
+          Practical privacy obligations for Canadian municipal campaigns. These check automatically based on your campaign configuration.
+        </p>
+        <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+          {[
+            {
+              label: "Data retention policy set",
+              description: "You have a stated policy for how long personal data is kept after the campaign.",
+              passed: currentRetention !== null,
+              action: null,
+            },
+            {
+              label: "Consent collection active",
+              description: "You have at least one consent type configured for collecting signatures at the door.",
+              passed: consentTypeCount > 0,
+              action: "/campaign-settings/signature-consents",
+            },
+            {
+              label: "Do-not-contact requests honoured",
+              description: "People who asked not to be contacted are flagged and excluded from walk lists automatically.",
+              passed: true, // Always true — built into the platform
+              action: null,
+            },
+            {
+              label: "Data export capability",
+              description: "You can export all data held on a person when they request it (right of access).",
+              passed: true, // Always true — export button on every person profile
+              action: null,
+            },
+            {
+              label: "Anonymization capability",
+              description: "You can anonymize records when requested, keeping only aggregate data.",
+              passed: true, // Always true — anonymize button on every person profile
+              action: null,
+            },
+            {
+              label: "Campaign data scoped",
+              description: "Personal data is isolated per campaign and not shared across campaigns.",
+              passed: true, // Always true — built into the data model
+              action: null,
+            },
+            {
+              label: "Audit logging enabled",
+              description: "Important data changes are logged with who made them and when.",
+              passed: auditLogCount > 0,
+              action: "/audit-log",
+            },
+            {
+              label: "Access controls enforced",
+              description: "Not every volunteer sees all data — role-based access is active.",
+              passed: true, // Always true — RBAC is built in
+              action: null,
+            },
+          ].map((item) => (
+            <div key={item.label} className="flex items-start gap-3 px-5 py-3.5">
+              <div className={[
+                "flex-shrink-0 h-5 w-5 rounded-full flex items-center justify-center mt-0.5",
+                item.passed ? "bg-emerald-100" : "bg-amber-100",
+              ].join(" ")}>
+                {item.passed ? (
+                  <svg className="h-3 w-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="h-3 w-3 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={["text-sm font-medium", item.passed ? "text-slate-900" : "text-amber-700"].join(" ")}>
+                  {item.label}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">{item.description}</p>
+              </div>
+              {item.action && !item.passed && (
+                <Link
+                  href={item.action}
+                  className="flex-shrink-0 text-xs font-medium text-brand-500 hover:text-brand-600 mt-0.5"
+                >
+                  Set up
+                </Link>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
