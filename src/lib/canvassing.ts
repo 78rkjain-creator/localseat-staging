@@ -434,6 +434,7 @@ export async function getCanvassingQueue(
         phoneMobile: e.person.phoneMobile,
         email: e.person.email,
         birthDate: e.person.birthDate,
+        doNotContact: e.person.doNotContact,
         address: e.person.household?.address ?? null,
         coResidents: (e.person.household?.people ?? []).filter(
           (p) => p.id !== e.person.id
