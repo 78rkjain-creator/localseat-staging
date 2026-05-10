@@ -585,3 +585,114 @@ export async function sendContactNotificationEmail(params: {
     console.error("[email] Failed to send contact notification email:", err);
   }
 }
+
+// ── Bug report email ─────────────────────────────────────────────────────────
+
+export async function sendBugReportEmail(params: {
+  reporterName: string;
+  reporterEmail: string;
+  role: string;
+  campaignName: string;
+  campaignId: string;
+  severity: string;
+  description: string;
+  currentUrl: string;
+  userAgent: string;
+  timestamp: string;
+  screenshot: { buffer: Buffer; name: string; type: string } | null;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const {
+    reporterName, reporterEmail, role, campaignName, campaignId,
+    severity, description, currentUrl, userAgent, timestamp, screenshot,
+  } = params;
+
+  const severityLabel = severity.charAt(0).toUpperCase() + severity.slice(1);
+  const severityColor =
+    severity === "blocking" ? "#dc2626" :
+    severity === "major"    ? "#d97706" :
+                              "#475569";
+
+  const subject = `[${severityLabel}] Bug Report — ${reporterName}`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;margin-top:24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <div style="padding:24px 32px;border-bottom:1px solid #f1f5f9;">
+      <h1 style="margin:0;font-size:18px;color:#0f172a;">Bug Report</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#64748b;">${timestamp}</p>
+    </div>
+
+    <div style="padding:24px 32px;">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:8px 0;color:#64748b;width:120px;vertical-align:top;">Severity</td>
+          <td style="padding:8px 0;color:${severityColor};font-weight:600;">${severityLabel}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Reported by</td>
+          <td style="padding:8px 0;color:#0f172a;">${reporterName} (${reporterEmail})</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Role</td>
+          <td style="padding:8px 0;color:#0f172a;">${formatRole(role)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Campaign</td>
+          <td style="padding:8px 0;color:#0f172a;">${campaignName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Campaign ID</td>
+          <td style="padding:8px 0;color:#0f172a;font-family:monospace;font-size:12px;">${campaignId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Page</td>
+          <td style="padding:8px 0;color:#0f172a;word-break:break-all;">${currentUrl}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;vertical-align:top;">Device</td>
+          <td style="padding:8px 0;color:#64748b;font-size:12px;word-break:break-all;">${userAgent}</td>
+        </tr>
+      </table>
+
+      <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+        <p style="margin:0 0 6px;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Description</p>
+        <p style="margin:0;font-size:14px;color:#0f172a;white-space:pre-wrap;line-height:1.6;">${description.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+      </div>
+
+      ${screenshot ? '<p style="margin-top:16px;font-size:13px;color:#64748b;">📎 Screenshot attached</p>' : ""}
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from:    fromWelcome(),
+      to:      "rahul@localseat.io",
+      replyTo: reporterEmail,
+      subject,
+      html,
+      ...(screenshot
+        ? {
+            attachments: [
+              {
+                filename: screenshot.name,
+                content:  screenshot.buffer,
+                contentType: screenshot.type,
+              },
+            ],
+          }
+        : {}),
+    });
+    console.log(`[email] Bug report sent from ${reporterEmail} (${severity})`);
+  } catch (err) {
+    console.error("[email] Failed to send bug report email:", err);
+    throw err;
+  }
+}

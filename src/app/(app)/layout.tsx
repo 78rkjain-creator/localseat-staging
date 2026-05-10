@@ -17,6 +17,7 @@ import { isGotvMode } from "@/lib/gotv";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
+import { BugReportButton } from "@/components/bug-report-button";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -264,6 +265,7 @@ export default async function AppLayout({
       </div>
       <MobileNav gotvMode={gotvMode} />
       <PwaInstallPrompt />
+      <BugReportButton />
     </div>
   );
 }
