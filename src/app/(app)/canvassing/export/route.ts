@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canExportData } from "@/lib/permissions";
 import { createAuditLog } from "@/lib/audit";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
-import type { SupportLevel } from "@/types";
+import type { Role, SupportLevel } from "@/types";
 
 function esc(val: string | boolean | number | null | undefined): string {
   if (val == null) return "";
@@ -24,11 +25,22 @@ function row(fields: (string | boolean | number | null | undefined)[]): string {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.activeCampaignId) {
-    return new NextResponse("Unauthorized", { status: 401 });
+  if (!session) return new NextResponse("Unauthorized", { status: 401 });
+
+  const { activeCampaignId, activeRole } = session.user;
+  if (!activeCampaignId) return new NextResponse("No active campaign", { status: 400 });
+  if (!activeRole || !canExportData(activeRole as Role)) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const campaignId = session.user.activeCampaignId;
+  // Re-verify the user still has an active membership in this campaign.
+  const membership = await db.campaignMembership.findFirst({
+    where: { userId: session.user.id, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!membership) return new NextResponse("Forbidden", { status: 403 });
+
+  const campaignId = activeCampaignId;
   const listId = req.nextUrl.searchParams.get("listId") ?? undefined;
 
   try {
