@@ -16,6 +16,7 @@ import {
   Settings,
   User,
   ClipboardList,
+  BarChart3,
 } from "lucide-react";
 type Role = "candidate" | "campaign_manager" | "co_chair" | "field_organizer" | "canvasser" | "volunteer_coordinator" | "finance_lead";
 
@@ -44,7 +45,7 @@ function getTabsForRole(role: Role | string | null | undefined, gotvMode: boolea
       return [
         tab("Canvassing", "/canvassing", <MapPin size={ICON_SIZE} />),
         tab("Follow-ups", "/follow-ups", <CheckSquare size={ICON_SIZE} />),
-        tab("Voters", "/people/residents", <Users size={ICON_SIZE} />),
+        tab("Board", "/leaderboard", <BarChart3 size={ICON_SIZE} />),
         tab("Account", "/account", <User size={ICON_SIZE} />),
       ];
     case "field_organizer":
@@ -92,6 +93,7 @@ function getTabsForRole(role: Role | string | null | undefined, gotvMode: boolea
 
 const MANAGER_MORE_LINKS: Tab[] = [
   tab("GOTV", "/gotv", <CheckSquare size={ICON_SIZE} />),
+  tab("Leaderboard", "/leaderboard", <BarChart3 size={ICON_SIZE} />),
   tab("Donors", "/donors", <Heart size={ICON_SIZE} />),
   tab("Volunteers", "/volunteers", <UserCheck size={ICON_SIZE} />),
   tab("Outreach", "/outreach", <Megaphone size={ICON_SIZE} />),

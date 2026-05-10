@@ -8,7 +8,7 @@ import { getEvent, getCampaignMembers } from "@/lib/events";
 import { isEventsEnabled } from "@/lib/plan-limits";
 import { UpgradeCard } from "@/components/upgrade-card";
 import { FEATURE_METADATA } from "@/lib/feature-metadata";
-import { updateEventStatus, deleteEvent } from "../actions";
+import { updateEventStatus, deleteEvent, rsvpToEvent, cancelRsvp } from "../actions";
 import { AttendeePanel } from "./attendee-panel";
 import { CopyEventModal } from "./copy-event-modal";
 import type { Role } from "@/types";
@@ -69,7 +69,16 @@ export default async function EventDetailPage({ params }: PageProps) {
   const typeLabel = EVENT_TYPE_LABELS[event.eventType] ?? event.eventType;
 
   const attended = event.attendees.filter((a) => a.status === "attended").length;
+  const confirmed = event.attendees.filter((a) => a.status === "confirmed").length;
+  const noShow = event.attendees.filter((a) => a.status === "no_show").length;
+  const invited = event.attendees.filter((a) => a.status === "invited").length;
   const total = event.attendees.length;
+  const isCompleted = event.status === "completed";
+  const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0;
+
+  // Check if current user has RSVP'd
+  const myAttendee = event.attendees.find((a) => a.user.id === session.user.id);
+  const hasRsvpd = !!myAttendee;
 
   return (
     <div className="px-4 sm:px-6 py-8 max-w-2xl mx-auto">
@@ -169,6 +178,105 @@ export default async function EventDetailPage({ params }: PageProps) {
               Cancel event
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Self-service RSVP */}
+      {!canManage && event.status === "upcoming" && (
+        <div className="mb-8">
+          {hasRsvpd ? (
+            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <p className="text-sm font-medium text-emerald-700">You&apos;re going</p>
+              </div>
+              <form action={async () => {
+                "use server";
+                await cancelRsvp(eventId);
+              }}>
+                <button
+                  type="submit"
+                  className="text-xs text-slate-500 hover:text-red-500 transition-colors"
+                >
+                  Cancel
+                </button>
+              </form>
+            </div>
+          ) : (
+            <form action={async () => {
+              "use server";
+              await rsvpToEvent(eventId);
+            }}>
+              <button
+                type="submit"
+                className="w-full h-11 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold rounded-xl transition-colors"
+              >
+                RSVP — I&apos;ll be there
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Post-event analytics */}
+      {isCompleted && total > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4">
+            Event analytics
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-emerald-600 tabular-nums">{attended}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-semibold">Attended</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 tabular-nums">{total}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-semibold">Total RSVP</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-amber-500 tabular-nums">{noShow}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-semibold">No-show</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 text-center">
+              <p className="text-2xl font-bold text-slate-900 tabular-nums">{attendanceRate}%</p>
+              <p className="text-[10px] text-slate-500 uppercase font-semibold">Attendance</p>
+            </div>
+          </div>
+          {attended > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 px-5 py-4">
+              <p className="text-xs text-slate-500 mb-2">Attendance breakdown</p>
+              <div className="h-3 rounded-full bg-slate-100 overflow-hidden flex">
+                <div
+                  className="h-full bg-emerald-400"
+                  style={{ width: `${(attended / total) * 100}%` }}
+                  title={`Attended: ${attended}`}
+                />
+                <div
+                  className="h-full bg-amber-300"
+                  style={{ width: `${(noShow / total) * 100}%` }}
+                  title={`No-show: ${noShow}`}
+                />
+                <div
+                  className="h-full bg-sky-300"
+                  style={{ width: `${(confirmed / total) * 100}%` }}
+                  title={`Confirmed: ${confirmed}`}
+                />
+                <div
+                  className="h-full bg-slate-200"
+                  style={{ width: `${(invited / total) * 100}%` }}
+                  title={`Invited: ${invited}`}
+                />
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-500">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" />Attended ({attended})</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" />No-show ({noShow})</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-300" />Confirmed ({confirmed})</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-200" />Invited ({invited})</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

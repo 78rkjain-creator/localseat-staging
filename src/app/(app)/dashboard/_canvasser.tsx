@@ -4,6 +4,7 @@ import { getAssignedLists } from "@/lib/canvassing";
 import { getActiveFieldMessages } from "@/lib/field-messages";
 import { FieldMessagesBanner } from "@/components/field-messages-banner";
 import { isGotvMode } from "@/lib/gotv";
+import { getMyEngagementStats } from "@/lib/engagement";
 
 interface Props {
   userId: string;
@@ -183,7 +184,7 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
     },
   } as const;
 
-  const [assignments, tasks, totalDoors, doorsToday, doorsLast7Days, followUps, fieldMessages] =
+  const [assignments, tasks, totalDoors, doorsToday, doorsLast7Days, followUps, fieldMessages, engagement, upcomingEvents] =
     await Promise.all([
       getAssignedLists(userId, campaignId),
       db.task.findMany({
@@ -200,6 +201,29 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
       }),
       db.canvassResponse.count({ where: { ...statsWhere, needsFollowUp: true } }),
       getActiveFieldMessages(campaignId),
+      getMyEngagementStats(userId, campaignId),
+      db.event.findMany({
+        where: {
+          campaignId,
+          deletedAt: null,
+          status: { in: ["upcoming", "in_progress"] },
+          date: { gte: todayStart },
+        },
+        select: {
+          id: true,
+          name: true,
+          date: true,
+          startTime: true,
+          location: true,
+          eventType: true,
+          attendees: {
+            where: { userId, deletedAt: null },
+            select: { id: true, status: true },
+          },
+        },
+        orderBy: { date: "asc" },
+        take: 3,
+      }),
     ]);
 
   const doorsAvg = Math.round(doorsLast7Days / 7);
@@ -377,6 +401,106 @@ export async function CanvasserHome({ userId, campaignId, firstName }: Props) {
             </div>
           )}
         </div>
+
+        {/* Engagement strip */}
+        {engagement.totalDoors > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                Your stats
+              </p>
+              <Link href="/leaderboard" className="text-[11px] font-medium text-brand-500">
+                Leaderboard →
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {engagement.currentStreak > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 text-center">
+                  <p className="text-lg font-bold text-amber-500">{engagement.currentStreak}d</p>
+                  <p className="text-[9px] text-slate-400 uppercase font-semibold">🔥 Streak</p>
+                </div>
+              )}
+              <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 text-center">
+                <p className="text-lg font-bold text-slate-900">#{engagement.rank}</p>
+                <p className="text-[9px] text-slate-400 uppercase font-semibold">Rank</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 px-3 py-2.5 text-center">
+                <p className="text-lg font-bold text-slate-900">{engagement.bestDay}</p>
+                <p className="text-[9px] text-slate-400 uppercase font-semibold">Best day</p>
+              </div>
+            </div>
+            {engagement.nextMilestone && (
+              <div className="mt-2 bg-white rounded-xl border border-slate-200 px-4 py-2.5 flex items-center gap-3">
+                <span className="text-lg">{engagement.nextMilestone.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-700">
+                    Next: {engagement.nextMilestone.label}
+                  </p>
+                  <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1">
+                    <div
+                      className="h-full rounded-full bg-violet-400"
+                      style={{
+                        width: `${Math.min(100, Math.round((engagement.totalDoors / engagement.nextMilestone.threshold) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 flex-shrink-0">
+                  {engagement.nextMilestone.threshold - engagement.totalDoors} to go
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Upcoming events */}
+        {upcomingEvents.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              Upcoming events
+            </p>
+            <div className="flex flex-col gap-2">
+              {upcomingEvents.map((ev) => {
+                const dateStr = new Date(ev.date).toLocaleDateString("en-CA", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                const myAttendee = ev.attendees[0] ?? null;
+                const isRsvpd = !!myAttendee;
+
+                return (
+                  <div
+                    key={ev.id}
+                    className="bg-white rounded-xl border border-slate-200 px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{ev.name}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {dateStr} · {ev.startTime}
+                          {ev.location ? ` · ${ev.location}` : ""}
+                        </p>
+                      </div>
+                      {isRsvpd ? (
+                        <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          {myAttendee.status === "attended" ? "Attended" : "Going"}
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/events/${ev.id}`}
+                          className="flex-shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full bg-brand-50 text-brand-600 border border-brand-200 hover:bg-brand-100 transition-colors"
+                        >
+                          RSVP
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Follow-up tasks */}
         {tasks.length > 0 && (

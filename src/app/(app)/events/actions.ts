@@ -383,3 +383,61 @@ export async function deleteEvent(eventId: string): Promise<{ error?: string }> 
   revalidatePath("/events");
   redirect("/events");
 }
+
+// ── Self-service RSVP (any authenticated campaign member) ──────────────────
+
+export async function rsvpToEvent(
+  eventId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+
+  const event = await db.event.findFirst({
+    where: { id: eventId, campaignId: activeCampaignId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!event) return { error: "Event not found." };
+
+  const existing = await db.eventAttendee.findFirst({
+    where: { eventId, userId: session.user.id, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) return { error: "Already RSVP'd." };
+
+  await db.eventAttendee.create({
+    data: { eventId, userId: session.user.id, status: "confirmed" },
+  });
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/dashboard");
+  return {};
+}
+
+// ── Cancel RSVP ───────────────────────────────────────────────────────────────
+
+export async function cancelRsvp(
+  eventId: string
+): Promise<{ error?: string }> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { error: "Not authenticated." };
+
+  const { activeCampaignId } = session.user;
+  if (!activeCampaignId) return { error: "No active campaign." };
+
+  await db.eventAttendee.updateMany({
+    where: {
+      eventId,
+      userId: session.user.id,
+      event: { campaignId: activeCampaignId },
+      deletedAt: null,
+    },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/dashboard");
+  return {};
+}
