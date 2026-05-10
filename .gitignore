@@ -47,6 +47,14 @@ tsc_output.txt
 .claude/
 test-template.xlsx
 
+# Internal project files — do not commit
+HANDOFF.md
+*.log
+localseat-ui.zip
+backfill.sql
+DashboardShell.tsx
+MobileCanvassScreen.tsx
+test.csv
 
 # Boundary collector build artifacts
 boundary-collector/output/

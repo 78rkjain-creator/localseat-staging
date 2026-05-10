@@ -362,6 +362,7 @@ model Address {
   households Household[]
   signs      Sign[]
 
+  @@index([campaignId, deletedAt])
   @@map("addresses")
 }
 
@@ -380,6 +381,7 @@ model Household {
   address  Address  @relation(fields: [addressId], references: [id])
   people   Person[]
 
+  @@index([campaignId, deletedAt])
   @@map("households")
 }
 
@@ -553,6 +555,7 @@ model CanvassList {
   entries     CanvassListEntry[]
   events      Event[]
 
+  @@index([campaignId, deletedAt])
   @@map("canvass_lists")
 }
 
@@ -648,7 +651,7 @@ model OutreachLog {
   person   Person    @relation(fields: [personId], references: [id])
   user     User?     @relation(fields: [userId], references: [id])
 
-  @@index([campaignId])
+  @@index([campaignId, deletedAt])
   @@index([personId])
   @@map("outreach_logs")
 }
@@ -695,7 +698,7 @@ model Donor {
   linkedPerson Person?   @relation(fields: [linkedPersonId], references: [id])
   createdBy    User?     @relation(fields: [createdById], references: [id])
 
-  @@index([campaignId])
+  @@index([campaignId, deletedAt])
   @@index([linkedPersonId])
   @@map("donors")
 }
@@ -732,6 +735,7 @@ model VolunteerRecord {
   shifts   VolunteerShiftAttendee[]
 
   @@unique([campaignId, personId])
+  @@index([deletedAt])
   @@map("volunteer_records")
 }
 
@@ -759,6 +763,7 @@ model VolunteerShift {
   campaign  Campaign                 @relation(fields: [campaignId], references: [id])
   attendees VolunteerShiftAttendee[]
 
+  @@index([campaignId, deletedAt])
   @@map("volunteer_shifts")
 }
 
@@ -813,6 +818,7 @@ model AddressChangeRequest {
 
   @@index([campaignId, status])
   @@index([personId])
+  @@index([deletedAt])
   @@map("address_change_requests")
 }
 
@@ -1260,7 +1266,7 @@ model SignatureConsentType {
   campaign Campaign          @relation(fields: [campaignId], references: [id])
   consents SignatureConsent[]
 
-  @@index([campaignId])
+  @@index([campaignId, deletedAt])
   @@map("signature_consent_types")
 }
 
