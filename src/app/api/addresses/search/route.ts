@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return NextResponse.json({ campaign: [], mapbox: [] });
 
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const token = process.env.MAPBOX_SERVER_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   // DB query + Mapbox call run in parallel
   const [campaignRows, mapboxRaw] = await Promise.all([

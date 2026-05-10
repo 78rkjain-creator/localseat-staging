@@ -4,6 +4,12 @@ const MAPBOX_BASE = "https://api.mapbox.com/geocoding/v5/mapbox.places";
 const BATCH_SIZE = 10;
 const BETWEEN_BATCHES_MS = 600;
 
+// Prefer a dedicated server token for server-side geocoding (allows stricter
+// URL restrictions and separate rate limits). Falls back to the public token.
+function getMapboxToken(): string | undefined {
+  return process.env.MAPBOX_SERVER_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+}
+
 // ── geocodeAddress ─────────────────────────────────────────────────────────
 // Resolves coordinates for a single Address record.
 // Returns cached lat/lng immediately if already set.
@@ -29,9 +35,9 @@ export async function geocodeAddress(
       "Canada",
     ].join(", ");
 
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    const token = getMapboxToken();
     if (!token) {
-      console.warn("[geocoding] NEXT_PUBLIC_MAPBOX_TOKEN is not set");
+      console.warn("[geocoding] No Mapbox token configured (MAPBOX_SERVER_TOKEN or NEXT_PUBLIC_MAPBOX_TOKEN)");
       return null;
     }
 
@@ -151,9 +157,9 @@ async function geocodeInBatches(
 
   if (addressIds.length === 0) return { geocoded, failed };
 
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const token = getMapboxToken();
   if (!token) {
-    console.warn("[geocoding] NEXT_PUBLIC_MAPBOX_TOKEN is not set");
+    console.warn("[geocoding] No Mapbox token configured (MAPBOX_SERVER_TOKEN or NEXT_PUBLIC_MAPBOX_TOKEN)");
     return { geocoded: 0, failed: addressIds.length };
   }
 

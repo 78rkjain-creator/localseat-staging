@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   experimental: {
     serverActions: {
+      // 50MB to support large voter list imports (CSV/XLSX). Next.js does not
+      // allow per-action limits — this applies globally. Moving file uploads
+      // to dedicated API routes would allow a lower default. Acceptable for V1.
       bodySizeLimit: "50mb",
     },
   },
