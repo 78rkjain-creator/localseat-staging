@@ -74,6 +74,18 @@ function SystemStatusSection({
   const [municipalityToggling, setMunicipalityToggling] = useState(false);
   const [municipalityToggleError, setMunicipalityToggleError] = useState("");
 
+  // System banner state
+  const [bannerActive, setBannerActive] = useState(
+    initialSettings["system_banner_active"] === "true",
+  );
+  const [bannerMessage, setBannerMessage] = useState(
+    initialSettings["system_banner_message"] ?? "",
+  );
+  const [bannerToggling, setBannerToggling] = useState(false);
+  const [bannerSaving, setBannerSaving] = useState(false);
+  const [bannerError, setBannerError] = useState("");
+  const [bannerSaved, setBannerSaved] = useState(false);
+
   async function handleMunicipalityToggle(next: boolean) {
     setMunicipalityToggling(true);
     setMunicipalityToggleError("");
@@ -83,6 +95,35 @@ function SystemStatusSection({
       setMunicipalityToggleError(result.error);
     } else {
       setMunicipalityRequired(next);
+    }
+  }
+
+  async function handleBannerToggle(next: boolean) {
+    setBannerToggling(true);
+    setBannerError("");
+    const result = await updatePlatformSettings({ system_banner_active: next ? "true" : "false" });
+    setBannerToggling(false);
+    if (result.error) {
+      setBannerError(result.error);
+    } else {
+      setBannerActive(next);
+    }
+  }
+
+  async function handleBannerSave() {
+    setBannerSaving(true);
+    setBannerError("");
+    setBannerSaved(false);
+    const result = await updatePlatformSettings({
+      system_banner_message: bannerMessage,
+      system_banner_active: bannerActive ? "true" : "false",
+    });
+    setBannerSaving(false);
+    if (result.error) {
+      setBannerError(result.error);
+    } else {
+      setBannerSaved(true);
+      setTimeout(() => setBannerSaved(false), 2000);
     }
   }
 
@@ -247,6 +288,100 @@ function SystemStatusSection({
               </button>
             )}
           </div>
+        </div>
+
+        {/* System banner row */}
+        <div className="px-6 py-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <p className="text-sm font-semibold text-slate-800">System banner</p>
+                {bannerActive ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                    Showing
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
+                    Hidden
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                Display a message banner across the top of the app for all users. Use for maintenance windows, announcements, or alerts.
+              </p>
+              {bannerError && (
+                <p className="mt-1.5 text-xs text-red-600">{bannerError}</p>
+              )}
+            </div>
+
+            <div className="flex-shrink-0">
+              {canEdit ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={bannerActive}
+                  onClick={() => handleBannerToggle(!bannerActive)}
+                  disabled={bannerToggling}
+                  className={[
+                    "relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200",
+                    bannerActive ? "bg-amber-500" : "bg-slate-200",
+                    bannerToggling ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                      bannerActive ? "translate-x-5" : "translate-x-0",
+                    ].join(" ")}
+                  />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={bannerActive}
+                  disabled
+                  className="relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent bg-slate-200 opacity-60 cursor-not-allowed"
+                >
+                  <span className="inline-block h-5 w-5 rounded-full bg-white shadow" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Message input + save */}
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={bannerMessage}
+              onChange={(e) => setBannerMessage(e.target.value)}
+              placeholder="e.g. System maintenance will occur on Monday May 11 between 9pm and 11:59pm"
+              disabled={!canEdit}
+              className={`${INPUT_CLASS} flex-1`}
+            />
+            {canEdit ? (
+              <button
+                onClick={handleBannerSave}
+                disabled={bannerSaving}
+                className={SAVE_BTN}
+              >
+                {bannerSaving ? "Saving…" : bannerSaved ? "Saved ✓" : "Save message"}
+              </button>
+            ) : (
+              <button disabled className={READ_ONLY_BTN}>Read-only</button>
+            )}
+          </div>
+
+          {/* Preview */}
+          {bannerMessage && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center gap-2.5">
+              <svg className="h-4 w-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+              </svg>
+              <p className="text-sm text-amber-800">{bannerMessage}</p>
+              <span className="ml-auto text-[10px] text-amber-400 flex-shrink-0 uppercase tracking-wide font-semibold">Preview</span>
+            </div>
+          )}
         </div>
 
         {/* Force logout row */}

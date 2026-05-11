@@ -16,6 +16,7 @@ import { isMaintenanceMode } from "@/lib/maintenance";
 import { isGotvMode } from "@/lib/gotv";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
+import { SystemBanner } from "@/components/layout/system-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
 import type { Role } from "@/types";
 
@@ -201,8 +202,19 @@ export default async function AppLayout({
 
   const gotvMode = activeCampaignId ? await isGotvMode(activeCampaignId) : false;
 
+  // System-wide banner message (set by superuser in admin settings)
+  const bannerRows = await db.platformSettings.findMany({
+    where: { key: { in: ["system_banner_active", "system_banner_message"] } },
+  });
+  const bannerMap = Object.fromEntries(bannerRows.map((r) => [r.key, r.value]));
+  const systemBannerMessage =
+    bannerMap["system_banner_active"] === "true" && bannerMap["system_banner_message"]
+      ? bannerMap["system_banner_message"]
+      : null;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {systemBannerMessage && <SystemBanner message={systemBannerMessage} />}
       {supportMode && (
         <SupportBanner
           campaignName={supportCampaignName ?? "Unknown campaign"}
