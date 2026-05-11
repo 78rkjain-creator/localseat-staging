@@ -93,7 +93,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
 
   const {
     forUs, againstUs, undecided, notHome, uncontacted,
-    walkListProgress, donorCountByStatus,
+    walkListProgress, donorCountByStatus, competitorBreakdown,
   } = data;
 
   // ── Plan usage for hero bar ──────────────────────────────────────────────
@@ -281,7 +281,38 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
             </div>
           </div>
 
-          {/* 5 ── Plan usage */}
+          {/* 5 ── Opponents */}
+          {competitorBreakdown.length > 0 && (
+            <>
+              <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+              <div className="flex flex-col w-[150px] flex-shrink-0 pl-5">
+                <p className="text-[11px] uppercase tracking-[0.06em] text-white/50">Opponents</p>
+                {competitorBreakdown.slice(0, 3).map((comp, i) => {
+                  const maxCount = competitorBreakdown[0].count;
+                  const pct = maxCount > 0 ? Math.round((comp.count / maxCount) * 100) : 0;
+                  return (
+                    <div key={comp.name} className={i === 0 ? "mt-1.5" : "mt-1"}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-white/60 truncate max-w-[95px]">{comp.name}</span>
+                        <span className="text-[11px] font-semibold tabular-nums text-red-300">{comp.count}</span>
+                      </div>
+                      <div className="h-[3px] rounded-full bg-white/[0.08] overflow-hidden mt-0.5">
+                        <div
+                          className="h-full rounded-full bg-red-400 transition-all"
+                          style={{ width: `${pct}%`, opacity: i === 0 ? 1 : 0.7 }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[11px] text-white/35 mt-1.5">
+                  {competitorBreakdown.reduce((s, c) => s + c.count, 0).toLocaleString()} total for opponents
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* 6 ── Plan usage */}
           {(constituentUsage || tagUsage) && (
             <>
               <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
