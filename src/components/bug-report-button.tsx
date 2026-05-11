@@ -101,7 +101,7 @@ export function BugReportButton({ variant = "floating" }: { variant?: "floating"
       {variant === "sidebar" ? (
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-2 flex-1 px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors"
+          className="flex items-center gap-2 flex-1 px-3 py-2 text-sm text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
           aria-label="Report a bug"
         >
           <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
