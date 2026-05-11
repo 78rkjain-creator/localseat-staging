@@ -12,6 +12,7 @@ import { BarSparkline, LineSparkline } from "@/components/dashboard/sparkline-ch
 import type { DonorStatus, Role } from "@/types";
 import { DONOR_STATUS_LABELS } from "@/types";
 import type { PlanTier } from "@/lib/plan-limits";
+import { getEffectiveLimits } from "@/lib/plan-limits";
 
 interface Props {
   campaignId: string;
@@ -94,6 +95,30 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
     forUs, againstUs, undecided, notHome, uncontacted,
     walkListProgress, donorCountByStatus,
   } = data;
+
+  // ── Plan usage for hero bar ──────────────────────────────────────────────
+  let constituentUsage: { count: number; limit: number } | null = null;
+  let tagUsage: { count: number; limit: number } | null = null;
+
+  if (role === "candidate" || role === "campaign_manager" || role === "data_manager") {
+    const limits = await getEffectiveLimits(campaignId);
+    if (!limits.isUnlimited("constituentLimit") && limits.constituentLimit > 0) {
+      const count = await db.person.count({ where: { campaignId, deletedAt: null } });
+      constituentUsage = { count, limit: limits.constituentLimit };
+    }
+    if (!limits.isUnlimited("tagLimit") && limits.tagLimit > 0) {
+      const count = await db.tag.count({ where: { campaignId, deletedAt: null } });
+      tagUsage = { count, limit: limits.tagLimit };
+    }
+  }
+
+  const recordsNearLimit = constituentUsage
+    ? constituentUsage.count / constituentUsage.limit >= 0.9
+    : false;
+  const tagsNearLimit = tagUsage
+    ? tagUsage.count / tagUsage.limit >= 0.9
+    : false;
+  const showUpgradeWarning = recordsNearLimit || tagsNearLimit;
 
   const totalContacted = contactedOnce + contactedTwice + contactedThreePlus;
   const reachedPct = totalPeople > 0 ? Math.round((totalContacted / totalPeople) * 100) : 0;
@@ -255,6 +280,73 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
               />
             </div>
           </div>
+
+          {/* 5 ── Plan usage */}
+          {(constituentUsage || tagUsage) && (
+            <>
+              <div className="w-px h-14 flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+              <div className="flex flex-col w-36 flex-shrink-0 pl-5 gap-2">
+                <p className="text-[11px] uppercase tracking-[0.06em] text-white/50">Plan usage</p>
+                {constituentUsage && (
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] text-white/40">Records</span>
+                      <span className="text-[10px] font-medium text-white/60 tabular-nums">
+                        {constituentUsage.count.toLocaleString()} / {constituentUsage.limit.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((constituentUsage.count / constituentUsage.limit) * 100))}%`,
+                          background: constituentUsage.count / constituentUsage.limit >= 0.9
+                            ? "#f87171"
+                            : constituentUsage.count / constituentUsage.limit >= 0.75
+                            ? "#fbbf24"
+                            : "#94a3b8",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {tagUsage && (
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] text-white/40">Tags</span>
+                      <span className="text-[10px] font-medium text-white/60 tabular-nums">
+                        {tagUsage.count.toLocaleString()} / {tagUsage.limit.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(100, Math.round((tagUsage.count / tagUsage.limit) * 100))}%`,
+                          background: tagUsage.count / tagUsage.limit >= 0.9
+                            ? "#f87171"
+                            : tagUsage.count / tagUsage.limit >= 0.75
+                            ? "#fbbf24"
+                            : "#94a3b8",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {showUpgradeWarning && (
+                  <Link
+                    href="/onboarding/choose-plan"
+                    className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+                  >
+                    <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                    Upgrade plan
+                  </Link>
+                )}
+              </div>
+            </>
+          )}
 
         </div>
       </div>

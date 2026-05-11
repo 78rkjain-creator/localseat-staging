@@ -17,7 +17,6 @@ import { isGotvMode } from "@/lib/gotv";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
-import { BugReportButton } from "@/components/bug-report-button";
 import type { Role } from "@/types";
 
 export default async function AppLayout({
@@ -160,8 +159,6 @@ export default async function AppLayout({
   let contactMapEnabled        = true;
   let reportsEnabled           = true;
   let canvassScriptEnabled     = true;
-  let constituentUsage: { count: number; limit: number } | null = null;
-  let tagUsage: { count: number; limit: number } | null = null;
 
   // Check for pending support access request (candidate/campaign_manager only)
   let pendingSupportRequest: {
@@ -200,17 +197,6 @@ export default async function AppLayout({
     contactMapEnabled        = limits.contactMapEnabled;
     reportsEnabled           = limits.reportsEnabled;
     canvassScriptEnabled     = limits.canvassScriptEnabled;
-
-    if (activeRole === "candidate" || activeRole === "campaign_manager") {
-      if (!limits.isUnlimited("constituentLimit") && limits.constituentLimit > 0) {
-        const count = await db.person.count({ where: { campaignId: activeCampaignId, deletedAt: null } });
-        constituentUsage = { count, limit: limits.constituentLimit };
-      }
-      if (!limits.isUnlimited("tagLimit") && limits.tagLimit > 0) {
-        const count = await db.tag.count({ where: { campaignId: activeCampaignId, deletedAt: null } });
-        tagUsage = { count, limit: limits.tagLimit };
-      }
-    }
   }
 
   const gotvMode = activeCampaignId ? await isGotvMode(activeCampaignId) : false;
@@ -256,8 +242,6 @@ export default async function AppLayout({
           contactMapEnabled={contactMapEnabled}
           reportsEnabled={reportsEnabled}
           canvassScriptEnabled={canvassScriptEnabled}
-          constituentUsage={constituentUsage}
-          tagUsage={tagUsage}
         />
         <main className="flex-1 min-w-0 bg-slate-50 overflow-y-auto pb-16 md:pb-0">
           {children}
@@ -265,7 +249,6 @@ export default async function AppLayout({
       </div>
       <MobileNav gotvMode={gotvMode} />
       <PwaInstallPrompt />
-      <BugReportButton />
     </div>
   );
 }
