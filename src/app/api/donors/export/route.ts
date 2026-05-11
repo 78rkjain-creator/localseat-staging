@@ -83,17 +83,17 @@ export async function GET() {
               ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
               : (d as Record<string, unknown>).address ?? "";
 
-            const base = [
+            const base: string[] = [
               d.firstName, d.lastName,
-              address, addr?.city ?? "", addr?.province ?? "", addr?.postalCode ?? "",
+              address as string, addr?.city ?? "", addr?.province ?? "", addr?.postalCode ?? "",
               d.phoneHome ?? "", d.phoneMobile ?? "", d.email ?? "",
             ];
-            const financial = showAmounts ? [
+            const financial: string[] = showAmounts ? [
               d.amount ? d.amount.toString() : "",
               d.donationDate ? d.donationDate.toISOString().split("T")[0] : "",
               d.paymentMethod ? (PAYMENT_METHOD_LABELS[d.paymentMethod as PaymentMethod] ?? d.paymentMethod) : "",
             ] : [];
-            const rest = [
+            const rest: string[] = [
               DONOR_STATUS_LABELS[d.status as DonorStatus] ?? d.status,
               d.thankYouSent ? "Yes" : "No",
               d.thankYouDate ? d.thankYouDate.toISOString().split("T")[0] : "",
