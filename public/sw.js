@@ -50,6 +50,12 @@ self.addEventListener("activate", (event) => {
         )
       )
       .then(() => self.clients.claim())
+      .then(() => {
+        // Notify all open tabs that a new version is active so they can reload
+        self.clients.matchAll({ type: "window" }).then((clients) => {
+          clients.forEach((client) => client.postMessage({ type: "SW_UPDATED" }));
+        });
+      })
   );
 });
 

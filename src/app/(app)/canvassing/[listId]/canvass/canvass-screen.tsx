@@ -351,7 +351,14 @@ export function CanvassScreen({
       .catch(() => { clearTimeout(t); setSwFailure(true); });
   }, []);
 
-  const current = displayEntries[currentIndex];
+  // Clamp currentIndex when displayEntries shrinks (e.g. parity filter)
+  useEffect(() => {
+    if (displayEntries.length > 0 && currentIndex >= displayEntries.length) {
+      setCurrentIndex(0);
+    }
+  }, [displayEntries.length, currentIndex]);
+
+  const current = displayEntries.length > 0 ? displayEntries[currentIndex] : null;
   const totalCount = entries.length;
   const doneCount = savedSet.size;
   const progressPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
@@ -883,6 +890,7 @@ export function CanvassScreen({
             </div>
           )}
 
+          {current && (<>
           {/* ── Household hero ── */}
           <div className="bg-gradient-to-r from-slate-50 to-white rounded-2xl border border-slate-200 px-4 py-2 mb-1.5">
             <div className="flex items-center gap-1.5">
@@ -1297,6 +1305,7 @@ export function CanvassScreen({
             />
           )}
 
+          </>)}
         </div>
       </main>
 
