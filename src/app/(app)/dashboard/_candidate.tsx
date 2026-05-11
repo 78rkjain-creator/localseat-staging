@@ -13,6 +13,7 @@ import { getEffectiveLimits } from "@/lib/plan-limits";
 import { splitCampaignName } from "@/components/dashboard/dashboard-shared";
 import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 import { OverviewTab } from "@/components/dashboard/tabs/overview-tab";
+import { ActivityTab } from "@/components/dashboard/tabs/activity-tab";
 import { FieldOpsTab } from "@/components/dashboard/tabs/field-ops-tab";
 import { SupportersTab } from "@/components/dashboard/tabs/supporters-tab";
 import { FinanceTab } from "@/components/dashboard/tabs/finance-tab";
@@ -140,6 +141,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
   // ── Tab definitions ────────────────────────────────────────────────────
   const tabs = [
     { id: "overview", label: "Overview" },
+    { id: "activity", label: "Activity" },
     { id: "field", label: "Field ops" },
     { id: "supporters", label: "Supporters" },
     ...(!isStarterPlan ? [{ id: "finance", label: "Finance" }] : []),
@@ -409,8 +411,10 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
           uncontacted={uncontacted}
           totalPeople={totalPeople}
           needsYou={needsYou}
-          liveActivity={liveActivity}
         />
+
+        {/* Activity tab */}
+        <ActivityTab liveActivity={liveActivity} />
 
         {/* Field ops tab */}
         <FieldOpsTab

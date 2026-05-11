@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { KpiCardWithSparkline, ActionQueueItem } from "@/components/dashboard/dashboard-shared";
-import { BarSparkline, LineSparkline } from "@/components/dashboard/sparkline-charts";
-import { CanvassActivityFeed } from "@/components/dashboard/canvass-activity-feed";
+import { LineSparkline } from "@/components/dashboard/sparkline-charts";
 import type { SeriesPoint } from "@/components/dashboard/sparkline-charts";
-import type { CanvassActivityEntry } from "@/lib/dashboard";
 
 interface NeedsYouItem {
   id: string;
@@ -27,17 +25,13 @@ interface OverviewTabProps {
   raisedWeek: number;
   donorsSeries: SeriesPoint[];
   isStarterPlan: boolean;
-  // Voter ID mix
   forUs: number;
   undecided: number;
   againstUs: number;
   notHome: number;
   uncontacted: number;
   totalPeople: number;
-  // Action queue
   needsYou: NeedsYouItem[];
-  // Live activity
-  liveActivity: CanvassActivityEntry[];
 }
 
 function BarMeter({
@@ -88,7 +82,6 @@ export function OverviewTab({
   uncontacted,
   totalPeople,
   needsYou,
-  liveActivity,
 }: OverviewTabProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -134,9 +127,9 @@ export function OverviewTab({
         </div>
       </div>
 
-      {/* Voter ID mix + Action queue */}
+      {/* 2×2 grid */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Voter ID mix */}
+        {/* Top-left: Voter ID mix */}
         <div className="bg-white border border-slate-200 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
@@ -149,7 +142,7 @@ export function OverviewTab({
               details →
             </Link>
           </div>
-          <div className="space-y-1.5 mb-2">
+          <div className="space-y-1">
             {[
               { label: "For us", value: forUs, color: "#10b981" },
               { label: "Undecided", value: undecided, color: "#f59e0b" },
@@ -160,14 +153,11 @@ export function OverviewTab({
               <BarMeter key={label} label={label} value={value} max={totalPeople} color={color} />
             ))}
           </div>
-          <div className="mt-auto min-h-0">
-            <LineSparkline data={supportRateSeries} height={56} yLabel="Support % · 7-day trend" ySuffix="%" />
-          </div>
         </div>
 
-        {/* Action queue */}
+        {/* Top-right: Action queue */}
         <div className="px-1">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
               For you
             </p>
@@ -181,18 +171,23 @@ export function OverviewTab({
           {needsYou.length === 0 ? (
             <p className="text-sm text-slate-400 mt-1">All clear — nothing urgent.</p>
           ) : (
-            <div className="flex flex-col gap-1.5">
-              {needsYou.slice(0, 5).map((item) => (
+            <div className="flex flex-col gap-1">
+              {needsYou.slice(0, 4).map((item) => (
                 <ActionQueueItem key={item.id} item={item} />
               ))}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Live activity */}
-      <div className="bg-white border border-slate-200 border-l-2 border-l-brand-300 rounded-xl overflow-hidden p-4">
-        <CanvassActivityFeed initialEntries={liveActivity.slice(0, 6)} />
+        {/* Bottom-left: Support trend */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <LineSparkline data={supportRateSeries} height={56} yLabel="Support % · 7-day trend" ySuffix="%" />
+        </div>
+
+        {/* Bottom-right: Doors trend */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <LineSparkline data={doorsSeries} height={56} yLabel="Doors · 7-day trend" />
+        </div>
       </div>
     </div>
   );
