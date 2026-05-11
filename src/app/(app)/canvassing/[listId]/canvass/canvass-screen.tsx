@@ -431,6 +431,7 @@ export function CanvassScreen({
     supportLevel: SupportLevel | null;
     outcomeDetail?: string | null;
   }) {
+    if (!current) return;
     if (isPending) return;
     setError(null);
     setShowNotHomeMenu(false);
@@ -494,6 +495,7 @@ export function CanvassScreen({
   }
 
   async function handleSave() {
+    if (!current) return;
     const { supportLevel, otherOutcome, outcomeDetail } = draft;
     if (!supportLevel && !otherOutcome) return;
     if (isPending) return;
@@ -697,12 +699,12 @@ export function CanvassScreen({
     );
   }
 
-  const addr = current.person.address;
+  const addr = current?.person.address;
   const addressLine = addr
     ? `${addr.streetNumber} ${addr.streetName}${addr.unitNumber ? ` #${addr.unitNumber}` : ""}`
     : "Unknown address";
   const cityLine = addr ? `${addr.city}, ${addr.province}` : "";
-  const coResidents = current.person.coResidents ?? [];
+  const coResidents = current?.person.coResidents ?? [];
 
   // Building context: how many entries share this base address, and which position is this.
   const buildingBaseKey = addr ? `${addr.streetNumber} ${addr.streetName}` : null;
@@ -714,7 +716,7 @@ export function CanvassScreen({
     : [];
   const isMultiUnit = buildingEntries.length > 1;
   const buildingPosition = isMultiUnit
-    ? buildingEntries.findIndex(e => e.person.id === current.person.id) + 1
+    ? buildingEntries.findIndex(e => e.person.id === current?.person.id) + 1
     : 0;
 
   function fmtAddr(a: typeof addr): string {
@@ -743,10 +745,10 @@ export function CanvassScreen({
   })();
 
   // All people at this door — main person first, then co-residents
-  const allResidents = [
+  const allResidents = current ? [
     { id: current.person.id, firstName: current.person.firstName, lastName: current.person.lastName },
     ...coResidents,
-  ];
+  ] : [];
 
   // ── Active canvassing screen ──────────────────────────────────────────────
 
@@ -1466,7 +1468,7 @@ export function CanvassScreen({
         </div>
       </footer>
 
-      {showVoterChangeModal && (
+      {showVoterChangeModal && current && (
         <VoterChangeModal
           personId={current.person.id}
           campaignId={campaignId}
