@@ -145,6 +145,7 @@ export async function getCandidateDashboardData(campaignId: string) {
       by: ["personId"],
       where: { campaignId, deletedAt: null },
     }).then((rows: { personId: string }[]) => rows.length),
+    voterIdBreakdown,
   ]);
 
   const canvassersOutToday = canvassersOutTodayRaw.length;
