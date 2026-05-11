@@ -6,6 +6,7 @@ import type { CanvassActivityEntry } from "@/lib/dashboard";
 
 interface Props {
   initialEntries: CanvassActivityEntry[];
+  twoColumn?: boolean;
 }
 
 const SUPPORT_LABELS: Record<string, string> = {
@@ -107,7 +108,7 @@ function formatUpdatedText(date: Date): string {
   return `Updated ${Math.floor(secs / 60)}m ago`;
 }
 
-export function CanvassActivityFeed({ initialEntries }: Props) {
+export function CanvassActivityFeed({ initialEntries, twoColumn }: Props) {
   const [entries, setEntries] = useState<CanvassActivityEntry[]>(initialEntries);
   const [updatedText, setUpdatedText] = useState<string>("");
   const lastUpdatedRef = useRef<Date | null>(null);
@@ -160,11 +161,15 @@ export function CanvassActivityFeed({ initialEntries }: Props) {
       {entries.length === 0 ? (
         <p className="text-sm text-slate-400">No canvass activity yet.</p>
       ) : (
-        <ol className="flex flex-col">
+        <ol className={twoColumn ? "columns-2 gap-6" : "flex flex-col"}>
           {entries.map((entry, i) => (
             <li
               key={entry.id}
-              className={["flex items-start gap-3 py-3", i > 0 ? "border-t border-slate-50" : ""].join(" ")}
+              className={[
+                "flex items-start gap-3 py-2.5",
+                i > 0 ? "border-t border-slate-50" : "",
+                twoColumn ? "break-inside-avoid" : "",
+              ].join(" ")}
             >
               {/* Avatar */}
               <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
