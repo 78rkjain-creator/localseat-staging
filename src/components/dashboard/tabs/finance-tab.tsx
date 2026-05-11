@@ -59,9 +59,9 @@ export function FinanceTab({
   showUpgradeWarning,
 }: FinanceTabProps) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Donor pipeline */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Donor pipeline
@@ -91,14 +91,14 @@ export function FinanceTab({
             );
           })}
         </div>
-        <LineSparkline data={donorsSeries} color="#3b82f6" height={80} yLabel="Donors received · 7-day trend" />
+        <LineSparkline data={donorsSeries} color="#3b82f6" height={56} yLabel="Donors received · 7-day trend" />
       </div>
 
       {/* Signs */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Signs</p>
         <div className="flex items-baseline gap-3 mb-3">
-          <p className="text-[28px] font-bold text-slate-900 tabular leading-none">
+          <p className="text-2xl font-bold text-slate-900 tabular leading-none">
             {signsOut.toLocaleString()}
           </p>
           <span
@@ -109,12 +109,12 @@ export function FinanceTab({
             +{signsWeek} this week
           </span>
         </div>
-        <BarSparkline data={signsSeries} height={72} />
+        <BarSparkline data={signsSeries} height={52} />
       </div>
 
       {/* Plan usage */}
       {(constituentUsage || tagUsage) && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
             Plan usage
           </p>

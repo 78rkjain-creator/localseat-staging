@@ -27,17 +27,17 @@ function SentimentBlock({
   return (
     <div className="text-center">
       <div
-        className="h-20 rounded-lg flex items-end justify-center pb-2"
+        className="h-14 rounded-lg flex items-end justify-center pb-1"
         style={{ background: `${color}18` }}
       >
         <span
-          className="text-xl font-bold tabular"
+          className="text-lg font-bold tabular"
           style={{ color }}
         >
           {value.toLocaleString()}
         </span>
       </div>
-      <p className="text-[11px] text-slate-500 mt-1.5">{label}</p>
+      <p className="text-[10px] text-slate-500 mt-1">{label}</p>
     </div>
   );
 }
@@ -58,9 +58,9 @@ export function SupportersTab({
   const idTotal = forUs + againstUs + undecided;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Full voter ID breakdown */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
           Full voter ID breakdown
         </p>
@@ -90,25 +90,25 @@ export function SupportersTab({
 
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total people</p>
-          <p className="text-2xl font-bold text-slate-900 tabular leading-none mt-1.5">
+          <p className="text-[22px] font-bold text-slate-900 tabular leading-none mt-1">
             {totalPeople.toLocaleString()}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Reached</p>
-          <p className="text-2xl font-bold text-slate-900 tabular leading-none mt-1.5">{reachedPct}%</p>
-          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-2.5">
+          <p className="text-[22px] font-bold text-slate-900 tabular leading-none mt-1">{reachedPct}%</p>
+          <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-2">
             <div className="h-full rounded-full bg-blue-500" style={{ width: `${reachedPct}%` }} />
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Support rate</p>
-          <p className="text-2xl font-bold text-slate-900 tabular leading-none mt-1.5">{supportRate}%</p>
+          <p className="text-[22px] font-bold text-slate-900 tabular leading-none mt-1">{supportRate}%</p>
           {supportDelta !== null && (
             <p
-              className="text-[11px] mt-1.5 font-medium"
+              className="text-[10px] mt-1 font-medium"
               style={{
                 color: supportDelta > 0 ? "#16a34a" : supportDelta < 0 ? "#dc2626" : "#94a3b8",
               }}
@@ -120,13 +120,13 @@ export function SupportersTab({
       </div>
 
       {/* Support trend */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <LineSparkline data={supportRateSeries} height={100} yLabel="Support % · 7-day trend" ySuffix="%" />
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <LineSparkline data={supportRateSeries} height={72} yLabel="Support % · 7-day trend" ySuffix="%" />
       </div>
 
       {/* Opponents */}
       {competitorBreakdown.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Opponents</p>
           <div className="space-y-2">
             {competitorBreakdown.slice(0, 5).map((comp, i) => {

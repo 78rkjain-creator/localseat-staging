@@ -48,7 +48,7 @@ export function FieldOpsTab({
   const leaderboard = canvassers.slice(0, 5);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Walk lists */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
@@ -67,12 +67,12 @@ export function FieldOpsTab({
           </div>
         )}
         <div className="mt-auto min-h-0">
-          <BarSparkline data={doorsSeries} height={80} yLabel="Doors · 7-day trend" />
+          <BarSparkline data={doorsSeries} height={56} yLabel="Doors · 7-day trend" />
         </div>
       </div>
 
       {/* Canvassers + Events side by side */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         {/* Canvasser leaderboard */}
         <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-3">
           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">

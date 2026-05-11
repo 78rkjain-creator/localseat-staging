@@ -146,7 +146,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
   ];
 
   return (
-    <div className="flex flex-col h-full overflow-auto px-4 py-4 gap-4">
+    <div className="flex flex-col h-full overflow-auto px-4 py-3 gap-3">
 
       {/* ── Hero band ── */}
       <div

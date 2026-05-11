@@ -91,7 +91,7 @@ export function OverviewTab({
   liveActivity,
 }: OverviewTabProps) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* KPI strip */}
       <div className="bg-gradient-to-b from-orange-50/30 to-transparent rounded-2xl px-1 pt-1 pb-0 -mx-1">
         <div className={`grid gap-3 ${isStarterPlan ? "grid-cols-3" : "grid-cols-4"}`}>
@@ -135,10 +135,10 @@ export function OverviewTab({
       </div>
 
       {/* Voter ID mix + Action queue */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         {/* Voter ID mix */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
               Voter ID mix
             </p>
@@ -149,7 +149,7 @@ export function OverviewTab({
               details →
             </Link>
           </div>
-          <div className="space-y-1.5 mb-3">
+          <div className="space-y-1.5 mb-2">
             {[
               { label: "For us", value: forUs, color: "#10b981" },
               { label: "Undecided", value: undecided, color: "#f59e0b" },
@@ -161,7 +161,7 @@ export function OverviewTab({
             ))}
           </div>
           <div className="mt-auto min-h-0">
-            <LineSparkline data={supportRateSeries} height={72} yLabel="Support % · 7-day trend" ySuffix="%" />
+            <LineSparkline data={supportRateSeries} height={56} yLabel="Support % · 7-day trend" ySuffix="%" />
           </div>
         </div>
 

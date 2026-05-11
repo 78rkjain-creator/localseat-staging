@@ -45,7 +45,7 @@ interface BarSparklineProps {
   yLabel?: string;
 }
 
-export function BarSparkline({ data, height = 64, showAxes = true, yLabel }: BarSparklineProps) {
+export function BarSparkline({ data, height = 56, showAxes = true, yLabel }: BarSparklineProps) {
   const maxVal = Math.max(...data.map((d) => d.count), 1);
 
   return (
@@ -113,7 +113,7 @@ interface LineSparklineProps {
 export function LineSparkline({
   data,
   color = "#22c55e",
-  height = 64,
+  height = 56,
   showAxes = true,
   yLabel,
   ySuffix = "",

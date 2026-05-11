@@ -47,12 +47,12 @@ export function KpiCard({
 }) {
   return (
     <div className={[
-      "bg-white rounded-xl p-4 flex flex-col",
+      "bg-white rounded-xl p-3 flex flex-col",
       accent
         ? "border-l-[3px] border-l-brand-400 border-t border-r border-b border-slate-200"
         : "border border-slate-200",
     ].join(" ")}>
-      <div className="flex items-start justify-between mb-1.5">
+      <div className="flex items-start justify-between mb-1">
         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
         {badge && (
           <span
@@ -66,7 +66,7 @@ export function KpiCard({
           </span>
         )}
       </div>
-      <p className="text-2xl font-bold text-slate-900 tabular leading-none mb-3">
+      <p className="text-[22px] font-bold text-slate-900 tabular leading-none mb-2">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
       {children}
@@ -83,7 +83,7 @@ export function KpiCardWithSparkline({
   sparkType,
   sparkData,
   sparkColor,
-  sparkHeight = 80,
+  sparkHeight = 56,
   ySuffix,
 }: {
   label: string;
@@ -110,10 +110,10 @@ export function KpiCardWithSparkline({
 
 export function GeoStatCard({ label, value, description }: { label: string; value: string; description: string }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col">
+    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col">
       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 tabular leading-none mt-1.5">{value}</p>
-      <p className="text-[11px] text-slate-400 mt-1">{description}</p>
+      <p className="text-[22px] font-bold text-slate-900 tabular leading-none mt-1">{value}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">{description}</p>
     </div>
   );
 }
