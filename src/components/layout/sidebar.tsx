@@ -853,10 +853,22 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoU
         )}
       </nav>
 
-      {/* Help & Bug Report */}
-      <div className="flex items-center gap-1.5 px-3 py-1">
-        <SidebarHelpButton />
-        <SidebarBugReportButton />
+      {/* User Guide + Help & Bug Report */}
+      <div className="flex flex-col gap-1 px-3 py-1">
+        <a
+          href="/LocalSeat-User-Guide.docx"
+          download
+          className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors"
+        >
+          <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Download User Guide
+        </a>
+        <div className="flex items-center gap-1.5">
+          <SidebarHelpButton />
+          <SidebarBugReportButton />
+        </div>
       </div>
 
       {/* User */}
