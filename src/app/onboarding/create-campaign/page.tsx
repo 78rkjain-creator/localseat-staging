@@ -28,6 +28,8 @@ export default function CreateCampaignPage() {
   const [name, setName] = useState("");
   const [ballotName, setBallotName] = useState("");
   const [officeSought, setOfficeSought] = useState("");
+  const [province, setProvince] = useState("");
+  const [campaignElectionType, setCampaignElectionType] = useState("municipal");
   const [selected, setSelected] = useState<MunicipalitySelectorValue | null>(null);
   const [boundary, setBoundary] = useState<Polygon | MultiPolygon | null>(null);
   const [loadingBoundary, setLoadingBoundary] = useState(false);
@@ -35,6 +37,36 @@ export default function CreateCampaignPage() {
   const [electionDate, setElectionDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Known municipal election dates by province (2026)
+  const MUNICIPAL_ELECTION_DATES: Record<string, string> = {
+    NB: "2026-05-11",
+    BC: "2026-10-17",
+    ON: "2026-10-26",
+    MB: "2026-10-28",
+    PE: "2026-11-02",
+    SK: "2026-11-09",
+    NT: "2026-12-14",
+  };
+
+  // Auto-fill election date when province or election type changes
+  function handleProvinceChange(prov: string) {
+    setProvince(prov);
+    if (campaignElectionType === "municipal" && MUNICIPAL_ELECTION_DATES[prov]) {
+      setElectionDate(MUNICIPAL_ELECTION_DATES[prov]);
+    } else {
+      setElectionDate("");
+    }
+  }
+
+  function handleElectionTypeChange(type: string) {
+    setCampaignElectionType(type);
+    if (type === "municipal" && MUNICIPAL_ELECTION_DATES[province]) {
+      setElectionDate(MUNICIPAL_ELECTION_DATES[province]);
+    } else {
+      setElectionDate("");
+    }
+  }
 
   async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
     setSelected(value);
@@ -57,6 +89,8 @@ export default function CreateCampaignPage() {
         name,
         ballotName,
         officeSought,
+        province,
+        campaignElectionType,
         wardsInput,
         electionDate,
         municipalityName: selected?.name,
@@ -135,6 +169,53 @@ export default function CreateCampaignPage() {
             placeholder="e.g. City Councillor, Mayor, School Board Trustee"
           />
 
+          {/* Province */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Province / Territory <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={province}
+              onChange={(e) => handleProvinceChange(e.target.value)}
+              required
+              className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent appearance-none"
+            >
+              <option value="">Select province…</option>
+              <option value="AB">Alberta</option>
+              <option value="BC">British Columbia</option>
+              <option value="MB">Manitoba</option>
+              <option value="NB">New Brunswick</option>
+              <option value="NL">Newfoundland and Labrador</option>
+              <option value="NS">Nova Scotia</option>
+              <option value="NT">Northwest Territories</option>
+              <option value="NU">Nunavut</option>
+              <option value="ON">Ontario</option>
+              <option value="PE">Prince Edward Island</option>
+              <option value="QC">Quebec</option>
+              <option value="SK">Saskatchewan</option>
+              <option value="YT">Yukon</option>
+            </select>
+          </div>
+
+          {/* Election type */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              Type of election <span className="text-red-400">*</span>
+            </label>
+            <select
+              value={campaignElectionType}
+              onChange={(e) => handleElectionTypeChange(e.target.value)}
+              required
+              className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent appearance-none"
+            >
+              <option value="municipal">Municipal</option>
+              <option value="provincial_nomination">Provincial Nomination</option>
+              <option value="provincial">Provincial</option>
+              <option value="federal_nomination">Federal Nomination</option>
+              <option value="federal">Federal</option>
+            </select>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">
               Municipality
@@ -169,7 +250,7 @@ export default function CreateCampaignPage() {
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="electionDate" className="text-sm font-medium text-slate-700">
-              Election date (optional)
+              Election date
             </label>
             <input
               id="electionDate"
@@ -178,6 +259,9 @@ export default function CreateCampaignPage() {
               onChange={(e) => setElectionDate(e.target.value)}
               className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
+            {electionDate && campaignElectionType === "municipal" && (
+              <p className="text-xs text-emerald-600">Auto-filled from known municipal election date</p>
+            )}
           </div>
 
           {error && (

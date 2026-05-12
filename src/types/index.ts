@@ -171,3 +171,34 @@ export const OUT_OF_DISTRICT_APPROVAL_STATUS_LABELS: Record<OutOfDistrictApprova
   approved: "Approved",
   rejected: "Rejected",
 };
+
+export type CampaignElectionType =
+  | "municipal"
+  | "provincial_nomination"
+  | "provincial"
+  | "federal_nomination"
+  | "federal";
+
+export const CAMPAIGN_ELECTION_TYPE_LABELS: Record<CampaignElectionType, string> = {
+  municipal:              "Municipal",
+  provincial_nomination:  "Provincial Nomination",
+  provincial:             "Provincial",
+  federal_nomination:     "Federal Nomination",
+  federal:                "Federal",
+};
+
+export const PROVINCE_LABELS: Record<string, string> = {
+  AB: "Alberta",
+  BC: "British Columbia",
+  MB: "Manitoba",
+  NB: "New Brunswick",
+  NL: "Newfoundland and Labrador",
+  NS: "Nova Scotia",
+  NT: "Northwest Territories",
+  NU: "Nunavut",
+  ON: "Ontario",
+  PE: "Prince Edward Island",
+  QC: "Quebec",
+  SK: "Saskatchewan",
+  YT: "Yukon",
+};

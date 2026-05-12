@@ -10,6 +10,8 @@ interface CreateCampaignInput {
   name: string;
   ballotName?: string;
   officeSought?: string;
+  province?: string;
+  campaignElectionType?: string;
   municipality?: string;
   wardsInput?: string;
   electionDate?: string;
@@ -33,6 +35,19 @@ export async function createCampaign(
 
   const ballotName = input.ballotName?.trim() || null;
   const officeSought = input.officeSought?.trim() || null;
+  const provinceInput = input.province?.trim() || "";
+  if (!provinceInput) {
+    return { error: "Province is required." };
+  }
+  const validProvinces = ["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"];
+  if (!validProvinces.includes(provinceInput)) {
+    return { error: "Invalid province." };
+  }
+  const validElectionTypes = ["municipal","provincial_nomination","provincial","federal_nomination","federal"];
+  const electionTypeInput = input.campaignElectionType?.trim() || "municipal";
+  if (!validElectionTypes.includes(electionTypeInput)) {
+    return { error: "Invalid election type." };
+  }
   const municipality = input.municipality?.trim() || null;
   const wards = (input.wardsInput ?? "")
     .split(",")
@@ -70,9 +85,10 @@ export async function createCampaign(
       ...(municipalityId   ? { municipalityId   } : {}),
       ...(municipalityBoundary ? { municipalityBoundary } : {}),
       wards,
-      province: "ON",
+      province: provinceInput,
       year,
       ...(electionDate ? { electionDate } : {}),
+      campaignElectionType: electionTypeInput as "municipal" | "provincial_nomination" | "provincial" | "federal_nomination" | "federal",
       plan: "bench",
       planActivated: false,
       advanceVotingDates: [],

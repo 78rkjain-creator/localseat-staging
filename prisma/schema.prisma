@@ -176,6 +176,14 @@ enum PersonListMembershipStatus {
 
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
+enum CampaignElectionType {
+  municipal
+  provincial_nomination
+  provincial
+  federal_nomination
+  federal
+}
+
 model Campaign {
   id           String   @id @default(cuid())
   name         String
@@ -191,6 +199,7 @@ model Campaign {
   province     String   @default("ON")
   year         Int
   electionDate         DateTime?
+  campaignElectionType CampaignElectionType @default(municipal)
   fundraisingGoal      Int?
   wardBoundary      Json?
   wardBoundarySetAt DateTime?
