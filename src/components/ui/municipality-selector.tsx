@@ -21,12 +21,14 @@ interface Props {
   value: MunicipalitySelectorValue | null;
   onChange: (value: MunicipalitySelectorValue | null) => void;
   placeholder?: string;
+  province?: string;
 }
 
 export function MunicipalitySelector({
   value,
   onChange,
   placeholder = "Search municipalities…",
+  province = "ON",
 }: Props) {
   const [query, setQuery] = useState("");
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
@@ -37,11 +39,15 @@ export function MunicipalitySelector({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (province !== "ON") {
+      setMunicipalities([]);
+      return;
+    }
     fetch("/data/municipalities.json")
       .then((r) => r.json())
       .then((data: Municipality[]) => setMunicipalities(data))
       .catch(() => setMunicipalities([]));
-  }, []);
+  }, [province]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -164,7 +170,34 @@ export function MunicipalitySelector({
     );
   }
 
-  // ── Dropdown search mode ──────────────────────────────────────────────────
+  // ── Non-Ontario: simple text input ──────────────────────────────────────
+
+  if (province !== "ON") {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const trimmed = customName.trim();
+              if (trimmed) onChange({ id: null, name: trimmed });
+            }
+          }}
+          onBlur={() => {
+            const trimmed = customName.trim();
+            if (trimmed) onChange({ id: null, name: trimmed });
+          }}
+          placeholder="Enter your municipality name…"
+          className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      </div>
+    );
+  }
+
+  // ── Ontario: dropdown search mode ─────────────────────────────────────────
 
   return (
     <div ref={containerRef} className="relative">

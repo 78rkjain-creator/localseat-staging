@@ -35,6 +35,7 @@ export default function CreateCampaignPage() {
   const [loadingBoundary, setLoadingBoundary] = useState(false);
   const [wardsInput, setWardsInput] = useState("");
   const [electionDate, setElectionDate] = useState("");
+  const [skRural, setSkRural] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -45,33 +46,44 @@ export default function CreateCampaignPage() {
     getElectionDates().then(setElectionDates).catch(() => {});
   }, []);
 
-  // Look up the date for a given province + election type
-  function lookupDate(prov: string, type: string): string | undefined {
-    // Map campaign election types to the settings key type
+  // Look up the date for a given province + election type + SK variant
+  function lookupDate(prov: string, type: string, rural?: boolean): string | undefined {
     const typeKey = type === "provincial_nomination" ? "provincial"
       : type === "federal_nomination" ? "federal"
       : type;
-    // Saskatchewan has split municipal dates — try urban (cities/towns) first
     if (prov === "SK") {
-      return electionDates[`SK_URBAN_${typeKey}`] ?? electionDates[`SK_RURAL_${typeKey}`] ?? electionDates[`SK_${typeKey}`];
+      const skKey = rural ? "SK_RURAL" : "SK_URBAN";
+      return electionDates[`${skKey}_${typeKey}`] ?? electionDates[`SK_${typeKey}`];
     }
     return electionDates[`${prov}_${typeKey}`];
   }
 
-  // Auto-fill election date when province or election type changes
+  // Auto-fill election date when province, election type, or SK toggle changes
+  function updateElectionDate(prov: string, type: string, rural: boolean) {
+    const date = lookupDate(prov, type, rural);
+    setElectionDate(date ?? "");
+  }
+
   function handleProvinceChange(prov: string) {
     setProvince(prov);
-    const date = lookupDate(prov, campaignElectionType);
-    setElectionDate(date ?? "");
+    if (prov !== "SK") setSkRural(false);
+    // Clear municipality when province changes — the old selection is no longer valid
+    setSelected(null);
+    setBoundary(null);
+    updateElectionDate(prov, campaignElectionType, prov === "SK" ? skRural : false);
   }
 
   function handleElectionTypeChange(type: string) {
     setCampaignElectionType(type);
-    const date = lookupDate(province, type);
-    setElectionDate(date ?? "");
+    updateElectionDate(province, type, skRural);
   }
 
-  const hasKnownDate = !!lookupDate(province, campaignElectionType);
+  function handleSkRuralChange(rural: boolean) {
+    setSkRural(rural);
+    updateElectionDate(province, campaignElectionType, rural);
+  }
+
+  const hasKnownDate = !!lookupDate(province, campaignElectionType, skRural);
 
   async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
     setSelected(value);
@@ -202,6 +214,26 @@ export default function CreateCampaignPage() {
             </select>
           </div>
 
+          {/* Saskatchewan rural/urban toggle — only shown when SK is selected */}
+          {province === "SK" && campaignElectionType === "municipal" && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={skRural}
+                  onChange={(e) => handleSkRuralChange(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-900">Rural municipality (even-numbered division)</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Saskatchewan has two municipal election cycles. Check this if your campaign is for an even-numbered division in a rural municipality. Leave unchecked for cities, towns, villages, and odd-numbered rural divisions.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+
           {/* Election type */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">
@@ -228,9 +260,10 @@ export default function CreateCampaignPage() {
             <MunicipalitySelector
               value={selected}
               onChange={handleMunicipalityChange}
-              placeholder="Search Ontario municipalities…"
+              province={province}
+              placeholder={province === "ON" ? "Search Ontario municipalities…" : "Enter your municipality name…"}
             />
-            {selected && (
+            {selected && province === "ON" && (
               <div className="mt-1">
                 <MunicipalityMap
                   boundary={boundary}
