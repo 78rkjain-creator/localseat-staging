@@ -917,6 +917,149 @@ function FeatureMatrixSection({
 
 // ── Root client component ──────────────────────────────────────────────────
 
+// ── Section 4: Election Dates ─────────────────────────────────────────────
+
+const PROVINCES = [
+  { code: "AB", name: "Alberta" },
+  { code: "BC", name: "British Columbia" },
+  { code: "MB", name: "Manitoba" },
+  { code: "NB", name: "New Brunswick" },
+  { code: "NL", name: "Newfoundland and Labrador" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "NU", name: "Nunavut" },
+  { code: "ON", name: "Ontario" },
+  { code: "PE", name: "Prince Edward Island" },
+  { code: "QC", name: "Quebec" },
+  { code: "SK", name: "Saskatchewan" },
+  { code: "YT", name: "Yukon" },
+] as const;
+
+const ELECTION_COLUMNS = [
+  { key: "municipal", label: "Municipal" },
+  { key: "provincial", label: "Provincial" },
+  { key: "federal", label: "Federal" },
+] as const;
+
+function electionDateKey(province: string, type: string): string {
+  return `election_date_${province}_${type}`;
+}
+
+function ElectionDatesSection({
+  initialSettings,
+  canEdit,
+}: {
+  initialSettings: Record<string, string>;
+  canEdit: boolean;
+}) {
+  const [dates, setDates] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const p of PROVINCES) {
+      for (const c of ELECTION_COLUMNS) {
+        const key = electionDateKey(p.code, c.key);
+        init[key] = initialSettings[key] ?? "";
+      }
+    }
+    return init;
+  });
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  function handleChange(province: string, type: string, value: string) {
+    const key = electionDateKey(province, type);
+    setDates((prev) => ({ ...prev, [key]: value }));
+    setSaveState("idle");
+  }
+
+  async function handleSave() {
+    setSaveState("saving");
+    setErrorMsg("");
+
+    // Only send keys that have values (skip empty)
+    const updates: Record<string, string> = {};
+    for (const [key, val] of Object.entries(dates)) {
+      if (val) updates[key] = val;
+    }
+
+    // Also clear keys that were set but are now empty
+    for (const p of PROVINCES) {
+      for (const c of ELECTION_COLUMNS) {
+        const key = electionDateKey(p.code, c.key);
+        if (!dates[key] && initialSettings[key]) {
+          updates[key] = "";
+        }
+      }
+    }
+
+    const result = await updatePlatformSettings(updates);
+    if (result.error) {
+      setSaveState("error");
+      setErrorMsg(result.error);
+    } else {
+      setSaveState("saved");
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-slate-900 mb-1">Election Dates</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        Set known election dates by province. These dates auto-fill during campaign creation and lock the election date field for municipal campaigns.
+      </p>
+
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50">
+              <th className="text-left px-4 py-3 font-semibold text-slate-700">Province / Territory</th>
+              {ELECTION_COLUMNS.map((col) => (
+                <th key={col.key} className="text-left px-4 py-3 font-semibold text-slate-700">{col.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PROVINCES.map((prov, i) => (
+              <tr key={prov.code} className={i % 2 === 1 ? "bg-slate-50/50" : ""}>
+                <td className="px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap">{prov.name}</td>
+                {ELECTION_COLUMNS.map((col) => {
+                  const key = electionDateKey(prov.code, col.key);
+                  return (
+                    <td key={col.key} className="px-4 py-2.5">
+                      <input
+                        type="date"
+                        value={dates[key] ?? ""}
+                        onChange={(e) => handleChange(prov.code, col.key, e.target.value)}
+                        disabled={!canEdit}
+                        className="h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed w-[150px]"
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {canEdit && (
+        <div className="mt-4 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveState === "saving"}
+            className="h-10 px-5 rounded-xl bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
+          >
+            {saveState === "saving" ? "Saving…" : "Save election dates"}
+          </button>
+          <InlineStatus state={saveState} errorMessage={errorMsg} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
+
 export function SettingsClient({ initialSettings, canEdit }: Props) {
   return (
     <div className="flex flex-col gap-10">
@@ -932,6 +1075,7 @@ export function SettingsClient({ initialSettings, canEdit }: Props) {
       <PricingSection      initialSettings={initialSettings} canEdit={canEdit} />
       <LimitsSection       initialSettings={initialSettings} canEdit={canEdit} />
       <FeatureMatrixSection initialSettings={initialSettings} canEdit={canEdit} />
+      <ElectionDatesSection initialSettings={initialSettings} canEdit={canEdit} />
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface OfficeAddr {
 interface Props {
   name: string;
   electionDateValue: string;
+  isFixedElectionDate: boolean;
   fundraisingGoal: number | null;
   advanceVotingDates: VotingDate[];
   initialOfficeAddr: OfficeAddr | null;
@@ -49,6 +50,7 @@ function formatOfficeDisplay(a: OfficeAddr): string {
 export function GeneralSettingsForm({
   name,
   electionDateValue,
+  isFixedElectionDate,
   fundraisingGoal,
   advanceVotingDates: initialAdvanceDates,
   initialOfficeAddr,
@@ -68,6 +70,7 @@ export function GeneralSettingsForm({
     initialMunicipalityBoundary
   );
   const [loadingBoundary, setLoadingBoundary] = useState(false);
+  const [showElectionDateWarning, setShowElectionDateWarning] = useState(false);
 
   async function fetchAndSetBoundary(id: string) {
     setLoadingBoundary(true);
@@ -218,11 +221,31 @@ export function GeneralSettingsForm({
             name="electionDate"
             type="date"
             defaultValue={electionDateValue}
+            onChange={() => {
+              if (isFixedElectionDate) setShowElectionDateWarning(true);
+            }}
             className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <p className="text-xs text-slate-400 mt-1.5">
-            Used on the dashboard to show days remaining.
-          </p>
+          {isFixedElectionDate && !showElectionDateWarning && (
+            <p className="text-xs text-slate-400 mt-1.5">
+              This is a fixed election date set by provincial legislation.
+            </p>
+          )}
+          {showElectionDateWarning && (
+            <div className="mt-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <p className="text-sm font-medium text-amber-800">
+                This is a legislated fixed election date
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Municipal election dates in Canada are set by provincial law and cannot be changed by individual campaigns. Changing this date may cause incorrect countdown timers and reporting. Only change this if you are certain the date is wrong.
+              </p>
+            </div>
+          )}
+          {!isFixedElectionDate && (
+            <p className="text-xs text-slate-400 mt-1.5">
+              Used on the dashboard to show days remaining.
+            </p>
+          )}
         </div>
 
         {/* Fundraising goal */}

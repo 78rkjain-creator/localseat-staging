@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createCampaign } from "./actions";
+import { createCampaign, getElectionDates } from "./actions";
 import { Logo } from "@/components/brand/Logo";
 import { MunicipalitySelector } from "@/components/ui/municipality-selector";
 import type { MunicipalitySelectorValue } from "@/components/ui/municipality-selector";
@@ -38,35 +38,36 @@ export default function CreateCampaignPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Known municipal election dates by province (2026)
-  const MUNICIPAL_ELECTION_DATES: Record<string, string> = {
-    NB: "2026-05-11",
-    BC: "2026-10-17",
-    ON: "2026-10-26",
-    MB: "2026-10-28",
-    PE: "2026-11-02",
-    SK: "2026-11-09",
-    NT: "2026-12-14",
-  };
+  // Election dates loaded from PlatformSettings (keyed as "{PROVINCE}_{type}")
+  const [electionDates, setElectionDates] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getElectionDates().then(setElectionDates).catch(() => {});
+  }, []);
+
+  // Look up the date for a given province + election type
+  function lookupDate(prov: string, type: string): string | undefined {
+    // Map campaign election types to the settings key type
+    const typeKey = type === "provincial_nomination" ? "provincial"
+      : type === "federal_nomination" ? "federal"
+      : type;
+    return electionDates[`${prov}_${typeKey}`];
+  }
 
   // Auto-fill election date when province or election type changes
   function handleProvinceChange(prov: string) {
     setProvince(prov);
-    if (campaignElectionType === "municipal" && MUNICIPAL_ELECTION_DATES[prov]) {
-      setElectionDate(MUNICIPAL_ELECTION_DATES[prov]);
-    } else {
-      setElectionDate("");
-    }
+    const date = lookupDate(prov, campaignElectionType);
+    setElectionDate(date ?? "");
   }
 
   function handleElectionTypeChange(type: string) {
     setCampaignElectionType(type);
-    if (type === "municipal" && MUNICIPAL_ELECTION_DATES[province]) {
-      setElectionDate(MUNICIPAL_ELECTION_DATES[province]);
-    } else {
-      setElectionDate("");
-    }
+    const date = lookupDate(province, type);
+    setElectionDate(date ?? "");
   }
+
+  const hasKnownDate = !!lookupDate(province, campaignElectionType);
 
   async function handleMunicipalityChange(value: MunicipalitySelectorValue | null) {
     setSelected(value);
@@ -257,10 +258,16 @@ export default function CreateCampaignPage() {
               type="date"
               value={electionDate}
               onChange={(e) => setElectionDate(e.target.value)}
-              className="h-12 w-full rounded-2xl border border-slate-200 hover:border-slate-300 bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              readOnly={hasKnownDate}
+              className={[
+                "h-12 w-full rounded-2xl border bg-white px-4 text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent",
+                hasKnownDate
+                  ? "border-slate-100 bg-slate-50 text-slate-500 cursor-not-allowed"
+                  : "border-slate-200 hover:border-slate-300",
+              ].join(" ")}
             />
-            {electionDate && campaignElectionType === "municipal" && (
-              <p className="text-xs text-emerald-600">Auto-filled from known municipal election date</p>
+            {electionDate && hasKnownDate && (
+              <p className="text-xs text-emerald-600">Fixed election date set by provincial legislation</p>
             )}
           </div>
 

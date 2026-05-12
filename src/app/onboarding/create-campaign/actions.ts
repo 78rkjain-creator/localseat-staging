@@ -134,3 +134,22 @@ export async function createCampaign(
 
   return { campaignId: campaign.id };
 }
+
+// ── Fetch known election dates from PlatformSettings ──────────────────────
+
+export async function getElectionDates(): Promise<Record<string, string>> {
+  const rows = await db.platformSettings.findMany({
+    where: { key: { startsWith: "election_date_" } },
+    select: { key: true, value: true },
+  });
+  // Return map like { "ON_municipal": "2026-10-26", "BC_municipal": "2026-10-17" }
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    // key format: election_date_{PROVINCE}_{TYPE}
+    const suffix = row.key.replace("election_date_", "");
+    if (suffix && row.value) {
+      result[suffix] = row.value;
+    }
+  }
+  return result;
+}
