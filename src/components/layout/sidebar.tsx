@@ -108,7 +108,6 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoU
 
   const isAdminPath =
     pathname.startsWith("/campaign-settings") ||
-    pathname.startsWith("/data-corrections") ||
     pathname.startsWith("/team");
   useEffect(() => {
     if (isAdminPath) setAdminOpen(true);
@@ -183,7 +182,7 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoU
         ]
       : []),
     {
-      href: "/data-corrections",
+      href: "/campaign-settings/data-corrections",
       label: "Data Corrections",
       badge: pendingDataCorrectionsCount > 0 ? pendingDataCorrectionsCount : undefined,
       icon: (

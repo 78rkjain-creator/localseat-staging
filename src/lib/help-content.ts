@@ -802,7 +802,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // ── Data Corrections ───────────────────────────────────────────────────────
   {
-    route: "/data-corrections",
+    route: "/campaign-settings/data-corrections",
     title: "Data Corrections",
     summary:
       "Review and approve address changes and voter data corrections submitted by team members from the field.",
@@ -830,7 +830,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     ],
   },
   {
-    route: "/volunteers",
+    route: "/people/volunteers",
     title: "Volunteers",
     summary:
       "View and manage all volunteers — people who expressed interest during canvassing or were added manually.",
