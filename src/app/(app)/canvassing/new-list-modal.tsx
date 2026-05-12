@@ -4,7 +4,7 @@ import { useRef, useState, useTransition, useEffect, useCallback } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createCanvassList, getFilterMatchCount } from "./actions";
+import { createCanvassList, getFilterMatchCount, searchStreetNames } from "./actions";
 import type { DynamicFilters } from "@/lib/canvassing";
 
 interface Tag {
@@ -43,6 +43,8 @@ const WARD_OPTIONS = [
 export function NewListModal({ open, onClose, tags = [], gotvMode = false, surveys = [] }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streetDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streetDropdownRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -54,6 +56,36 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [canvassStatus, setCanvassStatus] = useState<DynamicFilters["canvassStatus"]>("");
   const [wardStatuses, setWardStatuses] = useState<string[]>([]);
+  const [streetName, setStreetName] = useState("");
+
+  // Street name autocomplete
+  const [streetSuggestions, setStreetSuggestions] = useState<string[]>([]);
+  const [showStreetDropdown, setShowStreetDropdown] = useState(false);
+
+  useEffect(() => {
+    if (streetName.trim().length < 2) {
+      setStreetSuggestions([]);
+      setShowStreetDropdown(false);
+      return;
+    }
+    if (streetDebounceRef.current) clearTimeout(streetDebounceRef.current);
+    streetDebounceRef.current = setTimeout(async () => {
+      const results = await searchStreetNames(streetName);
+      setStreetSuggestions(results);
+      setShowStreetDropdown(results.length > 0);
+    }, 250);
+    return () => { if (streetDebounceRef.current) clearTimeout(streetDebounceRef.current); };
+  }, [streetName]);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (streetDropdownRef.current && !streetDropdownRef.current.contains(e.target as Node)) {
+        setShowStreetDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   // Live match count
   const [matchCount, setMatchCount] = useState<number | null>(null);
@@ -65,13 +97,14 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
       ...(tagIds.length ? { tagIds } : {}),
       ...(canvassStatus ? { canvassStatus } : {}),
       ...(wardStatuses.length ? { wardStatuses } : {}),
+      ...(streetName.trim() ? { streetName: streetName.trim() } : {}),
     };
 
     startCount(async () => {
       const result = await getFilterMatchCount(filters);
       if ("count" in result) setMatchCount(result.count);
     });
-  }, [supportLevels, tagIds, canvassStatus, wardStatuses]);
+  }, [supportLevels, tagIds, canvassStatus, wardStatuses, streetName]);
 
   useEffect(() => {
     if (!isDynamic) return;
@@ -109,6 +142,7 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
         ...(tagIds.length ? { tagIds } : {}),
         ...(canvassStatus ? { canvassStatus } : {}),
         ...(wardStatuses.length ? { wardStatuses } : {}),
+        ...(streetName.trim() ? { streetName: streetName.trim() } : {}),
       };
       formData.set("isDynamic", "true");
       formData.set("dynamicFilters", JSON.stringify(filters));
@@ -140,6 +174,9 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
     setTagIds([]);
     setCanvassStatus("");
     setWardStatuses([]);
+    setStreetName("");
+    setStreetSuggestions([]);
+    setShowStreetDropdown(false);
     setMatchCount(null);
     onClose();
   }
@@ -251,6 +288,44 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
 
           {isDynamic && (
             <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col gap-4">
+              {/* Street name */}
+              <div className="relative" ref={streetDropdownRef}>
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+                  Street name
+                </p>
+                <input
+                  type="text"
+                  value={streetName}
+                  onChange={(e) => {
+                    setStreetName(e.target.value);
+                    if (!e.target.value.trim()) setShowStreetDropdown(false);
+                  }}
+                  onFocus={() => {
+                    if (streetSuggestions.length > 0) setShowStreetDropdown(true);
+                  }}
+                  placeholder="e.g. 2nd Ave E"
+                  autoComplete="off"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-colors"
+                />
+                {showStreetDropdown && streetSuggestions.length > 0 && (
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    {streetSuggestions.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          setStreetName(name);
+                          setShowStreetDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl transition-colors"
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Canvass status */}
               <div>
                 <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
@@ -373,7 +448,7 @@ export function NewListModal({ open, onClose, tags = [], gotvMode = false, surve
 
               {/* Live match count */}
               {(() => {
-                const hasFilters = !!(canvassStatus || supportLevels.length || tagIds.length || wardStatuses.length);
+                const hasFilters = !!(canvassStatus || supportLevels.length || tagIds.length || wardStatuses.length || streetName.trim());
                 return (
                   <div className="pt-3 border-t border-slate-200">
                     {isCountPending ? (

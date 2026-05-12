@@ -232,6 +232,12 @@ export async function _doRefresh(
     andConditions.push({ wardStatus: { in: filters.wardStatuses as WardStatus[] } });
   }
 
+  if (filters.streetName?.trim()) {
+    andConditions.push({
+      household: { address: { streetName: { contains: filters.streetName.trim(), mode: "insensitive" } } },
+    });
+  }
+
   const where: Prisma.PersonWhereInput = {
     campaignId,
     deletedAt: null,
@@ -954,6 +960,12 @@ export async function getFilterMatchCount(
     andConditions.push({ wardStatus: { in: filters.wardStatuses as WardStatus[] } });
   }
 
+  if (filters.streetName?.trim()) {
+    andConditions.push({
+      household: { address: { streetName: { contains: filters.streetName.trim(), mode: "insensitive" } } },
+    });
+  }
+
   const where: Prisma.PersonWhereInput = {
     campaignId: activeCampaignId,
     deletedAt: null,
@@ -1032,4 +1044,33 @@ export async function assignCanvasser(
 
   revalidatePath(`/canvassing/${listId}`);
   return {};
+}
+
+// ── Street name autocomplete ──────────────────────────────────────────────
+
+export async function searchStreetNames(
+  query: string
+): Promise<string[]> {
+  const session = await getServerSession(authOptions);
+  if (!session) return [];
+
+  const { activeCampaignId } = session.user;
+  if (!activeCampaignId) return [];
+
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  const addresses = await db.address.findMany({
+    where: {
+      campaignId: activeCampaignId,
+      deletedAt: null,
+      streetName: { contains: trimmed, mode: "insensitive" },
+    },
+    select: { streetName: true },
+    distinct: ["streetName"],
+    orderBy: { streetName: "asc" },
+    take: 10,
+  });
+
+  return addresses.map((a) => a.streetName);
 }

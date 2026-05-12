@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { previewFilter, addFilteredPeople } from "./actions";
+import { searchStreetNames } from "../actions";
 import type { FilterParams } from "./actions";
 import type { SupportLevel } from "@/types";
 import { SUPPORT_LEVEL_LABELS } from "@/types";
@@ -48,6 +49,39 @@ export function AddPeopleModal({
   const [isPreviewing, startPreview] = useTransition();
   const [isSubmitting, startSubmit] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streetDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streetDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Street name autocomplete
+  const [streetSuggestions, setStreetSuggestions] = useState<string[]>([]);
+  const [showStreetDropdown, setShowStreetDropdown] = useState(false);
+
+  useEffect(() => {
+    const val = filters.streetName ?? "";
+    if (val.trim().length < 2) {
+      setStreetSuggestions([]);
+      setShowStreetDropdown(false);
+      return;
+    }
+    if (streetDebounceRef.current) clearTimeout(streetDebounceRef.current);
+    streetDebounceRef.current = setTimeout(async () => {
+      const results = await searchStreetNames(val);
+      setStreetSuggestions(results);
+      setShowStreetDropdown(results.length > 0);
+    }, 250);
+    return () => { if (streetDebounceRef.current) clearTimeout(streetDebounceRef.current); };
+  }, [filters.streetName]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (streetDropdownRef.current && !streetDropdownRef.current.contains(e.target as Node)) {
+        setShowStreetDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   // Debounce preview as filters change
   useEffect(() => {
@@ -77,6 +111,8 @@ export function AddPeopleModal({
     setPreviewError(null);
     setSubmitError(null);
     setSuccess(null);
+    setStreetSuggestions([]);
+    setShowStreetDropdown(false);
     onClose();
   }
 
@@ -122,14 +158,38 @@ export function AddPeopleModal({
 
           {/* Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Street name"
-              value={filters.streetName ?? ""}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, streetName: e.target.value }))
-              }
-              placeholder="e.g. Elm Street"
-            />
+            <div className="relative" ref={streetDropdownRef}>
+              <Input
+                label="Street name"
+                value={filters.streetName ?? ""}
+                onChange={(e) => {
+                  setFilters((f) => ({ ...f, streetName: e.target.value }));
+                  if (!e.target.value.trim()) setShowStreetDropdown(false);
+                }}
+                onFocus={() => {
+                  if (streetSuggestions.length > 0) setShowStreetDropdown(true);
+                }}
+                placeholder="e.g. Elm Street"
+                autoComplete="off"
+              />
+              {showStreetDropdown && streetSuggestions.length > 0 && (
+                <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                  {streetSuggestions.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => {
+                        setFilters((f) => ({ ...f, streetName: name }));
+                        setShowStreetDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-xl last:rounded-b-xl transition-colors"
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Input
               label="Street number (optional)"
               value={filters.streetNumber ?? ""}

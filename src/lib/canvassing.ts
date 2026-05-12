@@ -10,6 +10,7 @@ export interface DynamicFilters {
   tagIds?: string[];
   canvassStatus?: "not_yet_canvassed" | "canvassed" | "not_home" | "";
   wardStatuses?: string[];
+  streetName?: string;
 }
 
 // ── Walk list index ────────────────────────────────────────────────────────
