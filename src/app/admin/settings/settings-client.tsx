@@ -919,7 +919,7 @@ function FeatureMatrixSection({
 
 // ── Section 4: Election Dates ─────────────────────────────────────────────
 
-const PROVINCES = [
+const PROVINCES: readonly { code: string; name: string; info?: string }[] = [
   { code: "AB", name: "Alberta" },
   { code: "BC", name: "British Columbia" },
   { code: "MB", name: "Manitoba" },
@@ -931,9 +931,10 @@ const PROVINCES = [
   { code: "ON", name: "Ontario" },
   { code: "PE", name: "Prince Edward Island" },
   { code: "QC", name: "Quebec" },
-  { code: "SK", name: "Saskatchewan" },
+  { code: "SK_RURAL", name: "Saskatchewan — Rural (even divisions)", info: "Even-numbered divisions in rural municipalities only. Cities, towns, and villages vote in the other cycle." },
+  { code: "SK_URBAN", name: "Saskatchewan — Cities, towns & villages", info: "Cities, towns, villages, and odd-numbered rural divisions." },
   { code: "YT", name: "Yukon" },
-] as const;
+];
 
 const ELECTION_COLUMNS = [
   { key: "municipal", label: "Municipal" },
@@ -1020,7 +1021,17 @@ function ElectionDatesSection({
           <tbody>
             {PROVINCES.map((prov, i) => (
               <tr key={prov.code} className={i % 2 === 1 ? "bg-slate-50/50" : ""}>
-                <td className="px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap">{prov.name}</td>
+                <td className="px-4 py-2.5 font-medium text-slate-900">
+                  <span className="whitespace-nowrap">{prov.name}</span>
+                  {prov.info && (
+                    <span className="relative ml-1.5 inline-block group">
+                      <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help">i</span>
+                      <span className="absolute left-6 top-0 z-30 hidden group-hover:block w-64 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs leading-relaxed shadow-lg">
+                        {prov.info}
+                      </span>
+                    </span>
+                  )}
+                </td>
                 {ELECTION_COLUMNS.map((col) => {
                   const key = electionDateKey(prov.code, col.key);
                   return (

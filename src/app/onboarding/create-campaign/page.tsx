@@ -51,6 +51,10 @@ export default function CreateCampaignPage() {
     const typeKey = type === "provincial_nomination" ? "provincial"
       : type === "federal_nomination" ? "federal"
       : type;
+    // Saskatchewan has split municipal dates — try urban (cities/towns) first
+    if (prov === "SK") {
+      return electionDates[`SK_URBAN_${typeKey}`] ?? electionDates[`SK_RURAL_${typeKey}`] ?? electionDates[`SK_${typeKey}`];
+    }
     return electionDates[`${prov}_${typeKey}`];
   }
 

@@ -52,12 +52,24 @@ export default async function GeneralSettingsPage() {
   const electionTypeKey = campaign.campaignElectionType === "provincial_nomination" ? "provincial"
     : campaign.campaignElectionType === "federal_nomination" ? "federal"
     : campaign.campaignElectionType;
-  const settingsKey = `election_date_${campaign.province}_${electionTypeKey}`;
-  const knownDateSetting = await db.platformSettings.findUnique({
-    where: { key: settingsKey },
-    select: { value: true },
-  });
-  const isFixedElectionDate = !!knownDateSetting?.value;
+
+  // Saskatchewan has split municipal dates — check urban first, then rural, then plain SK
+  let isFixedElectionDate = false;
+  if (campaign.province === "SK") {
+    const skKeys = [`election_date_SK_URBAN_${electionTypeKey}`, `election_date_SK_RURAL_${electionTypeKey}`, `election_date_SK_${electionTypeKey}`];
+    const skSettings = await db.platformSettings.findMany({
+      where: { key: { in: skKeys } },
+      select: { value: true },
+    });
+    isFixedElectionDate = skSettings.some((s) => !!s.value);
+  } else {
+    const settingsKey = `election_date_${campaign.province}_${electionTypeKey}`;
+    const knownDateSetting = await db.platformSettings.findUnique({
+      where: { key: settingsKey },
+      select: { value: true },
+    });
+    isFixedElectionDate = !!knownDateSetting?.value;
+  }
 
   // Serialize advance voting dates as { date: "YYYY-MM-DD", time: "HH:MM" }[] for the form
   const advanceVotingDates = [...campaign.advanceVotingDates]
