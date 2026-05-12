@@ -30,10 +30,46 @@ jest.mock('@/lib/audit', () => ({
   createAuditLog: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock @prisma/client enums used at module level in transitive imports
+jest.mock('@prisma/client', () => ({
+  Role: {
+    candidate: 'candidate',
+    campaign_manager: 'campaign_manager',
+    data_manager: 'data_manager',
+    co_chair: 'co_chair',
+    field_organizer: 'field_organizer',
+    canvasser: 'canvasser',
+    volunteer_coordinator: 'volunteer_coordinator',
+    finance_lead: 'finance_lead',
+    sign_installer: 'sign_installer',
+    data_supplier: 'data_supplier',
+  },
+  WardStatus: { not_checked: 'not_checked', inside: 'inside', outside: 'outside', outside_accepted: 'outside_accepted', pending_review: 'pending_review' },
+  ListSource: { voters_list: 'voters_list', residents_list: 'residents_list', manual: 'manual', canvass: 'canvass', team: 'team' },
+  Prisma: {},
+  PrismaClient: jest.fn(),
+}));
+
+// Mock support-access — saveCanvassResponse imports checkSupportWriteAccess
+jest.mock('@/lib/support-access', () => ({
+  checkSupportWriteAccess: jest.fn().mockResolvedValue({ allowed: true }),
+}));
+
+// Mock plan-limits — saveCanvassResponse imports canAddConstituent
+jest.mock('@/lib/plan-limits', () => ({
+  canAddConstituent: jest.fn().mockResolvedValue(true),
+}));
+
+// Mock ward — saveCanvassResponse imports isPointInWard, campaignHasWard
+jest.mock('@/lib/ward', () => ({
+  isPointInWard: jest.fn().mockReturnValue(true),
+  campaignHasWard: jest.fn().mockResolvedValue(false),
+}));
+
 jest.mock('@/lib/db', () => ({
   db: {
     canvassAssignment: { findFirst: jest.fn() },
-    person: { findFirst: jest.fn() },
+    person: { findFirst: jest.fn(), update: jest.fn().mockResolvedValue({}) },
     canvassResponse: {
       create: jest.fn(),
     },

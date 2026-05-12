@@ -47,6 +47,12 @@ jest.mock('@/lib/audit', () => ({
   createAuditLog: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock plan-limits — donor export calls isDonorTrackingEnabled which hits the DB
+jest.mock('@/lib/plan-limits', () => ({
+  isDonorTrackingEnabled: jest.fn().mockResolvedValue(true),
+  getEffectiveLimits: jest.fn().mockResolvedValue({ donorTrackingEnabled: true }),
+}));
+
 // Mock the Prisma client entirely — no real DB connections
 jest.mock('@/lib/db', () => ({
   db: {
@@ -55,6 +61,9 @@ jest.mock('@/lib/db', () => ({
     },
     canvassResponse: {
       findMany: jest.fn(),
+    },
+    donor: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   },
 }));
