@@ -102,7 +102,23 @@ export async function geocodeAndClassifyAddress(
       where: { id: campaignId },
       select: { wardBoundary: true },
     });
-    if (!campaign?.wardBoundary) return; // geocoding was still useful; no boundary to classify against
+    if (!campaign?.wardBoundary) {
+      // No boundary configured — geocoding was still useful.
+      // Mark person as "inside" so they leave the needs-geocode queue.
+      if (personId) {
+        const person = await db.person.findUnique({
+          where: { id: personId },
+          select: { anonymizedAt: true, wardStatus: true },
+        });
+        if (person && person.anonymizedAt === null && person.wardStatus === WardStatus.not_checked) {
+          await db.person.update({
+            where: { id: personId },
+            data: { wardStatus: WardStatus.inside, needsDistrictClassification: false },
+          });
+        }
+      }
+      return;
+    }
 
     const boundary = campaign.wardBoundary as unknown as Polygon | MultiPolygon;
     const inside = isPointInWard(coords.lat, coords.lng, boundary);
