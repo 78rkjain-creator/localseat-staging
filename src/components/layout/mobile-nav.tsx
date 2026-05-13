@@ -108,6 +108,10 @@ function useShowMore(role: Role | string | null | undefined): boolean {
 export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
   const { data: session } = useSession();
   const pathname = usePathname();
+
+  // Hide mobile nav on the active canvassing screen
+  if (pathname.includes("/canvass")) return null;
+
   const [moreOpen, setMoreOpen] = useState(false);
 
   const role = session?.user?.activeRole;

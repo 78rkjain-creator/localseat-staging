@@ -90,6 +90,10 @@ function NavLink({
 
 export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoUrl, campaignCount = 1, pendingDataCorrectionsCount = 0, donorTrackingEnabled = true, followUpQueueEnabled = true, analyticsEnabled = true, eventsEnabled = true, surveysEnabled = true, digitalSignaturesEnabled = true, customFieldsEnabled = true, signTrackingEnabled = true, contactMapEnabled = true, reportsEnabled = true, canvassScriptEnabled = true }: SidebarProps) {
   const pathname = usePathname();
+
+  // Hide sidebar entirely on the active canvassing screen
+  if (pathname.includes("/canvass")) return null;
+
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
