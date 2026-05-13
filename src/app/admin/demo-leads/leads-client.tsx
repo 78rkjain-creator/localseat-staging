@@ -25,6 +25,7 @@ export function LeadsClient({ initialLeads }: Props) {
   const [isPending, startTransition] = useTransition();
   const [checkedEmails, setCheckedEmails] = useState<Set<string>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingUnmark, setConfirmingUnmark] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return leads.filter((lead) => {
@@ -60,7 +61,6 @@ export function LeadsClient({ initialLeads }: Props) {
     setConfirmingDelete(false);
   }
 
-  // Clearing selection when filters change keeps the visual state consistent
   function updateFilter(fn: () => void) {
     fn();
     setCheckedEmails(new Set());
@@ -94,19 +94,30 @@ export function LeadsClient({ initialLeads }: Props) {
     });
   }
 
-  function toggleEmailed(lead: DemoLead) {
-    startTransition(async () => {
-      if (lead.emailedAt) {
-        await unmarkAsEmailed(lead.email);
-        setLeads((prev) =>
-          prev.map((l) => l.email === lead.email ? { ...l, emailedAt: null } : l)
-        );
-      } else {
+  function handleEmailedClick(lead: DemoLead) {
+    if (lead.emailedAt) {
+      // Already emailed — show confirmation before unmarking
+      setConfirmingUnmark(lead.email);
+    } else {
+      // Not emailed — mark immediately
+      startTransition(async () => {
         await markAsEmailed(lead.email);
         setLeads((prev) =>
           prev.map((l) => l.email === lead.email ? { ...l, emailedAt: new Date() } : l)
         );
-      }
+      });
+    }
+  }
+
+  function confirmUnmark() {
+    if (!confirmingUnmark) return;
+    const emailToUnmark = confirmingUnmark;
+    setConfirmingUnmark(null);
+    startTransition(async () => {
+      await unmarkAsEmailed(emailToUnmark);
+      setLeads((prev) =>
+        prev.map((l) => l.email === emailToUnmark ? { ...l, emailedAt: null } : l)
+      );
     });
   }
 
@@ -136,6 +147,34 @@ export function LeadsClient({ initialLeads }: Props) {
 
   return (
     <div>
+      {/* Unmark confirmation modal */}
+      {confirmingUnmark && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setConfirmingUnmark(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6">
+            <h3 className="text-base font-bold text-slate-900 mb-2">Unmark as emailed?</h3>
+            <p className="text-sm text-slate-500 mb-5 leading-relaxed">
+              This lead is currently marked as emailed. Are you sure you want to unmark it? They may receive the automated follow-up email again.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmUnmark}
+                disabled={isPending}
+                className="flex-1 h-10 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                Yes, unmark
+              </button>
+              <button
+                onClick={() => setConfirmingUnmark(null)}
+                className="flex-1 h-10 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white border border-slate-100 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <input
@@ -277,6 +316,7 @@ export function LeadsClient({ initialLeads }: Props) {
                     />
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Name</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Email</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Phone</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Municipality</th>
@@ -285,7 +325,6 @@ export function LeadsClient({ initialLeads }: Props) {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">First seen</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">Last seen</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Source</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -294,7 +333,11 @@ export function LeadsClient({ initialLeads }: Props) {
                     key={lead.email}
                     className={[
                       "transition-colors",
-                      checkedEmails.has(lead.email) ? "bg-brand-50" : "hover:bg-slate-50/50",
+                      lead.emailedAt
+                        ? "bg-emerald-50/60"
+                        : checkedEmails.has(lead.email)
+                          ? "bg-brand-50"
+                          : "hover:bg-slate-50/50",
                     ].join(" ")}
                   >
                     <td className="w-10 px-3 py-3 text-center">
@@ -315,6 +358,25 @@ export function LeadsClient({ initialLeads }: Props) {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleEmailedClick(lead)}
+                        disabled={isPending}
+                        title={lead.emailedAt ? `Emailed ${new Date(lead.emailedAt).toLocaleDateString("en-CA")}` : "Mark as emailed"}
+                        className={[
+                          "h-5 w-5 rounded border-2 flex items-center justify-center mx-auto transition-colors disabled:opacity-50",
+                          lead.emailedAt
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : "border-slate-300 hover:border-brand-400",
+                        ].join(" ")}
+                      >
+                        {lead.emailedAt && (
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       <a href={`mailto:${lead.email}`} className="hover:text-brand-600 hover:underline">
@@ -349,25 +411,6 @@ export function LeadsClient({ initialLeads }: Props) {
                           Demo
                         </span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => toggleEmailed(lead)}
-                        disabled={isPending}
-                        title={lead.emailedAt ? `Emailed ${new Date(lead.emailedAt).toLocaleDateString("en-CA")}` : "Mark as emailed"}
-                        className={[
-                          "h-5 w-5 rounded border-2 flex items-center justify-center mx-auto transition-colors disabled:opacity-50",
-                          lead.emailedAt
-                            ? "bg-emerald-500 border-emerald-500 text-white"
-                            : "border-slate-300 hover:border-brand-400",
-                        ].join(" ")}
-                      >
-                        {lead.emailedAt && (
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
                     </td>
                   </tr>
                 ))}
