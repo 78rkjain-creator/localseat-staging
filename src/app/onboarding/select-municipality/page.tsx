@@ -53,7 +53,7 @@ export default async function SelectMunicipalityPage({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <MunicipalityStep
               campaignId={queryPendingId}
-              isPending
+              isPendingCampaign
               required={required}
               nextUrl={nextUrl}
               initialMunicipality={initialMunicipality}

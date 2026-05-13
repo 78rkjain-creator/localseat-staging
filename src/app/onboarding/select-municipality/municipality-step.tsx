@@ -10,7 +10,7 @@ import type { Polygon, MultiPolygon } from "geojson";
 
 interface Props {
   campaignId: string;
-  isPending?: boolean;
+  isPendingCampaign?: boolean;
   required: boolean;
   nextUrl: string;
   initialMunicipality: MunicipalitySelectorValue | null;
@@ -22,7 +22,7 @@ const initialState: SaveMunicipalityState = {};
 
 export function MunicipalityStep({
   campaignId,
-  isPending,
+  isPendingCampaign,
   required,
   nextUrl,
   initialMunicipality,
@@ -74,7 +74,7 @@ export function MunicipalityStep({
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="campaignId" value={campaignId} />
-      <input type="hidden" name="isPending" value={isPending ? "true" : ""} />
+      <input type="hidden" name="isPending" value={isPendingCampaign ? "true" : ""} />
       <input type="hidden" name="nextUrl" value={nextUrl} />
       <input type="hidden" name="municipalityName" value={selected?.name ?? ""} />
       <input type="hidden" name="municipalityId" value={selected?.id ?? ""} />
