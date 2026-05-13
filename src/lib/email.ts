@@ -696,3 +696,104 @@ export async function sendBugReportEmail(params: {
     throw err;
   }
 }
+
+// ── Lead follow-up email ──────────────────────────────────────────────────────
+
+export async function sendLeadFollowUpEmail(params: {
+  firstName: string;
+  email: string;
+  municipality?: string | null;
+  officeType?: string | null;
+}): Promise<boolean> {
+  if (!smtpConfigured()) return false;
+
+  const { firstName, email, municipality, officeType } = params;
+  const registerUrl = `${appUrl()}/register`;
+  const demoUrl = process.env.DEMO_SITE_URL ?? "https://demo.localseat.io";
+
+  const officeLabel = officeType
+    ? `running for <strong style="color:#1e293b;">${officeType}</strong>`
+    : "running for local office";
+
+  const municipalityLine = municipality
+    ? ` in <strong style="color:#1e293b;">${municipality}</strong>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Getting started with LocalSeat</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#f97316;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Municipal campaign platform</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Hi ${firstName},</h1>
+      <p style="margin:0 0 16px;color:#475569;line-height:1.6;">
+        Thanks for your interest in LocalSeat. We noticed you signed up recently${municipalityLine} — that's great.
+      </p>
+      <p style="margin:0 0 16px;color:#475569;line-height:1.6;">
+        LocalSeat is built for Canadian municipal campaigns. It helps you manage your voter contacts, run door-to-door canvassing, track lawn sign requests, and keep your team organized — all from your phone or computer.
+      </p>
+
+      <div style="margin:0 0 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#0f172a;">What you can do with LocalSeat:</p>
+        <p style="margin:0 0 6px;color:#475569;font-size:14px;line-height:1.6;">• Import your voter list and organize by household</p>
+        <p style="margin:0 0 6px;color:#475569;font-size:14px;line-height:1.6;">• Create walk lists and assign canvassers</p>
+        <p style="margin:0 0 6px;color:#475569;font-size:14px;line-height:1.6;">• Record support levels door-to-door on any phone</p>
+        <p style="margin:0 0 6px;color:#475569;font-size:14px;line-height:1.6;">• Track lawn signs, volunteers, and donor interest</p>
+        <p style="margin:0;color:#475569;font-size:14px;line-height:1.6;">• See your campaign progress on a live dashboard</p>
+      </div>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+        <tr>
+          <td style="background:#f97316;border-radius:10px;">
+            <a href="${registerUrl}"
+               style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+              Create your campaign
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:0 0 24px;color:#64748b;font-size:13px;line-height:1.5;">
+        Or <a href="${demoUrl}" style="color:#f97316;text-decoration:none;font-weight:500;">try the demo</a> first — no account needed.
+      </p>
+
+      <p style="margin:0;color:#475569;line-height:1.6;">
+        If you have questions or need help getting started, just reply to this email. We're happy to help.
+      </p>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: email,
+      subject: "Getting started with LocalSeat",
+      html,
+    });
+    console.log(`[email] Lead follow-up email sent to ${email}`);
+    return true;
+  } catch (err) {
+    console.error("[email] Failed to send lead follow-up email:", err);
+    return false;
+  }
+}
