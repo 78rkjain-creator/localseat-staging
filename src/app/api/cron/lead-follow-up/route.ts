@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sendLeadFollowUpEmail } from "@/lib/email";
+import { sendLeadFollowUpEmail, sendLeadFollowUpSummary } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Daily cron job: sends a follow-up email to leads who registered yesterday
- * and haven't been emailed yet.
+ * and haven't been emailed yet. Sends a summary to info@localseat.io.
  *
  * Call via: GET /api/cron/lead-follow-up
  * Auth:    x-cron-secret header must match CRON_SECRET env var
@@ -39,6 +39,8 @@ export async function GET(req: NextRequest) {
   });
 
   if (leads.length === 0) {
+    // Still send summary so you know the job ran
+    await sendLeadFollowUpSummary({ sent: [], failed: [], date: yesterdayStart });
     return NextResponse.json({ sent: 0, failed: 0, skipped: 0, message: "No new leads from yesterday" });
   }
 
@@ -51,30 +53,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  let sent = 0;
-  let failed = 0;
+  const sentList: { name: string; email: string }[] = [];
+  const failedList: { name: string; email: string }[] = [];
 
   for (const [email, lead] of byEmail) {
+    const fullName = `${lead.firstName} ${lead.lastName}`;
     const success = await sendLeadFollowUpEmail({
       firstName: lead.firstName,
       email,
-      municipality: lead.municipality,
-      officeType: lead.officeType,
     });
 
     if (success) {
-      // Mark ALL registrations for this email as emailed
       await db.demoRegistration.updateMany({
         where: { email },
         data: { emailedAt: new Date() },
       });
-      sent++;
+      sentList.push({ name: fullName, email });
     } else {
-      failed++;
+      failedList.push({ name: fullName, email });
     }
   }
 
-  console.log(`[cron/lead-follow-up] Processed ${byEmail.size} leads: ${sent} sent, ${failed} failed`);
+  // Send summary to info@localseat.io
+  await sendLeadFollowUpSummary({ sent: sentList, failed: failedList, date: yesterdayStart });
 
-  return NextResponse.json({ sent, failed, total: byEmail.size });
+  console.log(`[cron/lead-follow-up] Processed ${byEmail.size} leads: ${sentList.length} sent, ${failedList.length} failed`);
+
+  return NextResponse.json({ sent: sentList.length, failed: failedList.length, total: byEmail.size });
 }

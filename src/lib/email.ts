@@ -702,22 +702,12 @@ export async function sendBugReportEmail(params: {
 export async function sendLeadFollowUpEmail(params: {
   firstName: string;
   email: string;
-  municipality?: string | null;
-  officeType?: string | null;
 }): Promise<boolean> {
   if (!smtpConfigured()) return false;
 
-  const { firstName, email, municipality, officeType } = params;
+  const { firstName, email } = params;
   const registerUrl = `${appUrl()}/register`;
   const demoUrl = process.env.DEMO_SITE_URL ?? "https://demo.localseat.io";
-
-  const officeLabel = officeType
-    ? `running for <strong style="color:#1e293b;">${officeType}</strong>`
-    : "running for local office";
-
-  const municipalityLine = municipality
-    ? ` in <strong style="color:#1e293b;">${municipality}</strong>`
-    : "";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -737,7 +727,7 @@ export async function sendLeadFollowUpEmail(params: {
     <div style="padding:32px;">
       <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Hi ${firstName},</h1>
       <p style="margin:0 0 16px;color:#475569;line-height:1.6;">
-        Thanks for your interest in LocalSeat. We noticed you signed up recently${municipalityLine} — that's great.
+        Thanks for your interest in LocalSeat. We noticed you signed up recently — that's great.
       </p>
       <p style="margin:0 0 16px;color:#475569;line-height:1.6;">
         LocalSeat is built for Canadian municipal campaigns. It helps you manage your voter contacts, run door-to-door canvassing, track lawn sign requests, and keep your team organized — all from your phone or computer.
@@ -770,6 +760,9 @@ export async function sendLeadFollowUpEmail(params: {
       <p style="margin:0;color:#475569;line-height:1.6;">
         If you have questions or need help getting started, just reply to this email. We're happy to help.
       </p>
+      <p style="margin:20px 0 0;color:#0f172a;font-weight:500;line-height:1.6;">
+        Rahul Jain
+      </p>
     </div>
 
     <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
@@ -795,5 +788,124 @@ export async function sendLeadFollowUpEmail(params: {
   } catch (err) {
     console.error("[email] Failed to send lead follow-up email:", err);
     return false;
+  }
+}
+
+// ── Lead follow-up daily summary ──────────────────────────────────────────────
+
+export async function sendLeadFollowUpSummary(params: {
+  sent: { name: string; email: string }[];
+  failed: { name: string; email: string }[];
+  date: Date;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { sent, failed, date } = params;
+  const dateLabel = date.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const total = sent.length + failed.length;
+
+  const sentRows = sent.length > 0
+    ? sent.map((l) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#0f172a;">${l.name}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#475569;">${l.email}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#16a34a;">Sent</td>
+        </tr>`
+      ).join("")
+    : "";
+
+  const failedRows = failed.length > 0
+    ? failed.map((l) =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#0f172a;">${l.name}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:14px;color:#475569;">${l.email}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#dc2626;">Failed</td>
+        </tr>`
+      ).join("")
+    : "";
+
+  const tableRows = sentRows + failedRows;
+
+  const noLeadsMessage = total === 0
+    ? `<p style="margin:0 0 16px;color:#475569;line-height:1.6;">No new leads registered on ${dateLabel}. The follow-up job ran successfully — there was just nothing to send.</p>`
+    : "";
+
+  const statsBlock = total > 0
+    ? `<div style="display:flex;gap:12px;margin-bottom:24px;">
+        <div style="flex:1;background:#f0fdf4;border-radius:10px;padding:16px;text-align:center;">
+          <p style="margin:0;font-size:24px;font-weight:600;color:#16a34a;">${sent.length}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#15803d;">Sent</p>
+        </div>
+        <div style="flex:1;background:${failed.length > 0 ? '#fef2f2' : '#f8fafc'};border-radius:10px;padding:16px;text-align:center;">
+          <p style="margin:0;font-size:24px;font-weight:600;color:${failed.length > 0 ? '#dc2626' : '#94a3b8'};">${failed.length}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:${failed.length > 0 ? '#991b1b' : '#94a3b8'};">Failed</p>
+        </div>
+      </div>`
+    : "";
+
+  const tableBlock = total > 0
+    ? `<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Name</th>
+            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Email</th>
+            <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Status</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Lead follow-up summary</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#0f172a;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:8px 0 0;font-size:14px;font-weight:600;color:#fb923c;">Lead follow-up summary</p>
+    </div>
+
+    <div style="padding:32px;">
+      <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">${dateLabel}</p>
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">
+        ${total === 0 ? "No follow-ups today" : `${total} follow-up${total === 1 ? "" : "s"} processed`}
+      </h1>
+
+      ${noLeadsMessage}
+      ${statsBlock}
+      ${tableBlock}
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        Automated daily summary &mdash; <a href="${appUrl()}/admin/demo-leads" style="color:#f97316;text-decoration:none;">View all leads</a>
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  const subject = total === 0
+    ? `Lead follow-up: no new leads — ${dateLabel}`
+    : `Lead follow-up: ${sent.length} sent${failed.length > 0 ? `, ${failed.length} failed` : ""} — ${dateLabel}`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: "info@localseat.io",
+      subject,
+      html,
+    });
+    console.log(`[email] Lead follow-up summary sent to info@localseat.io`);
+  } catch (err) {
+    console.error("[email] Failed to send lead follow-up summary:", err);
   }
 }
