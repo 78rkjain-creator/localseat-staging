@@ -12,6 +12,7 @@ import { VolunteerCoordinatorDashboard } from "./_volunteer-coordinator";
 import { FinanceLeadDashboard } from "./_finance-lead";
 import { CanvasserHome } from "./_canvasser";
 import { DemoWelcome } from "@/components/demo/demo-welcome";
+import { getAssignedLists } from "@/lib/canvassing";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -45,9 +46,16 @@ export default async function DashboardPage() {
     case "field_organizer":
       dashboard = <FieldOrganizerDashboard campaignId={activeCampaignId} firstName={firstName} userId={userId} />;
       break;
-    case "canvasser":
+    case "canvasser": {
+      const assigned = await getAssignedLists(userId, activeCampaignId);
+      if (assigned.length > 0) {
+        // Send canvasser straight to their first list's canvass screen (Tab 1)
+        redirect(`/canvassing/${assigned[0].list.id}/canvass`);
+      }
+      // No assignments yet — show the default canvasser home
       dashboard = <CanvasserHome userId={userId} campaignId={activeCampaignId} firstName={firstName} />;
       break;
+    }
     case "volunteer_coordinator":
       dashboard = <VolunteerCoordinatorDashboard campaignId={activeCampaignId} firstName={firstName} />;
       break;
