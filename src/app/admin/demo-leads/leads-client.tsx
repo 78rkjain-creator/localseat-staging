@@ -334,7 +334,7 @@ export function LeadsClient({ initialLeads }: Props) {
                     className={[
                       "transition-colors",
                       lead.emailedAt
-                        ? "bg-emerald-50/60"
+                        ? "bg-[#bbf7d0]"
                         : checkedEmails.has(lead.email)
                           ? "bg-brand-50"
                           : "hover:bg-slate-50/50",
