@@ -202,6 +202,7 @@ export default withAuth(
           pathname.startsWith("/api/promo/validate") ||
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
+          pathname.startsWith("/api/cron") ||
           pathname.startsWith("/icons")
         ) {
           return true;
