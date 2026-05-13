@@ -18,7 +18,6 @@ interface Props {
 export function LeadsClient({ initialLeads }: Props) {
   const [leads, setLeads]            = useState<DemoLead[]>(initialLeads);
   const [search, setSearch]          = useState("");
-  const [emailed, setEmailed]        = useState<LeadFilters["emailed"]>("all");
   const [officeType, setOfficeType]  = useState("");
   const [dateFrom, setDateFrom]      = useState("");
   const [dateTo, setDateTo]          = useState("");
@@ -26,8 +25,10 @@ export function LeadsClient({ initialLeads }: Props) {
   const [checkedEmails, setCheckedEmails] = useState<Set<string>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingUnmark, setConfirmingUnmark] = useState<string | null>(null);
+  const [emailedOpen, setEmailedOpen] = useState(false);
 
-  const filtered = useMemo(() => {
+  // Apply search/filter to all leads, then split into two groups
+  const allFiltered = useMemo(() => {
     return leads.filter((lead) => {
       if (search) {
         const q = search.toLowerCase();
@@ -38,8 +39,6 @@ export function LeadsClient({ initialLeads }: Props) {
           (lead.municipality?.toLowerCase().includes(q) ?? false);
         if (!matches) return false;
       }
-      if (emailed === "emailed"     && !lead.emailedAt) return false;
-      if (emailed === "not_emailed" &&  lead.emailedAt) return false;
       if (officeType && lead.officeType !== officeType) return false;
       if (dateFrom && new Date(lead.firstSeenAt) < new Date(dateFrom)) return false;
       if (dateTo) {
@@ -49,10 +48,13 @@ export function LeadsClient({ initialLeads }: Props) {
       }
       return true;
     });
-  }, [leads, search, emailed, officeType, dateFrom, dateTo]);
+  }, [leads, search, officeType, dateFrom, dateTo]);
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every((l) => checkedEmails.has(l.email));
-  const someFilteredSelected = filtered.some((l) => checkedEmails.has(l.email));
+  const newLeads = useMemo(() => allFiltered.filter((l) => !l.emailedAt), [allFiltered]);
+  const emailedLeads = useMemo(() => allFiltered.filter((l) => l.emailedAt), [allFiltered]);
+
+  const allNewSelected = newLeads.length > 0 && newLeads.every((l) => checkedEmails.has(l.email));
+  const someNewSelected = newLeads.some((l) => checkedEmails.has(l.email));
   const selCount = checkedEmails.size;
   const selLabel = selCount === 1 ? "1 lead" : `${selCount} leads`;
 
@@ -68,10 +70,10 @@ export function LeadsClient({ initialLeads }: Props) {
   }
 
   function toggleSelectAll() {
-    if (allFilteredSelected) {
+    if (allNewSelected) {
       setCheckedEmails(new Set());
     } else {
-      setCheckedEmails(new Set(filtered.map((l) => l.email)));
+      setCheckedEmails(new Set(newLeads.map((l) => l.email)));
     }
     setConfirmingDelete(false);
   }
@@ -96,10 +98,8 @@ export function LeadsClient({ initialLeads }: Props) {
 
   function handleEmailedClick(lead: DemoLead) {
     if (lead.emailedAt) {
-      // Already emailed — show confirmation before unmarking
       setConfirmingUnmark(lead.email);
     } else {
-      // Not emailed — mark immediately
       startTransition(async () => {
         await markAsEmailed(lead.email);
         setLeads((prev) =>
@@ -133,7 +133,7 @@ export function LeadsClient({ initialLeads }: Props) {
 
   function exportFiltered() {
     startTransition(async () => {
-      const csv = await exportDemoLeadsCSV({ search, emailed, officeType, dateFrom, dateTo });
+      const csv = await exportDemoLeadsCSV({ search, emailed: "all", officeType, dateFrom, dateTo });
       downloadCSV(csv, `demo-leads-filtered-${new Date().toISOString().slice(0, 10)}.csv`);
     });
   }
@@ -143,6 +143,128 @@ export function LeadsClient({ initialLeads }: Props) {
       const csv = await exportDemoLeadsCSV({});
       downloadCSV(csv, `demo-leads-all-${new Date().toISOString().slice(0, 10)}.csv`);
     });
+  }
+
+  // Shared table row renderer
+  function LeadRow({ lead, showCheckbox }: { lead: DemoLead; showCheckbox: boolean }) {
+    return (
+      <tr
+        key={lead.email}
+        className={[
+          "transition-colors",
+          lead.emailedAt
+            ? "bg-[#bbf7d0]"
+            : checkedEmails.has(lead.email)
+              ? "bg-brand-50"
+              : "hover:bg-slate-50/50",
+        ].join(" ")}
+      >
+        {showCheckbox && (
+          <td className="w-10 px-3 py-3 text-center">
+            <input
+              type="checkbox"
+              checked={checkedEmails.has(lead.email)}
+              onChange={() => toggleSelectOne(lead.email)}
+              className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+              aria-label={`Select ${lead.firstName} ${lead.lastName}`}
+            />
+          </td>
+        )}
+        <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
+          <div className="flex items-center gap-2">
+            <span>{lead.firstName} {lead.lastName}</span>
+            {lead.converted && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                Converted
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3 text-center">
+          <button
+            onClick={() => handleEmailedClick(lead)}
+            disabled={isPending}
+            title={lead.emailedAt ? `Emailed ${new Date(lead.emailedAt).toLocaleDateString("en-CA")}` : "Mark as emailed"}
+            className={[
+              "h-5 w-5 rounded border-2 flex items-center justify-center mx-auto transition-colors disabled:opacity-50",
+              lead.emailedAt
+                ? "bg-emerald-500 border-emerald-500 text-white"
+                : "border-slate-300 hover:border-brand-400",
+            ].join(" ")}
+          >
+            {lead.emailedAt && (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        </td>
+        <td className="px-4 py-3 text-slate-600">
+          <a href={`mailto:${lead.email}`} className="hover:text-brand-600 hover:underline">
+            {lead.email}
+          </a>
+        </td>
+        <td className="px-4 py-3 text-slate-500 hidden md:table-cell whitespace-nowrap">
+          {lead.phone ?? <span className="text-slate-300">—</span>}
+        </td>
+        <td className="px-4 py-3 text-slate-500 hidden lg:table-cell">
+          {lead.municipality ?? <span className="text-slate-300">—</span>}
+        </td>
+        <td className="px-4 py-3 text-slate-500 hidden lg:table-cell whitespace-nowrap">
+          {lead.officeType ?? <span className="text-slate-300">—</span>}
+        </td>
+        <td className="px-4 py-3 text-right text-slate-700 font-medium hidden sm:table-cell">
+          {lead.registrations}
+        </td>
+        <td className="px-4 py-3 text-slate-400 text-xs hidden xl:table-cell whitespace-nowrap">
+          {new Date(lead.firstSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
+        </td>
+        <td className="px-4 py-3 text-slate-400 text-xs hidden xl:table-cell whitespace-nowrap">
+          {new Date(lead.lastSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
+        </td>
+        <td className="px-4 py-3 hidden sm:table-cell">
+          {lead.source === "app" ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700">
+              App
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
+              Demo
+            </span>
+          )}
+        </td>
+      </tr>
+    );
+  }
+
+  // Shared table header
+  function TableHeader({ showCheckbox }: { showCheckbox: boolean }) {
+    return (
+      <tr className="border-b border-slate-100 bg-slate-50/50">
+        {showCheckbox && (
+          <th className="w-10 px-3 py-3 text-center">
+            <input
+              type="checkbox"
+              checked={allNewSelected}
+              ref={(el) => { if (el) el.indeterminate = someNewSelected && !allNewSelected; }}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
+              aria-label="Select all"
+            />
+          </th>
+        )}
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Name</th>
+        <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Email</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Phone</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Municipality</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Office</th>
+        <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Visits</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">First seen</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">Last seen</th>
+        <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Source</th>
+      </tr>
+    );
   }
 
   return (
@@ -176,7 +298,7 @@ export function LeadsClient({ initialLeads }: Props) {
       )}
 
       {/* Filters */}
-      <div className="bg-white border border-slate-100 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="bg-white border border-slate-100 rounded-2xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <input
           type="text"
           placeholder="Search name, email, municipality…"
@@ -184,16 +306,6 @@ export function LeadsClient({ initialLeads }: Props) {
           onChange={(e) => updateFilter(() => setSearch(e.target.value))}
           className="h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
         />
-
-        <select
-          value={emailed ?? "all"}
-          onChange={(e) => updateFilter(() => setEmailed(e.target.value as LeadFilters["emailed"]))}
-          className="h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="all">All — emailed status</option>
-          <option value="not_emailed">Not emailed</option>
-          <option value="emailed">Emailed</option>
-        </select>
 
         <select
           value={officeType}
@@ -227,13 +339,15 @@ export function LeadsClient({ initialLeads }: Props) {
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm text-slate-500">
-          Showing <strong className="text-slate-700">{filtered.length}</strong> of{" "}
-          <strong className="text-slate-700">{leads.length}</strong> leads
+          <strong className="text-slate-700">{newLeads.length}</strong> new{" "}
+          {newLeads.length === 1 ? "lead" : "leads"}
+          <span className="text-slate-300 mx-2">·</span>
+          <strong className="text-slate-400">{emailedLeads.length}</strong> emailed
         </p>
         <div className="flex gap-2">
           <button
             onClick={exportFiltered}
-            disabled={isPending || filtered.length === 0}
+            disabled={isPending || allFiltered.length === 0}
             className="text-xs font-medium px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
             Export filtered
@@ -296,129 +410,65 @@ export function LeadsClient({ initialLeads }: Props) {
         </div>
       )}
 
-      {/* Table */}
+      {/* New leads table */}
       <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
-        {filtered.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-12">No leads match your filters.</p>
+        {newLeads.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-12">No new leads.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="w-10 px-3 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected}
-                      ref={(el) => { if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected; }}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                      aria-label="Select all"
-                    />
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Name</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Emailed</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden md:table-cell">Phone</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Municipality</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden lg:table-cell">Office</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Visits</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">First seen</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden xl:table-cell">Last seen</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap hidden sm:table-cell">Source</th>
-                </tr>
-              </thead>
+              <thead><TableHeader showCheckbox /></thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.map((lead) => (
-                  <tr
-                    key={lead.email}
-                    className={[
-                      "transition-colors",
-                      lead.emailedAt
-                        ? "bg-[#bbf7d0]"
-                        : checkedEmails.has(lead.email)
-                          ? "bg-brand-50"
-                          : "hover:bg-slate-50/50",
-                    ].join(" ")}
-                  >
-                    <td className="w-10 px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={checkedEmails.has(lead.email)}
-                        onChange={() => toggleSelectOne(lead.email)}
-                        className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                        aria-label={`Select ${lead.firstName} ${lead.lastName}`}
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{lead.firstName} {lead.lastName}</span>
-                        {lead.converted && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-                            Converted
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleEmailedClick(lead)}
-                        disabled={isPending}
-                        title={lead.emailedAt ? `Emailed ${new Date(lead.emailedAt).toLocaleDateString("en-CA")}` : "Mark as emailed"}
-                        className={[
-                          "h-5 w-5 rounded border-2 flex items-center justify-center mx-auto transition-colors disabled:opacity-50",
-                          lead.emailedAt
-                            ? "bg-emerald-500 border-emerald-500 text-white"
-                            : "border-slate-300 hover:border-brand-400",
-                        ].join(" ")}
-                      >
-                        {lead.emailedAt && (
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      <a href={`mailto:${lead.email}`} className="hover:text-brand-600 hover:underline">
-                        {lead.email}
-                      </a>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 hidden md:table-cell whitespace-nowrap">
-                      {lead.phone ?? <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 hidden lg:table-cell">
-                      {lead.municipality ?? <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 hidden lg:table-cell whitespace-nowrap">
-                      {lead.officeType ?? <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700 font-medium hidden sm:table-cell">
-                      {lead.registrations}
-                    </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs hidden xl:table-cell whitespace-nowrap">
-                      {new Date(lead.firstSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs hidden xl:table-cell whitespace-nowrap">
-                      {new Date(lead.lastSeenAt).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      {lead.source === "app" ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700">
-                          App
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
-                          Demo
-                        </span>
-                      )}
-                    </td>
-                  </tr>
+                {newLeads.map((lead) => (
+                  <LeadRow key={lead.email} lead={lead} showCheckbox />
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Follow-up email sent — collapsible */}
+      {emailedLeads.length > 0 && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setEmailedOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-700">Follow-up email sent</span>
+              <span className="text-xs font-medium text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
+                {emailedLeads.length}
+              </span>
+            </div>
+            <svg
+              className={[
+                "h-4 w-4 text-slate-400 transition-transform",
+                emailedOpen ? "rotate-180" : "",
+              ].join(" ")}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {emailedOpen && (
+            <div className="mt-2 bg-white border border-slate-100 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><TableHeader showCheckbox={false} /></thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {emailedLeads.map((lead) => (
+                      <LeadRow key={lead.email} lead={lead} showCheckbox={false} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
