@@ -321,6 +321,7 @@ model User {
   dataImportsReviewed       DataImport[]         @relation("DataImportReviewedBy")
   supplierAcknowledgementsSigned SupplierAcknowledgement[] @relation("SupplierAcknowledgementSigner")
   pollStrikesRecorded            PollStrike[]              @relation("PollStriker")
+  pendingCampaigns               PendingCampaign[]
 
   @@index([deletedAt])
   @@index([platformRole])
@@ -1412,4 +1413,35 @@ model PollStrike {
   @@index([campaignId])
   @@index([personId])
   @@map("poll_strikes")
+}
+
+// ─── Pending Campaigns ───────────────────────────────────────────────────────
+// Stores campaign form data before payment. The real Campaign record is only
+// created when the Stripe webhook confirms payment. This keeps the campaigns
+// table clean — no ghost campaigns from abandoned checkouts.
+
+model PendingCampaign {
+  id                   String                @id @default(cuid())
+  userId               String
+  name                 String
+  ballotName           String?
+  officeSought         String?
+  municipality         String?
+  municipalityName     String?
+  municipalityId       String?
+  municipalityBoundary Json?
+  wards                String[]
+  city                 String                @default("")
+  province             String                @default("ON")
+  year                 Int
+  electionDate         DateTime?
+  campaignElectionType CampaignElectionType  @default(municipal)
+  createdAt            DateTime              @default(now())
+  expiresAt            DateTime
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("pending_campaigns")
 }

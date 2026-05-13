@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, FormEvent } from "react";
-import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCampaign, getElectionDates } from "./actions";
@@ -24,7 +23,6 @@ async function fetchBoundaryById(id: string): Promise<Polygon | MultiPolygon | n
 }
 
 export default function CreateCampaignPage() {
-  const { update } = useSession();
   const [name, setName] = useState("");
   const [ballotName, setBallotName] = useState("");
   const [officeSought, setOfficeSought] = useState("");
@@ -119,15 +117,12 @@ export default function CreateCampaignPage() {
         setLoading(false);
         return;
       }
-      // Refresh the JWT token with the new campaign membership
-      await update({ refreshMemberships: true, activeCampaignId: result?.campaignId });
-      // Wait for the session cookie to propagate before navigating
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      // Skip municipality onboarding step if already selected
+      // No campaign exists yet — go straight to plan selection / payment.
+      // The real campaign is created only after payment succeeds.
       if (selected?.name) {
-        window.location.href = `/onboarding/choose-plan?campaignId=${result?.campaignId}`;
+        window.location.href = `/onboarding/choose-plan?pendingId=${result?.pendingId}`;
       } else {
-        window.location.href = `/onboarding/select-municipality?campaignId=${result?.campaignId}&next=choose-plan`;
+        window.location.href = `/onboarding/select-municipality?pendingId=${result?.pendingId}&next=choose-plan`;
       }
     } catch {
       setError("Something went wrong. Please try again.");

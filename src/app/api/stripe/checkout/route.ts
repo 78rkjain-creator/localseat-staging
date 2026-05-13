@@ -15,43 +15,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { campaignId?: string; plan?: string; promoCode?: string };
+  let body: { campaignId?: string; pendingId?: string; plan?: string; promoCode?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { campaignId, plan, promoCode } = body;
+  const { campaignId, pendingId, plan, promoCode } = body;
 
-  if (!campaignId || !plan) {
-    return NextResponse.json({ error: "campaignId and plan are required" }, { status: 400 });
+  if (!plan) {
+    return NextResponse.json({ error: "plan is required" }, { status: 400 });
   }
-
+  if (!campaignId && !pendingId) {
+    return NextResponse.json({ error: "campaignId or pendingId is required" }, { status: 400 });
+  }
   if (!SELECTABLE_PLANS.includes(plan as PlanTier)) {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
-  }
-
-  const membership = await db.campaignMembership.findFirst({
-    where: {
-      campaignId,
-      userId: session.user.id,
-      role: { in: ["candidate", "campaign_manager", "data_manager"] },
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-
-  if (!membership) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
-  }
-
-  const campaign = await db.campaign.findUnique({
-    where: { id: campaignId },
-    select: { id: true, plan: true, planActivated: true, amountPaid: true },
-  });
-  if (!campaign) {
-    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   }
 
   const pricing = await getTierPricing();
@@ -60,21 +40,62 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Pricing not available" }, { status: 500 });
   }
 
-  const effectivePrice = parseInt(tierInfo.salePrice ?? tierInfo.regularPrice, 10);
-
-  const previousAmountPaid = campaign.amountPaid ?? 0;
-  const isUpgrade = campaign.planActivated && previousAmountPaid > 0;
-  const chargeAmount = isUpgrade
-    ? Math.max(effectivePrice - previousAmountPaid, 0)
-    : effectivePrice;
-
-  if (chargeAmount === 0) {
-    return NextResponse.json({ error: "No charge required for this upgrade" }, { status: 400 });
-  }
-
   const productId = STRIPE_PRODUCTS[plan];
   if (!productId) {
     return NextResponse.json({ error: "Stripe product not configured for this plan" }, { status: 500 });
+  }
+
+  const effectivePrice = parseInt(tierInfo.salePrice ?? tierInfo.regularPrice, 10);
+  let chargeAmount = effectivePrice;
+  let previousAmountPaid = 0;
+  let isUpgrade = false;
+
+  // New campaign flow: pendingId
+  if (pendingId) {
+    const pending = await db.pendingCampaign.findUnique({
+      where: { id: pendingId },
+      select: { id: true, userId: true, name: true },
+    });
+    if (!pending) {
+      return NextResponse.json({ error: "Pending campaign not found" }, { status: 404 });
+    }
+    if (pending.userId !== session.user.id) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+  }
+
+  // Existing campaign flow: upgrading
+  if (campaignId) {
+    const membership = await db.campaignMembership.findFirst({
+      where: {
+        campaignId,
+        userId: session.user.id,
+        role: { in: ["candidate", "campaign_manager", "data_manager"] },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!membership) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    const campaign = await db.campaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, plan: true, planActivated: true, amountPaid: true },
+    });
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+
+    previousAmountPaid = campaign.amountPaid ?? 0;
+    isUpgrade = campaign.planActivated && previousAmountPaid > 0;
+    chargeAmount = isUpgrade
+      ? Math.max(effectivePrice - previousAmountPaid, 0)
+      : effectivePrice;
+
+    if (chargeAmount === 0) {
+      return NextResponse.json({ error: "No charge required for this upgrade" }, { status: 400 });
+    }
   }
 
   // Resolve promo code
@@ -113,16 +134,21 @@ export async function POST(request: Request) {
     ],
     ...(resolvedPromo ? { discounts: [{ coupon: resolvedPromo.stripeCouponId }] } : {}),
     metadata: {
-      campaignId,
+      // For new campaigns, pendingId is set and campaignId is empty.
+      // For upgrades, campaignId is set and pendingId is empty.
+      pendingId:          pendingId ?? "",
+      campaignId:         campaignId ?? "",
       plan,
       userId:             session.user.id,
-      previousPlan:       campaign.plan ?? "",
+      previousPlan:       "",
       previousAmountPaid: String(previousAmountPaid),
       isUpgrade:          String(isUpgrade),
       promoCodeId:        resolvedPromo?.id ?? "",
     },
     success_url: `${origin}/onboarding/choose-plan/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url:  `${origin}/onboarding/choose-plan?campaignId=${campaignId}`,
+    cancel_url:  pendingId
+      ? `${origin}/onboarding/choose-plan?pendingId=${pendingId}`
+      : `${origin}/onboarding/choose-plan?campaignId=${campaignId}`,
   });
 
   return NextResponse.json({ url: checkoutSession.url });

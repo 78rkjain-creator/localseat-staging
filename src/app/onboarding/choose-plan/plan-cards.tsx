@@ -125,7 +125,8 @@ interface AppliedPromo {
 // ── Props ──────────────────────────────────────────────────────────────────
 
 interface Props {
-  campaignId:         string;
+  campaignId?:        string;
+  pendingId?:         string;
   pricing:            Record<string, TierPricing>;
   stripeEnabled:      boolean;
   currentAmountPaid?: number;
@@ -263,7 +264,7 @@ function PlanCard({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPaid = 0 }: Props) {
+export function PlanCards({ campaignId, pendingId, pricing, stripeEnabled, currentAmountPaid = 0 }: Props) {
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError]         = useState<string | null>(null);
 
@@ -315,7 +316,11 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
         const res = await fetch("/api/stripe/checkout", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ campaignId, plan, promoCode: appliedPromo?.code }),
+          body:    JSON.stringify({
+            ...(pendingId ? { pendingId } : { campaignId }),
+            plan,
+            promoCode: appliedPromo?.code,
+          }),
         });
         const data = await res.json() as { url?: string; error?: string };
         if (!res.ok || !data.url) {
@@ -331,7 +336,12 @@ export function PlanCards({ campaignId, pricing, stripeEnabled, currentAmountPai
       return;
     }
 
-    // Dev mode
+    // Dev mode — only works for existing campaigns (upgrades)
+    if (!campaignId) {
+      setError("Payment is required to create a campaign.");
+      setSelecting(null);
+      return;
+    }
     const result = await selectPlanDev(campaignId, plan, appliedPromo?.code);
     if (result.error) {
       setError(result.error);

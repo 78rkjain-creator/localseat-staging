@@ -3,8 +3,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Role, Prisma } from "@prisma/client";
-import { createAuditLog } from "@/lib/audit";
 
 interface CreateCampaignInput {
   name: string;
@@ -20,9 +18,14 @@ interface CreateCampaignInput {
   municipalityBoundary?: string; // JSON string
 }
 
+/**
+ * Creates a PendingCampaign record instead of a real Campaign.
+ * The real Campaign is only created when payment succeeds (Stripe webhook).
+ * Pending records expire after 48 hours if never paid.
+ */
 export async function createCampaign(
   input: CreateCampaignInput
-): Promise<{ error?: string; campaignId?: string } | null> {
+): Promise<{ error?: string; pendingId?: string } | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return { error: "Not authenticated." };
@@ -58,81 +61,38 @@ export async function createCampaign(
 
   const municipalityName = input.municipalityName?.trim() || null;
   const municipalityId   = input.municipalityId?.trim() || null;
-  let municipalityBoundary: Prisma.InputJsonValue | null = null;
+  let municipalityBoundary: object | null = null;
   if (input.municipalityBoundary?.trim()) {
     try {
-      municipalityBoundary = JSON.parse(input.municipalityBoundary) as Prisma.InputJsonValue;
+      municipalityBoundary = JSON.parse(input.municipalityBoundary);
     } catch { /* ignore malformed boundary */ }
   }
 
-  // Users creating their first campaign are candidates; users adding a
-  // subsequent campaign (already have memberships) become campaign managers.
-  const membershipRole =
-    session.user.memberships && session.user.memberships.length > 0
-      ? Role.campaign_manager
-      : Role.candidate;
-
-  // Use municipalityName for city/municipality fields when available (new selector flow)
   const cityValue = municipalityName ?? municipality;
 
-  const campaign = await db.campaign.create({
+  // Pending campaigns expire after 48 hours if never paid
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+  const pending = await db.pendingCampaign.create({
     data: {
+      userId: session.user.id,
       name,
       ...(ballotName ? { ballotName } : {}),
       ...(officeSought ? { officeSought } : {}),
       ...(cityValue ? { municipality: cityValue, city: cityValue } : { city: "" }),
       ...(municipalityName ? { municipalityName } : {}),
-      ...(municipalityId   ? { municipalityId   } : {}),
+      ...(municipalityId ? { municipalityId } : {}),
       ...(municipalityBoundary ? { municipalityBoundary } : {}),
       wards,
       province: provinceInput,
       year,
       ...(electionDate ? { electionDate } : {}),
       campaignElectionType: electionTypeInput as "municipal" | "provincial_nomination" | "provincial" | "federal_nomination" | "federal",
-      plan: "bench",
-      planActivated: false,
-      advanceVotingDates: [],
-      memberships: {
-        create: {
-          userId: session.user.id,
-          role: membershipRole,
-        },
-      },
+      expiresAt,
     },
   });
 
-  await db.tag.createMany({
-    data: [
-      { campaignId: campaign.id, name: "Volunteer",      color: "#22c55e" },
-      { campaignId: campaign.id, name: "Donor",          color: "#f97316" },
-      { campaignId: campaign.id, name: "Endorser",       color: null      },
-      { campaignId: campaign.id, name: "Sign location",  color: "#eab308" },
-      { campaignId: campaign.id, name: "Do not contact", color: "#ef4444" },
-      { campaignId: campaign.id, name: "Media",          color: null      },
-      { campaignId: campaign.id, name: "VIP",            color: "#f97316" },
-      { campaignId: campaign.id, name: "Influencer",     color: null      },
-    ],
-  });
-
-  await db.signatureConsentType.createMany({
-    data: [
-      { campaignId: campaign.id, label: "Lawn sign consent", sortOrder: 0 },
-      { campaignId: campaign.id, label: "Volunteer consent",  sortOrder: 1 },
-      { campaignId: campaign.id, label: "Petition",           sortOrder: 2 },
-      { campaignId: campaign.id, label: "Other",              sortOrder: 3 },
-    ],
-  });
-
-  await createAuditLog({
-    campaignId: campaign.id,
-    userId: session.user.id,
-    action: "CAMPAIGN_CREATED",
-    entityType: "campaign",
-    entityId: campaign.id,
-    details: { name, officeSought, municipality },
-  });
-
-  return { campaignId: campaign.id };
+  return { pendingId: pending.id };
 }
 
 // ── Fetch known election dates from PlatformSettings ──────────────────────
@@ -142,10 +102,8 @@ export async function getElectionDates(): Promise<Record<string, string>> {
     where: { key: { startsWith: "election_date_" } },
     select: { key: true, value: true },
   });
-  // Return map like { "ON_municipal": "2026-10-26", "BC_municipal": "2026-10-17" }
   const result: Record<string, string> = {};
   for (const row of rows) {
-    // key format: election_date_{PROVINCE}_{TYPE}
     const suffix = row.key.replace("election_date_", "");
     if (suffix && row.value) {
       result[suffix] = row.value;

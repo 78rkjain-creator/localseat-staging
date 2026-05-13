@@ -3,13 +3,16 @@ import { redirect } from "next/navigation";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { Logo } from "@/components/brand/Logo";
+import { SuccessActions } from "./success-actions";
 
 export const metadata: Metadata = { title: "Plan activated — LocalSeat" };
 
 const PLAN_LABELS: Record<string, string> = {
-  starter:  "Starter",
-  campaign: "Campaign",
-  election: "Election",
+  bench:  "Bench",
+  chair:  "Chair",
+  podium: "Podium",
+  stage:  "Stage",
+  arena:  "Arena",
 };
 
 export default async function PlanSuccessPage({
@@ -66,16 +69,11 @@ export default async function PlanSuccessPage({
             Payment of <span className="font-semibold text-slate-700">${amountDollars} CAD</span> confirmed.
           </p>
           <p className="text-slate-400 text-sm mb-8">
-            Your campaign features are now active. Head to your dashboard to get started.
+            Your campaign is now active. Head to your dashboard to get started.
           </p>
 
-          {/* Hard navigate to force session refresh */}
-          <a
-            href="/dashboard"
-            className="inline-flex w-full items-center justify-center h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white text-sm font-semibold transition-colors"
-          >
-            Go to dashboard
-          </a>
+          {/* Client component handles session refresh then navigates */}
+          <SuccessActions />
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-400">
