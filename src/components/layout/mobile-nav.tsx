@@ -135,17 +135,24 @@ export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
                 ? "border-brand-500 text-brand-500"
                 : "border-transparent text-slate-400 hover:text-slate-600",
             ].join(" ");
-            const content = (
-              <>
+            return (
+              <Link
+                key={t.href}
+                href={t.href}
+                onClick={
+                  t.href === "/canvassing"
+                    ? (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        window.location.href = t.href;
+                      }
+                    : undefined
+                }
+                className={cls}
+              >
                 {t.icon}
                 <span className="text-[10px] font-medium leading-none">{t.label}</span>
-              </>
+              </Link>
             );
-            // Canvassing page has a known RSC hydration issue — use <a> for full navigation
-            if (t.href === "/canvassing") {
-              return <a key={t.href} href={t.href} className={cls}>{content}</a>;
-            }
-            return <Link key={t.href} href={t.href} className={cls}>{content}</Link>;
           })}
 
           {showMore && (

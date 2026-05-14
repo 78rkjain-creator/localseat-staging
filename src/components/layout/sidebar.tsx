@@ -79,19 +79,20 @@ function NavLink({
       : "rounded-xl font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
   ].join(" ");
 
-  // Canvassing page has a known RSC hydration issue on client-side nav.
-  // Force full page navigation to avoid React error #300.
-  if (href === "/canvassing") {
-    return (
-      <a href={href} className={cls}>
-        <span className="h-5 w-5 flex-shrink-0">{icon}</span>
-        {label}
-      </a>
-    );
-  }
-
   return (
-    <Link href={href} prefetch={false} className={cls}>
+    <Link
+      href={href}
+      prefetch={false}
+      onClick={
+        href === "/canvassing"
+          ? (e: React.MouseEvent) => {
+              e.preventDefault();
+              window.location.href = href;
+            }
+          : undefined
+      }
+      className={cls}
+    >
       <span className="h-5 w-5 flex-shrink-0">{icon}</span>
       {label}
     </Link>
