@@ -62,7 +62,6 @@ export async function toggleGotvMode(
   revalidatePath("/gotv");
   revalidatePath("/dashboard");
   revalidatePath("/canvassing");
-  revalidatePath("/", "layout"); // refresh mobile nav GOTV state
   return {};
 }
 

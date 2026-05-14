@@ -17,9 +17,9 @@ export function GotvToggle({ enabled }: Props) {
       // Turning OFF — confirm first
       setConfirming(true);
     } else {
-      // Turning ON
+      // Turning ON — flip immediately, then persist
+      setOptimistic(true);
       startTransition(async () => {
-        setOptimistic(true);
         const result = await toggleGotvMode(true);
         if (result.error) setOptimistic(false);
       });
@@ -28,8 +28,8 @@ export function GotvToggle({ enabled }: Props) {
 
   function handleConfirmOff() {
     setConfirming(false);
+    setOptimistic(false);
     startTransition(async () => {
-      setOptimistic(false);
       const result = await toggleGotvMode(false);
       if (result.error) setOptimistic(true);
     });
