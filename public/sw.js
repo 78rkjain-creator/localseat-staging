@@ -16,7 +16,7 @@
  * connection. The queue data itself is stored in IndexedDB by the app layer.
  */
 
-const CACHE_NAME = "localseat-1777475043907";
+const CACHE_NAME = "localseat-1778772100000";
 
 const PRECACHE_URLS = [
   "/manifest.json",
@@ -125,19 +125,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Network-first: all other GET requests ────────────────────────────────
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches
-            .open(CACHE_NAME)
-            .then((cache) => cache.put(request, clone))
-            .catch(() => {});
-        }
-        return response;
-      })
-      .catch(() => caches.match(request))
-  );
+  // ── Network-only: all other GET requests ─────────────────────────────────
+  // Do NOT cache these — they include Next.js RSC payloads and prefetch
+  // responses. Serving stale versions causes React hydration error #300.
+  // Let them pass through to the network without interception.
 });
