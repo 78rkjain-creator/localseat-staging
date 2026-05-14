@@ -72,23 +72,29 @@ function NavLink({
   icon,
   active,
 }: NavItem & { active: boolean }) {
+  const cls = [
+    "flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
+    active
+      ? "rounded-r-xl bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
+      : "rounded-xl font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  ].join(" ");
+
   // Canvassing page has a known RSC hydration issue on client-side nav.
   // Force full page navigation to avoid React error #300.
-  const Tag = href === "/canvassing" ? "a" : Link;
+  if (href === "/canvassing") {
+    return (
+      <a href={href} className={cls}>
+        <span className="h-5 w-5 flex-shrink-0">{icon}</span>
+        {label}
+      </a>
+    );
+  }
+
   return (
-    <Tag
-      href={href}
-      prefetch={href === "/canvassing" ? undefined : false}
-      className={[
-        "flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
-        active
-          ? "rounded-r-xl bg-slate-100 text-slate-900 font-semibold border-l-2 border-brand-500"
-          : "rounded-xl font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-      ].join(" ")}
-    >
+    <Link href={href} prefetch={false} className={cls}>
       <span className="h-5 w-5 flex-shrink-0">{icon}</span>
       {label}
-    </Tag>
+    </Link>
   );
 }
 

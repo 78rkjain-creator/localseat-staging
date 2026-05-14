@@ -129,22 +129,23 @@ export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
         <div className="flex items-stretch h-16">
           {tabs.map((t) => {
             const active = isActive(t.href);
-            // Canvassing page has a known RSC hydration issue — use <a> for full navigation
-            const Tag = t.href === "/canvassing" ? "a" : Link;
-            return (
-              <Tag
-                key={t.href}
-                href={t.href}
-                className={[
-                  "flex flex-col items-center justify-center flex-1 gap-0.5 pt-1 border-t-2 transition-colors",
-                  active
-                    ? "border-brand-500 text-brand-500"
-                    : "border-transparent text-slate-400 hover:text-slate-600",
-                ].join(" ")}
-              >
+            const cls = [
+              "flex flex-col items-center justify-center flex-1 gap-0.5 pt-1 border-t-2 transition-colors",
+              active
+                ? "border-brand-500 text-brand-500"
+                : "border-transparent text-slate-400 hover:text-slate-600",
+            ].join(" ");
+            const content = (
+              <>
                 {t.icon}
                 <span className="text-[10px] font-medium leading-none">{t.label}</span>
-              </Tag>
+              </>
+            );
+            // Canvassing page has a known RSC hydration issue — use <a> for full navigation
+            if (t.href === "/canvassing") {
+              return <a key={t.href} href={t.href} className={cls}>{content}</a>;
+            }
+            return <Link key={t.href} href={t.href} className={cls}>{content}</Link>;
             );
           })}
 
