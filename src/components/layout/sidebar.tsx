@@ -141,8 +141,8 @@ export function Sidebar({ firstName, lastName, role, campaignName, campaignLogoU
     if (isOpsPath) setOpsOpen(true);
   }, [isOpsPath]);
 
-  // Hide sidebar entirely on the active canvassing screen
-  if (pathname.includes("/canvass")) return null;
+  // Hide sidebar entirely on the active canvassing screen (not the list page)
+  if (pathname.match(/\/canvassing\/[^/]+\/canvass/)) return null;
 
   // Scroll collapsible section into view when opened
   function toggleWithScroll(
