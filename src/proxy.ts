@@ -164,6 +164,7 @@ export default withAuth(
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
         pathname.startsWith("/api/stripe/checkout") ||
+        pathname === "/api/promo/validate" ||
         pathname === "/select-campaign" ||
         pathname === "/payment-suspended" ||
         pathname.startsWith("/onboarding/choose-plan") ||
