@@ -146,7 +146,6 @@ export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
               return <a key={t.href} href={t.href} className={cls}>{content}</a>;
             }
             return <Link key={t.href} href={t.href} className={cls}>{content}</Link>;
-            );
           })}
 
           {showMore && (
