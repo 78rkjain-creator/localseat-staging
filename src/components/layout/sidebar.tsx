@@ -75,6 +75,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       className={[
         "flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
         active
