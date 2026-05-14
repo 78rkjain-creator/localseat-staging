@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { toggleGotvMode } from "@/app/(app)/gotv/actions";
 
 interface Props {
@@ -13,13 +12,17 @@ export function GotvToggle({ enabled }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [optimistic, setOptimistic] = useState(enabled);
 
-  function handleClick() {
+  function handleToggle() {
     if (optimistic) {
       // Turning OFF — confirm first
       setConfirming(true);
     } else {
-      // Turning ON — go straight to GOTV setup page for target config
-      // (handled by the Link below)
+      // Turning ON
+      startTransition(async () => {
+        setOptimistic(true);
+        const result = await toggleGotvMode(true);
+        if (result.error) setOptimistic(false);
+      });
     }
   }
 
@@ -27,61 +30,73 @@ export function GotvToggle({ enabled }: Props) {
     setConfirming(false);
     startTransition(async () => {
       setOptimistic(false);
-      await toggleGotvMode(false);
+      const result = await toggleGotvMode(false);
+      if (result.error) setOptimistic(true);
     });
   }
 
-  // When GOTV is off, the toggle links to the setup page
-  if (!optimistic) {
-    return (
-      <Link
-        href="/gotv"
-        className="mt-2 inline-flex items-center gap-2 h-8 pl-2.5 pr-3 rounded-full text-[11px] font-semibold bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80 transition-colors"
-      >
-        <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
-        Activate GOTV
-      </Link>
-    );
-  }
-
-  // When GOTV is on — show live badge + toggle off control
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <Link
-        href="/gotv"
-        className="inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+    <div className="mt-2 flex flex-col gap-1.5">
+      {/* Switch row */}
+      <button
+        type="button"
+        onClick={confirming ? undefined : handleToggle}
+        disabled={isPending}
+        className="inline-flex items-center gap-2.5 group disabled:opacity-70"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        GOTV active
-      </Link>
-
-      {/* Toggle off button */}
-      {!confirming ? (
-        <button
-          type="button"
-          onClick={handleClick}
-          disabled={isPending}
-          className="h-8 px-2.5 rounded-full text-[11px] font-medium text-white/40 hover:text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-          title="Deactivate GOTV mode"
+        {/* Switch track */}
+        <span
+          className={[
+            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 flex-shrink-0",
+            optimistic ? "bg-emerald-500" : "bg-white/20",
+          ].join(" ")}
         >
-          {isPending ? "…" : "Turn off"}
-        </button>
-      ) : (
-        <div className="flex items-center gap-1.5">
+          {/* Switch knob */}
+          <span
+            className={[
+              "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200",
+              optimistic ? "translate-x-[22px]" : "translate-x-1",
+            ].join(" ")}
+          />
+        </span>
+
+        {/* Label */}
+        <span
+          className={[
+            "text-[11px] font-semibold transition-colors",
+            optimistic ? "text-emerald-300" : "text-white/50 group-hover:text-white/70",
+          ].join(" ")}
+        >
+          {isPending
+            ? optimistic ? "Activating…" : "Deactivating…"
+            : optimistic ? "GOTV active" : "GOTV off"
+          }
+        </span>
+
+        {/* Live pulse when active */}
+        {optimistic && !isPending && (
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        )}
+      </button>
+
+      {/* Confirmation row — only when turning off */}
+      {confirming && (
+        <div className="flex items-center gap-1.5 ml-[3.25rem]">
+          <span className="text-[10px] text-white/40 mr-1">Deactivate?</span>
           <button
             type="button"
             onClick={handleConfirmOff}
             disabled={isPending}
-            className="h-7 px-2.5 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+            className="h-6 px-2.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50"
           >
-            {isPending ? "Turning off…" : "Confirm off"}
+            {isPending ? "…" : "Yes"}
           </button>
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="h-7 px-2 rounded-full text-[11px] text-white/40 hover:text-white/60 transition-colors"
+            className="h-6 px-2 rounded-full text-[10px] text-white/40 hover:text-white/60 transition-colors"
           >
-            Cancel
+            No
           </button>
         </div>
       )}
