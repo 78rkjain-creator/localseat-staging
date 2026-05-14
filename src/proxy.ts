@@ -22,7 +22,8 @@ const MAINTENANCE_ALLOW_PREFIXES = [
   "/api/auth",         // NextAuth must work for admin sign-in
   "/api/maintenance-status", // the endpoint that serves the cache
   "/api/pricing",      // marketing site must keep working
-  "/api/stripe/webhook", // Stripe must be able to deliver webhooks during maintenance
+  "/api/stripe/webhook",   // Stripe must be able to deliver webhooks during maintenance
+  "/api/stripe/checkout",  // checkout must work before a campaign exists (payment gate flow)
 ];
 
 // Canvassers are restricted to these route prefixes — everything else redirects
@@ -162,6 +163,7 @@ export default withAuth(
     if (!token.activeCampaignId) {
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
+        pathname.startsWith("/api/stripe/checkout") ||
         pathname === "/select-campaign" ||
         pathname === "/payment-suspended" ||
         pathname.startsWith("/onboarding/choose-plan") ||
@@ -234,6 +236,7 @@ export default withAuth(
         // Onboarding and campaign selection require auth but not an active campaign.
         if (
           pathname === "/onboarding/create-campaign" ||
+          pathname.startsWith("/api/stripe/checkout") ||
           pathname === "/select-campaign"
         ) {
           return true;
