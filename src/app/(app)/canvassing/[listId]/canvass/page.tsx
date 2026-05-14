@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCanvassingQueue, getAssignedLists } from "@/lib/canvassing";
 import { db } from "@/lib/db";
+import { canManageCampaign } from "@/lib/permissions";
+import type { Role } from "@/types";
 import { isGotvMode } from "@/lib/gotv";
 import { getActiveFieldMessages } from "@/lib/field-messages";
 import { getActiveSurveyForCanvass } from "@/lib/surveys";
@@ -28,7 +30,7 @@ export default async function CanvassPage({ params }: PageProps) {
   if (!activeCampaignId) redirect("/select-campaign");
   if (!activeRole) redirect("/dashboard");
 
-  const [queue, campaign, fieldMessages, activeSurvey, consentTypes, gotvEnabled, listSurveyRecord, assignedLists] = await Promise.all([
+  const [queue, campaign, fieldMessages, activeSurvey, consentTypes, gotvEnabled, listSurveyRecord, assignedLists, listMeta] = await Promise.all([
     getCanvassingQueue(listId, session.user.id, activeCampaignId),
     db.campaign.findUnique({ where: { id: activeCampaignId }, select: { city: true, canvassScript: true } }),
     getActiveFieldMessages(activeCampaignId),
@@ -49,6 +51,11 @@ export default async function CanvassPage({ params }: PageProps) {
       },
     }),
     getAssignedLists(session.user.id, activeCampaignId),
+    // Fetch list-level GOTV flag for manager bypass
+    db.canvassList.findFirst({
+      where: { id: listId, campaignId: activeCampaignId },
+      select: { isGotvList: true },
+    }),
   ]);
   if (!queue) notFound();
 
@@ -93,7 +100,13 @@ export default async function CanvassPage({ params }: PageProps) {
     }
   }
 
-  if (gotvEnabled) {
+  // GOTV mode: show simplified GOTV canvass screen, but managers can use the
+  // full canvass UI on non-GOTV lists (e.g. ID canvassing on advance voting day)
+  const isManager = canManageCampaign(activeRole as Role);
+  const thisListIsGotv = listMeta?.isGotvList ?? false;
+  const useGotvScreen = gotvEnabled && (!isManager || thisListIsGotv);
+
+  if (useGotvScreen) {
     return (
       <GotvCanvassScreen
         listId={listId}

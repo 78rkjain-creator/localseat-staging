@@ -17,6 +17,7 @@ import { ActivityTab } from "@/components/dashboard/tabs/activity-tab";
 import { FieldOpsTab } from "@/components/dashboard/tabs/field-ops-tab";
 import { SupportersTab } from "@/components/dashboard/tabs/supporters-tab";
 import { FinanceTab } from "@/components/dashboard/tabs/finance-tab";
+import { GotvToggle } from "@/components/dashboard/gotv-toggle";
 
 interface Props {
   campaignId: string;
@@ -183,21 +184,7 @@ export async function CandidateDashboard({ campaignId, role, plan }: Props) {
               </p>
             )}
             {(role === "candidate" || role === "campaign_manager" || role === "data_manager") && (
-              <Link
-                href="/gotv"
-                className={[
-                  "mt-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-semibold transition-colors",
-                  gotvModeEnabled
-                    ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                    : "bg-white/10 text-white/50 hover:bg-white/15 hover:text-white/70",
-                ].join(" ")}
-              >
-                <span className={[
-                  "h-1.5 w-1.5 rounded-full",
-                  gotvModeEnabled ? "bg-emerald-400 animate-pulse" : "bg-white/30",
-                ].join(" ")} />
-                {gotvModeEnabled ? "GOTV active" : "GOTV"}
-              </Link>
+              <GotvToggle enabled={gotvModeEnabled} />
             )}
           </div>
 
