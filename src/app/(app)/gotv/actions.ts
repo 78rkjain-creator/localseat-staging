@@ -61,7 +61,6 @@ export async function toggleGotvMode(
 
   revalidatePath("/gotv");
   revalidatePath("/dashboard");
-  revalidatePath("/canvassing");
   return {};
 }
 
