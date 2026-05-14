@@ -909,3 +909,277 @@ export async function sendLeadFollowUpSummary(params: {
     console.error("[email] Failed to send lead follow-up summary:", err);
   }
 }
+
+// ── Payment warning email ────────────────────────────────────────────────────
+
+export async function sendPaymentWarningEmail(params: {
+  name: string;
+  email: string;
+  campaignName: string;
+  daysRemaining: number;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { name, email, campaignName, daysRemaining } = params;
+  const dayWord = daysRemaining === 1 ? "day" : "days";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Payment reminder</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#f97316;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Municipal campaign platform</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Payment reminder</h1>
+
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Hi ${name},
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your payment for <strong style="color:#1e293b;">${campaignName}</strong> has not been received yet.
+        You have <strong style="color:#dc2626;">${daysRemaining} ${dayWord}</strong> remaining before your account is suspended.
+      </p>
+      <p style="margin:0 0 24px;color:#475569;line-height:1.6;">
+        If your payment is still processing through your bank, no action is needed. Once we receive confirmation from your bank, your account will remain active.
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        If there is an issue with your payment, please contact us at <a href="mailto:info@localseat.io" style="color:#f97316;">info@localseat.io</a>.
+      </p>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: email,
+      subject: `Payment reminder: ${daysRemaining} ${dayWord} remaining - ${campaignName}`,
+      html,
+    });
+    console.log(`[email] Payment warning sent to ${email} (${daysRemaining} days remaining)`);
+  } catch (err) {
+    console.error("[email] Failed to send payment warning:", err);
+  }
+}
+
+// ── Payment suspended email ──────────────────────────────────────────────────
+
+export async function sendPaymentSuspendedEmail(params: {
+  name: string;
+  email: string;
+  campaignName: string;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { name, email, campaignName } = params;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Account suspended</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#dc2626;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Municipal campaign platform</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Account suspended</h1>
+
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Hi ${name},
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your payment for <strong style="color:#1e293b;">${campaignName}</strong> was not received within the required timeframe.
+        Your campaign account has been suspended.
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your campaign data has not been deleted and will be restored once payment is confirmed. If your payment is still being processed by your bank, your account will be reactivated automatically when we receive confirmation.
+      </p>
+      <p style="margin:0 0 24px;color:#475569;line-height:1.6;">
+        If you need help, contact us at <a href="mailto:info@localseat.io" style="color:#f97316;">info@localseat.io</a>.
+      </p>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: email,
+      subject: `Account suspended - ${campaignName}`,
+      html,
+    });
+    console.log(`[email] Payment suspended email sent to ${email}`);
+  } catch (err) {
+    console.error("[email] Failed to send payment suspended email:", err);
+  }
+}
+
+// ── Payment received email ───────────────────────────────────────────────────
+
+export async function sendPaymentReceivedEmail(params: {
+  name: string;
+  email: string;
+  campaignName: string;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { name, email, campaignName } = params;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Payment confirmed</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#16a34a;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Municipal campaign platform</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Payment confirmed</h1>
+
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Hi ${name},
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your payment for <strong style="color:#1e293b;">${campaignName}</strong> has been received and confirmed. Your campaign account is fully active.
+      </p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+        <tr>
+          <td style="background:#16a34a;border-radius:10px;">
+            <a href="${appUrl()}/dashboard"
+               style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+              Go to dashboard
+            </a>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: email,
+      subject: `Payment confirmed - ${campaignName}`,
+      html,
+    });
+    console.log(`[email] Payment received email sent to ${email}`);
+  } catch (err) {
+    console.error("[email] Failed to send payment received email:", err);
+  }
+}
+
+// ── Payment failed email ─────────────────────────────────────────────────────
+
+export async function sendPaymentFailedEmail(params: {
+  name: string;
+  email: string;
+  campaignName: string;
+}): Promise<void> {
+  if (!smtpConfigured()) return;
+
+  const { name, email, campaignName } = params;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Payment failed</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
+
+    <div style="background:#dc2626;padding:28px 32px;">
+      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">LocalSeat</p>
+      <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Municipal campaign platform</p>
+    </div>
+
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 20px;font-size:20px;font-weight:600;color:#0f172a;">Payment failed</h1>
+
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Hi ${name},
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your payment for <strong style="color:#1e293b;">${campaignName}</strong> could not be processed. Your campaign account has been suspended.
+      </p>
+      <p style="margin:0 0 12px;color:#475569;line-height:1.6;">
+        Your campaign data has not been deleted. Please contact us at <a href="mailto:info@localseat.io" style="color:#f97316;">info@localseat.io</a> to arrange payment and reactivate your account.
+      </p>
+    </div>
+
+    <div style="padding:20px 32px;border-top:1px solid #f1f5f9;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;">
+        The LocalSeat Team &mdash; Built for Canadian municipal campaigns
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: fromWelcome(),
+      to: email,
+      subject: `Payment failed - ${campaignName}`,
+      html,
+    });
+    console.log(`[email] Payment failed email sent to ${email}`);
+  } catch (err) {
+    console.error("[email] Failed to send payment failed email:", err);
+  }
+}

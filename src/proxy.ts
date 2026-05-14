@@ -35,6 +35,7 @@ const CANVASSER_ALLOW_PREFIXES = [
   "/select-campaign",
   "/onboarding",
   "/account",
+  "/payment-suspended",
   "/verify-email",   // needed so unverified canvassers can complete verification
   "/api/auth",       // NextAuth internal routes (session refresh, signout, etc.)
 ];
@@ -46,6 +47,7 @@ const SIGN_INSTALLER_ALLOW_PREFIXES = [
   "/select-campaign",
   "/onboarding",
   "/account",
+  "/payment-suspended",
   "/verify-email",
   "/api/auth",
 ];
@@ -56,6 +58,7 @@ const DATA_SUPPLIER_ALLOW_PREFIXES = [
   "/select-campaign",
   "/onboarding",
   "/account",
+  "/payment-suspended",
   "/verify-email",
   "/api/auth",
 ];
@@ -160,6 +163,7 @@ export default withAuth(
       const atCampaignGate =
         pathname === "/onboarding/create-campaign" ||
         pathname === "/select-campaign" ||
+        pathname === "/payment-suspended" ||
         pathname.startsWith("/onboarding/choose-plan") ||
         pathname.startsWith("/verify-email") ||
         pathname === "/resend-verification";
@@ -191,6 +195,7 @@ export default withAuth(
           pathname === "/verify-email" ||
           pathname === "/resend-verification" ||
           pathname === "/account-expired" ||
+          pathname === "/payment-suspended" ||
           pathname === "/reset-password" ||
           pathname === "/sw.js" ||
           pathname === "/manifest.json" ||

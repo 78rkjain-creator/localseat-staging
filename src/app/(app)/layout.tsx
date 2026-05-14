@@ -17,6 +17,7 @@ import { isGotvMode } from "@/lib/gotv";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EmailVerificationBanner } from "@/components/layout/email-verification-banner";
 import { SystemBanner } from "@/components/layout/system-banner";
+import { MultiCampaignBanner } from "@/components/layout/multi-campaign-banner";
 import { SupplierTopBar } from "@/components/layout/supplier-top-bar";
 import type { Role } from "@/types";
 
@@ -120,10 +121,14 @@ export default async function AppLayout({
   ) {
     const campaignPaymentState = await db.campaign.findUnique({
       where:  { id: activeCampaignId },
-      select: { planActivated: true, plan: true },
+      select: { planActivated: true, plan: true, paymentStatus: true },
     });
     if (campaignPaymentState && !campaignPaymentState.planActivated && campaignPaymentState.plan !== "demo") {
       redirect(`/onboarding/choose-plan?campaignId=${activeCampaignId}`);
+    }
+    // Suspended campaigns show a payment-suspended page
+    if (campaignPaymentState && (campaignPaymentState.paymentStatus === "suspended" || campaignPaymentState.paymentStatus === "failed")) {
+      redirect("/payment-suspended");
     }
   }
 
@@ -232,6 +237,12 @@ export default async function AppLayout({
           requesterName={pendingSupportRequest.requesterName}
           requestNote={pendingSupportRequest.requestNote}
           requestedAt={pendingSupportRequest.requestedAt}
+        />
+      )}
+      {memberships.length > 1 && activeMembership && (
+        <MultiCampaignBanner
+          campaignCount={memberships.length}
+          currentCampaignName={activeMembership.campaignName}
         />
       )}
       <div className="flex flex-1 min-h-0 overflow-hidden">

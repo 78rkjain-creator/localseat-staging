@@ -66,6 +66,13 @@ enum PlanTier {
   demo
 }
 
+enum PaymentStatus {
+  paid
+  pending
+  failed
+  suspended
+}
+
 enum CanvassListStatus {
   draft
   pending_approval
@@ -225,6 +232,11 @@ model Campaign {
   planActivated  Boolean   @default(true)
   amountPaid     Int?
   planLockedAt   DateTime?
+  paymentStatus          PaymentStatus @default(paid)
+  paymentDueDate         DateTime?
+  stripePaymentIntentId  String?
+  paymentWarningsSent    Int           @default(0)
+  suspendedAt            DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
