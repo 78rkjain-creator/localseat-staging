@@ -129,8 +129,10 @@ export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
         <div className="flex items-stretch h-16">
           {tabs.map((t) => {
             const active = isActive(t.href);
+            // Canvassing page has a known RSC hydration issue — use <a> for full navigation
+            const Tag = t.href === "/canvassing" ? "a" : Link;
             return (
-              <Link
+              <Tag
                 key={t.href}
                 href={t.href}
                 className={[
@@ -142,7 +144,7 @@ export function MobileNav({ gotvMode = false }: { gotvMode?: boolean }) {
               >
                 {t.icon}
                 <span className="text-[10px] font-medium leading-none">{t.label}</span>
-              </Link>
+              </Tag>
             );
           })}
 
