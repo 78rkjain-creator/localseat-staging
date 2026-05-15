@@ -122,3 +122,76 @@ export async function parseXlsxToReviewRows(
 
   return { rows, fileError: null, birthYearWarningCount, originalHeaders: rawHeaders };
 }
+
+/**
+ * Extract raw rows from an XLSX file without applying any field mapping.
+ * Returns original headers and rows keyed by the original header strings.
+ * Used by the column-mapping flow.
+ */
+export async function parseXlsxToRawRows(
+  file: File,
+): Promise<{
+  rawRows: Record<string, string>[];
+  originalHeaders: string[];
+  fileError: string | null;
+  rowCapExceeded?: boolean;
+}> {
+  const buffer = await file.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+
+  try {
+    await workbook.xlsx.load(buffer);
+  } catch {
+    return { rawRows: [], originalHeaders: [], fileError: "Could not read the XLSX file. Make sure it is a valid .xlsx file." };
+  }
+
+  let sheet: ExcelJS.Worksheet | undefined;
+  workbook.eachSheet((ws) => {
+    if (!sheet && ws.state !== "veryHidden" && ws.name !== "_Lists") {
+      sheet = ws;
+    }
+  });
+
+  if (!sheet) {
+    return { rawRows: [], originalHeaders: [], fileError: "No readable worksheet found in the file." };
+  }
+
+  const headerRow = sheet.getRow(1);
+  const rawHeaders: string[] = [];
+  headerRow.eachCell({ includeEmpty: false }, (cell) => {
+    rawHeaders.push(cellToString(cell));
+  });
+
+  if (rawHeaders.length === 0) {
+    return { rawRows: [], originalHeaders: [], fileError: "File must have a header row and at least one data row." };
+  }
+
+  const dataRowCount = (sheet.rowCount ?? 0) - 1;
+  if (dataRowCount > VOTER_LIST_ROW_CAP) {
+    return {
+      rawRows: [],
+      originalHeaders: rawHeaders,
+      fileError: `File has ${dataRowCount.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}.`,
+      rowCapExceeded: true,
+    };
+  }
+
+  const rawRows: Record<string, string>[] = [];
+
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const rowData: Record<string, string> = {};
+    rawHeaders.forEach((h, idx) => {
+      const cell = row.getCell(idx + 1);
+      rowData[h] = cellToString(cell).trim();
+    });
+    if (Object.values(rowData).every((v) => v === "")) return;
+    rawRows.push(rowData);
+  });
+
+  if (rawRows.length === 0) {
+    return { rawRows: [], originalHeaders: rawHeaders, fileError: "No data rows found after the header." };
+  }
+
+  return { rawRows, originalHeaders: rawHeaders, fileError: null };
+}

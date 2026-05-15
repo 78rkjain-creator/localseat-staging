@@ -8,19 +8,26 @@ import { importVoterRows, checkDuplicatesForImport, getCampaignTagsForImport } f
 import type { VoterCsvRow, FlaggedRow, TagPlan } from "./actions";
 import {
   parseCsvToReviewRows,
+  parseCsvLine,
+  normaliseKey,
+  buildReviewRow,
   getMissingFields,
   listMissingFields,
   FIELD_LABELS,
   MANDATORY_FIELDS,
+  VOTER_LIST_ROW_CAP,
   parseTagList,
   classifyRow,
 } from "@/lib/csv-import";
-import { parseXlsxToReviewRows } from "@/lib/xlsx-import";
+import { parseXlsxToReviewRows, parseXlsxToRawRows } from "@/lib/xlsx-import";
 import type { ReviewRow, RowFields, RowStatus, CustomFieldDef, ReviewBucket } from "@/lib/csv-import";
 import { ExportFixModal } from "./import-modal-export";
 import { buildVoterExportCsv, triggerCsvDownload } from "@/lib/import-export";
 import { splitCsvText, splitXlsxFile } from "@/lib/file-splitter";
 import type { FileBatchItem } from "@/lib/file-splitter";
+import { buildInitialMapping, applyMapping } from "@/lib/column-mapping";
+import type { MappingState, ColumnMapping as ColMapping } from "@/lib/column-mapping";
+import { ColumnMapper } from "./column-mapper";
 
 // ── Local constants ────────────────────────────────────────────────────────
 
@@ -30,7 +37,7 @@ const BASE_COLUMNS: (keyof RowFields)[] = [
 ];
 const EXTRA_COLUMNS: (keyof RowFields)[] = ["phoneHome", "phoneMobile", "email", "birthDate"];
 
-type Step = "upload" | "tagReview" | "review" | "done";
+type Step = "upload" | "mapping" | "tagReview" | "review" | "done";
 
 type TagDecisionStatus = "pending" | "create" | "skip" | "use";
 interface TagDecision {
@@ -90,6 +97,17 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
   const [tagDecisions, setTagDecisions] = useState<Record<string, TagDecision>>({});
   const [existingTagsByLower, setExistingTagsByLower] = useState<Map<string, { id: string; name: string }>>(new Map());
   const [allTagNamesFromImport, setAllTagNamesFromImport] = useState<string[]>([]);
+
+  // Column mapping state
+  const [mappingState, setMappingState] = useState<MappingState | null>(null);
+  /** Raw parsed rows keyed by original header — held until mapping is confirmed. */
+  const [rawParsedData, setRawParsedData] = useState<{
+    rawRows: Record<string, string>[];
+    originalHeaders: string[];
+    csvText?: string;
+    file?: File;
+    ext?: string;
+  } | null>(null);
 
   // ── Derived bucket counts ──────────────────────────────────────────────
 
@@ -162,6 +180,8 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setBatchSession(null);
     setActiveBatchIndex(null);
     setIsSplitting(false);
+    setMappingState(null);
+    setRawParsedData(null);
     onClose();
   }
 
@@ -264,22 +284,48 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
       return;
     }
 
-    let rows: ReviewRow[];
+    // Parse the file to extract raw headers + rows (no field mapping yet).
+    // The user will confirm column mapping on the next screen.
+    let rawRows: Record<string, string>[];
+    let hdrs: string[];
     let err: string | null;
     let rowCapExceeded: boolean | undefined;
-    let bywc: number;
-    let hdrs: string[];
     let csvText: string | undefined;
 
     if (ext === "xlsx") {
-      ({ rows, fileError: err, rowCapExceeded, birthYearWarningCount: bywc, originalHeaders: hdrs } =
-        await parseXlsxToReviewRows(file, customFields));
+      const result = await parseXlsxToRawRows(file);
+      rawRows = result.rawRows;
+      hdrs = result.originalHeaders;
+      err = result.fileError;
+      rowCapExceeded = result.rowCapExceeded;
     } else {
       csvText = await file.text();
-      ({ rows, fileError: err, rowCapExceeded, birthYearWarningCount: bywc, originalHeaders: hdrs } =
-        parseCsvToReviewRows(csvText, customFields));
+      // Quick parse to get raw rows keyed by original header
+      const lines = csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+      if (lines.length < 2) {
+        setFileError("File must have a header row and at least one data row.");
+        return;
+      }
+      const rawHeaders = parseCsvLine(lines[0]);
+      hdrs = rawHeaders;
+      const dataLines = lines.slice(1).filter((l) => l.trim());
+      if (dataLines.length > VOTER_LIST_ROW_CAP) {
+        rowCapExceeded = true;
+        rawRows = [];
+        err = `File has ${dataLines.length.toLocaleString()} rows — the maximum is ${VOTER_LIST_ROW_CAP.toLocaleString()}.`;
+      } else {
+        rawRows = [];
+        err = null;
+        for (const line of dataLines) {
+          const values = parseCsvLine(line);
+          const row: Record<string, string> = {};
+          rawHeaders.forEach((h, idx) => { row[h] = (values[idx] ?? "").trim(); });
+          rawRows.push(row);
+        }
+      }
     }
 
+    // Handle oversized files — split into batches (existing flow)
     if (rowCapExceeded) {
       setIsSplitting(true);
       try {
@@ -309,8 +355,50 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     }
 
     if (err) { setFileError(err); return; }
+    if (rawRows.length === 0) { setFileError("No data rows found after the header."); return; }
 
-    await processRowsForReview(rows, bywc, hdrs);
+    // Build the mapping state and go to the mapping confirmation screen.
+    const mapping = buildInitialMapping(hdrs, rawRows);
+    setMappingState(mapping);
+    setRawParsedData({ rawRows, originalHeaders: hdrs, csvText, file, ext });
+    setStep("mapping");
+  }
+
+  /**
+   * Called when the user confirms their column mapping.
+   * Applies the mapping to raw data, builds ReviewRows, and proceeds
+   * to the existing duplicate-check + review flow.
+   */
+  async function handleMappingConfirm(confirmedColumns: ColMapping[]) {
+    if (!rawParsedData) return;
+    const { rawRows, originalHeaders } = rawParsedData;
+
+    // Apply the user-confirmed mapping to each raw row.
+    // This produces a Record<string, string> keyed by normalised internal
+    // field names — the same shape that buildReviewRow expects.
+    const rows: ReviewRow[] = [];
+    let birthYearWarnCount = 0;
+    let id = 0;
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const mappedRow = applyMapping(confirmedColumns, rawRows[i], customFields);
+      const { row, bumpedBirthYearWarning } = buildReviewRow(mappedRow, i + 2, id++, customFields);
+      // Preserve original raw values for the export-to-fix flow
+      row.rawValues = rawRows[i];
+      if (bumpedBirthYearWarning) birthYearWarnCount++;
+      rows.push(row);
+    }
+
+    if (rows.length === 0) {
+      setFileError("No data rows could be mapped. Check your column mappings.");
+      setStep("upload");
+      return;
+    }
+
+    // Clean up mapping state and proceed to duplicate check + review
+    setMappingState(null);
+    setRawParsedData(null);
+    await processRowsForReview(rows, birthYearWarnCount, originalHeaders);
   }
 
   async function startBatch(idx: number) {
@@ -326,12 +414,23 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setExistingTagsByLower(new Map());
     setAllTagNamesFromImport([]);
     setExpanded({ ready: false, incomplete: false, duplicate: false, missing_required: false });
+    setMappingState(null);
+    setRawParsedData(null);
 
-    const { rows, fileError: err, birthYearWarningCount: bywc, originalHeaders: hdrs } =
-      parseCsvToReviewRows(batch.csvText, customFields, { skipRowCap: true });
+    // Parse batch CSV to get raw headers + rows for the mapping screen
+    const lines = batch.csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    const rawHeaders = parseCsvLine(lines[0]);
+    const dataLines = lines.slice(1).filter((l) => l.trim());
+    const rawRows: Record<string, string>[] = [];
+    for (const line of dataLines) {
+      const values = parseCsvLine(line);
+      const row: Record<string, string> = {};
+      rawHeaders.forEach((h, i) => { row[h] = (values[i] ?? "").trim(); });
+      rawRows.push(row);
+    }
 
-    if (err || rows.length === 0) {
-      setFileError(err ?? "This batch has no data rows.");
+    if (rawRows.length === 0) {
+      setFileError("This batch has no data rows.");
       return;
     }
 
@@ -339,7 +438,11 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setListName(batchSession.listName);
     setListImportType(batchSession.listImportType);
 
-    await processRowsForReview(rows, bywc, hdrs);
+    // Show mapping screen for user to confirm
+    const mapping = buildInitialMapping(rawHeaders, rawRows);
+    setMappingState(mapping);
+    setRawParsedData({ rawRows, originalHeaders: rawHeaders, csvText: batch.csvText });
+    setStep("mapping");
   }
 
   function handleBackToBatches() {
@@ -362,6 +465,8 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setExistingTagsByLower(new Map());
     setAllTagNamesFromImport([]);
     setExpanded({ ready: false, incomplete: false, duplicate: false, missing_required: false });
+    setMappingState(null);
+    setRawParsedData(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -515,13 +620,15 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
       open={open}
       onClose={handleClose}
       title={
-        batchSession && activeBatchIndex !== null
+        step === "mapping"
+          ? "Map your columns"
+          : batchSession && activeBatchIndex !== null
           ? `Import batch ${activeBatchIndex + 1} of ${batchSession.batches.length}`
           : batchSession
           ? `Import voter list — ${batchSession.batches.length} batches`
           : "Import voter list"
       }
-      maxWidth={step === "review" ? "max-w-6xl" : "max-w-lg"}
+      maxWidth={step === "review" ? "max-w-6xl" : step === "mapping" ? "max-w-3xl" : "max-w-lg"}
     >
       {step === "upload" && (
         <div className="flex flex-col gap-5">
@@ -549,7 +656,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
           {!isSplitting && !batchSession && (<>
           <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-4">
             <div className="flex items-start justify-between gap-3 mb-2">
-              <p className="text-sm font-medium text-slate-700">XLSX / CSV format</p>
+              <p className="text-sm font-medium text-slate-700">Upload your file as-is</p>
               <a
                 href="/api/voter-list/template"
                 download
@@ -558,15 +665,14 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                 </svg>
-                Download template
+                Template (optional)
               </a>
             </div>
-            <p className="text-xs text-slate-500 font-mono leading-relaxed break-all">
-              FirstName, LastName, StreetNumber, StreetName, UnitNumber, City, Province, PostalCode, PhoneHome, PhoneMobile, Email, BirthYear
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Upload any .csv or .xlsx file with a header row. {"You'll"} map your columns to the right fields on the next screen — no reformatting needed.
             </p>
             <p className="text-xs text-slate-400 mt-2">
-              Header row required. Mandatory: FirstName, LastName, StreetNumber, StreetName, City, Province, PostalCode.
-              Rows with missing mandatory fields are flagged for review. Files over 10,000 rows are automatically split into batches.
+              Files over 10,000 rows are automatically split into batches. Max file size: 25 MB.
             </p>
           </div>
 
@@ -665,6 +771,20 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
           </div>
           </>)}
         </div>
+      )}
+
+      {step === "mapping" && mappingState && (
+        <ColumnMapper
+          mapping={mappingState}
+          onConfirm={handleMappingConfirm}
+          onBack={() => {
+            setStep("upload");
+            setMappingState(null);
+            setRawParsedData(null);
+            if (fileRef.current) fileRef.current.value = "";
+          }}
+          customFields={customFields}
+        />
       )}
 
       {step === "tagReview" && (
