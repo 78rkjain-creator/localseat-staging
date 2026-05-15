@@ -12,6 +12,7 @@
  */
 
 import type { RowFields } from "./csv-import";
+import { normaliseKey } from "./csv-import";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,12 +30,12 @@ export interface FieldDef {
 export interface ColumnMapping {
   /** Original header text as it appeared in the file. */
   originalHeader: string;
-  /** Suggested internal field, or null if we couldn't guess. */
-  suggestedField: MappableField | null;
+  /** Suggested internal field, custom field ("custom:id"), or null if we couldn't guess. */
+  suggestedField: MappableField | string | null;
   /** Confidence: "high" = exact alias match, "medium" = partial match, "none" = no guess. */
   confidence: "high" | "medium" | "none";
   /** What the user has confirmed/chosen. Null until they interact or confirm all. */
-  confirmedField: MappableField | "__ignore__" | null;
+  confirmedField: MappableField | "__ignore__" | string | null;
 }
 
 /** The full mapping state for one import session. */
@@ -270,35 +271,62 @@ function suggestFieldForHeader(
 /**
  * Build initial mapping suggestions for all headers in the uploaded file.
  * Each header gets at most one suggestion. Fields are not double-assigned.
+ * Also attempts to match custom field labels.
  *
  * Returns a MappingState that the UI renders for user confirmation.
  */
 export function buildInitialMapping(
   originalHeaders: string[],
   sampleRows: Record<string, string>[],
+  customFields?: { id: string; label: string }[],
 ): MappingState {
-  const claimed = new Set<MappableField>();
+  const claimed = new Set<string>();
   const columns: ColumnMapping[] = [];
 
-  // First pass: high-confidence matches
-  const suggestions: (ReturnType<typeof suggestFieldForHeader> | null)[] =
+  // First pass: high-confidence matches against standard fields
+  const suggestions: ({ field: string; confidence: "high" | "medium" } | null)[] =
     originalHeaders.map(() => null);
 
   for (let i = 0; i < originalHeaders.length; i++) {
-    const result = suggestFieldForHeader(originalHeaders[i], claimed);
+    const result = suggestFieldForHeader(originalHeaders[i], claimed as Set<MappableField>);
     if (result && result.confidence === "high") {
       suggestions[i] = result;
       claimed.add(result.field);
     }
   }
 
-  // Second pass: medium-confidence for unmatched headers
+  // Second pass: medium-confidence standard fields
   for (let i = 0; i < originalHeaders.length; i++) {
     if (suggestions[i]) continue;
-    const result = suggestFieldForHeader(originalHeaders[i], claimed);
+    const result = suggestFieldForHeader(originalHeaders[i], claimed as Set<MappableField>);
     if (result) {
       suggestions[i] = result;
       claimed.add(result.field);
+    }
+  }
+
+  // Third pass: match remaining headers against custom field labels
+  if (customFields && customFields.length > 0) {
+    for (let i = 0; i < originalHeaders.length; i++) {
+      if (suggestions[i]) continue;
+      const normHeader = normalise(originalHeaders[i]);
+      if (!normHeader) continue;
+
+      for (const cf of customFields) {
+        const cfKey = `custom:${cf.id}`;
+        if (claimed.has(cfKey)) continue;
+        const normLabel = normalise(cf.label);
+        if (normHeader === normLabel) {
+          suggestions[i] = { field: cfKey, confidence: "high" };
+          claimed.add(cfKey);
+          break;
+        }
+        if (normHeader.includes(normLabel) || normLabel.includes(normHeader)) {
+          suggestions[i] = { field: cfKey, confidence: "medium" };
+          claimed.add(cfKey);
+          break;
+        }
+      }
     }
   }
 
@@ -339,8 +367,9 @@ export function applyMapping(
   const mapped: Record<string, string> = {};
 
   // Build a lookup from custom field id to normalised label
+  // Uses normaliseKey from csv-import to match exactly what buildReviewRow uses
   const cfLabelById = new Map(
-    (customFields ?? []).map((cf) => [cf.id, normalise(cf.label)]),
+    (customFields ?? []).map((cf) => [cf.id, normaliseKey(cf.label)]),
   );
 
   for (const col of columns) {

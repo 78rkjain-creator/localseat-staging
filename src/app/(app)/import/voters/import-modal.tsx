@@ -358,7 +358,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     if (rawRows.length === 0) { setFileError("No data rows found after the header."); return; }
 
     // Build the mapping state and go to the mapping confirmation screen.
-    const mapping = buildInitialMapping(hdrs, rawRows);
+    const mapping = buildInitialMapping(hdrs, rawRows, customFields);
     setMappingState(mapping);
     setRawParsedData({ rawRows, originalHeaders: hdrs, csvText, file, ext });
     setStep("mapping");
@@ -439,7 +439,7 @@ export function VoterImportModal({ open, onClose, customFields }: VoterImportMod
     setListImportType(batchSession.listImportType);
 
     // Show mapping screen for user to confirm
-    const mapping = buildInitialMapping(rawHeaders, rawRows);
+    const mapping = buildInitialMapping(rawHeaders, rawRows, customFields);
     setMappingState(mapping);
     setRawParsedData({ rawRows, originalHeaders: rawHeaders, csvText: batch.csvText });
     setStep("mapping");
