@@ -84,8 +84,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const from =
-    process.env.SMTP_FROM_APPROVALS ?? process.env.SMTP_USER ?? "alerts@localseat.io";
+  const from = process.env.SMTP_USER ?? "info@localseat.io";
 
   const subject = `[LocalSeat] Backup FAILED — ${tier ?? "unknown"} — ${new Date().toISOString().slice(0, 16)}`;
 
