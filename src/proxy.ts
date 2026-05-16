@@ -211,6 +211,7 @@ export default withAuth(
           pathname === "/api/demo-leads" ||
           pathname === "/api/contact" ||
           pathname.startsWith("/api/cron") ||
+          pathname.startsWith("/api/internal") ||
           pathname.startsWith("/icons")
         ) {
           return true;
