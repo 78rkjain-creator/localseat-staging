@@ -57,7 +57,10 @@ async function readCpuTimes(): Promise<CpuTimes | null> {
 async function getCpuUsage(): Promise<number | null> {
   const t1 = await readCpuTimes();
   if (!t1) return null;
-  await new Promise((r) => setTimeout(r, 200));
+  // 1-second sample window is long enough to smooth out brief subprocess
+  // spawns (like pm2 jlist) and short kernel ticks. Shorter windows produce
+  // noisy readings that don't reflect actual VPS load.
+  await new Promise((r) => setTimeout(r, 1000));
   const t2 = await readCpuTimes();
   if (!t2) return null;
 
@@ -151,8 +154,12 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [cpuPct, mem, disk, pmList] = await Promise.all([
-    getCpuUsage(),
+  // Important: sample CPU FIRST and alone. Running pm2 jlist or df in
+  // parallel spawns subprocesses that pollute the CPU reading. Once we
+  // have the CPU number, the other metrics can run in parallel.
+  const cpuPct = await getCpuUsage();
+
+  const [mem, disk, pmList] = await Promise.all([
     getMemInfo(),
     getDiskInfo(),
     getPmList(),
