@@ -1457,3 +1457,30 @@ model PendingCampaign {
   @@index([expiresAt])
   @@map("pending_campaigns")
 }
+
+// ─── Backup Runs ────────────────────────────────────────────────────────────
+// Records every call to /api/internal/backup-alert.
+// Written from src/app/api/internal/backup-alert/route.ts.
+// Powers the superuser health dashboard.
+
+model BackupRun {
+  id            String   @id @default(cuid())
+  startedAt     DateTime @default(now())
+
+  // What ran
+  tier          String   // "intraday" | "daily" | "weekly" | "monthly"
+  filename      String
+
+  // How it went
+  success       Boolean
+  sizeBytes     BigInt?
+  durationMs    Int?
+  errorCode     Int?
+  errorMessage  String?
+  logTail       String?  @db.Text
+
+  @@index([startedAt(sort: Desc)])
+  @@index([success, startedAt(sort: Desc)])
+  @@index([tier, startedAt(sort: Desc)])
+  @@map("backup_runs")
+}
