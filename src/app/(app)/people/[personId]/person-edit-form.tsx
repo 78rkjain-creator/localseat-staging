@@ -98,7 +98,7 @@ export function PersonEditForm({
     if (!result) return;
     setAddrStreetNumber(result.streetNumber);
     setAddrStreetName(result.streetName);
-    setAddrUnitNumber(result.type !== "mapbox" ? (result.unitNumber ?? "") : "");
+    setAddrUnitNumber(result.type === "campaign" || result.type === "manual" ? (result.unitNumber ?? "") : "");
     setAddrCity(result.city);
     setAddrProvince(result.province);
     setAddrPostalCode(result.postalCode);
