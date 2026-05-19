@@ -326,6 +326,10 @@ function AddMemberForm({
       setAddrUnitNumber(result.unitNumber ?? ""); setAddrCity(result.city);
       setAddrProvince(result.province); setAddrPostalCode(result.postalCode);
       setAddrLat(null); setAddrLng(null);
+    } else if (result.type === "nar") {
+      setAddrStreetNumber(result.streetNumber); setAddrStreetName(result.streetName);
+      setAddrCity(result.city); setAddrProvince(result.province); setAddrPostalCode(result.postalCode);
+      setAddrLat(result.latitude); setAddrLng(result.longitude);
     } else if (result.type === "mapbox") {
       setAddrStreetNumber(result.streetNumber); setAddrStreetName(result.streetName);
       setAddrCity(result.city); setAddrProvince(result.province); setAddrPostalCode(result.postalCode);

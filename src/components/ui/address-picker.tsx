@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { AddressSearchResponse, CampaignAddress, MapboxSuggestion } from "@/app/api/addresses/search/route";
+import type { AddressSearchResponse, CampaignAddress, MapboxSuggestion, NarSuggestion } from "@/app/api/addresses/search/route";
 
 // ── Exported types ─────────────────────────────────────────────────────────────
 
@@ -17,6 +17,7 @@ export interface AddressValue {
 
 export type AddressPickerResult =
   | ({ type: "campaign" } & CampaignAddress)
+  | ({ type: "nar" } & NarSuggestion)
   | ({ type: "mapbox" } & MapboxSuggestion)
   | { type: "manual"; streetNumber: string; streetName: string; unitNumber?: string; city: string; province: string; postalCode: string };
 
@@ -63,8 +64,9 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
   const [pc, setPc] = useState("");
 
   const campaignItems = response?.campaign ?? [];
+  const narItems = response?.nar ?? [];
   const mapboxItems = response?.mapbox ?? [];
-  const totalItems = campaignItems.length + mapboxItems.length;
+  const totalItems = campaignItems.length + narItems.length + mapboxItems.length;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -89,7 +91,7 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
     const cached = cacheRef.current.get(query);
     if (cached) {
       setResponse(cached);
-      setShowDrop(cached.campaign.length > 0 || cached.mapbox.length > 0);
+      setShowDrop(cached.campaign.length > 0 || cached.nar.length > 0 || cached.mapbox.length > 0);
       setActiveIdx(-1);
       return;
     }
@@ -106,7 +108,7 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
           if (!data) return;
           cacheRef.current.set(query, data);
           setResponse(data);
-          setShowDrop(data.campaign.length > 0 || data.mapbox.length > 0);
+          setShowDrop(data.campaign.length > 0 || data.nar.length > 0 || data.mapbox.length > 0);
           setActiveIdx(-1);
         })
         .catch(err => {
@@ -138,6 +140,14 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
     onSelect({ type: "mapbox", ...addr });
   }
 
+  function pickNar(addr: NarSuggestion) {
+    setQuery(addr.displayAddress);
+    setPickedLabel(addr.displayAddress);
+    setShowDrop(false);
+    setActiveIdx(-1);
+    onSelect({ type: "nar", ...addr });
+  }
+
   function handleQueryChange(val: string) {
     setQuery(val);
     if (pickedLabel !== null && val !== pickedLabel) {
@@ -158,8 +168,10 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
       e.preventDefault();
       if (activeIdx < campaignItems.length) {
         pickCampaign(campaignItems[activeIdx]!);
+      } else if (activeIdx < campaignItems.length + narItems.length) {
+        pickNar(narItems[activeIdx - campaignItems.length]!);
       } else {
-        pickMapbox(mapboxItems[activeIdx - campaignItems.length]!);
+        pickMapbox(mapboxItems[activeIdx - campaignItems.length - narItems.length]!);
       }
     } else if (e.key === "Escape") {
       setShowDrop(false);
@@ -241,6 +253,7 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
   // ── Search mode ───────────────────────────────────────────────────────────────
 
   const hasCampaign = campaignItems.length > 0;
+  const hasNar = narItems.length > 0;
   const hasMapbox = mapboxItems.length > 0;
 
   return (
@@ -254,7 +267,7 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
         autoComplete="off"
       />
 
-      {showDrop && (hasCampaign || hasMapbox) && (
+      {showDrop && (hasCampaign || hasNar || hasMapbox) && (
         <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
 
           {hasCampaign && (
@@ -278,13 +291,39 @@ export function AddressPicker({ onSelect, compact = false }: AddressPickerProps)
             </>
           )}
 
-          {hasMapbox && (
+          {hasNar && (
             <>
               <div className={`${sectionHeader}${hasCampaign ? " border-t border-slate-100 mt-1" : ""}`}>
+                Canadian addresses
+              </div>
+              {narItems.map((addr, i) => {
+                const flatIdx = campaignItems.length + i;
+                const streetLine = addr.streetNumber
+                  ? `${addr.streetNumber} ${addr.streetName}`
+                  : addr.streetName;
+                const secondary = [addr.city, addr.province, addr.postalCode].filter(Boolean).join(", ");
+                return (
+                  <button
+                    key={`nar-${i}`}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); pickNar(addr); }}
+                    className={`w-full text-left px-3 py-2 transition-colors ${activeIdx === flatIdx ? "bg-brand-50" : "hover:bg-slate-50"}`}
+                  >
+                    <p className="text-sm font-medium text-slate-900 truncate">{streetLine}</p>
+                    <p className="text-xs text-slate-400 truncate">{secondary}</p>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {hasMapbox && (
+            <>
+              <div className={`${sectionHeader}${(hasCampaign || hasNar) ? " border-t border-slate-100 mt-1" : ""}`}>
                 Search anywhere
               </div>
               {mapboxItems.map((addr, i) => {
-                const flatIdx = campaignItems.length + i;
+                const flatIdx = campaignItems.length + narItems.length + i;
                 const streetLine = addr.streetNumber
                   ? `${addr.streetNumber} ${addr.streetName}`
                   : addr.streetName;

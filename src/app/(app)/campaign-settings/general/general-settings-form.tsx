@@ -129,6 +129,19 @@ export function GeneralSettingsForm({
         addressId: result.id,
       });
       setShowPicker(false);
+    } else if (result.type === "nar") {
+      setOfficeAddr({
+        streetNumber: result.streetNumber,
+        streetName: result.streetName,
+        unitNumber: "",
+        city: result.city,
+        province: result.province,
+        postalCode: result.postalCode,
+        lat: String(result.latitude),
+        lng: String(result.longitude),
+        addressId: "",
+      });
+      setShowPicker(false);
     } else if (result.type === "mapbox") {
       setOfficeAddr({
         streetNumber: result.streetNumber,

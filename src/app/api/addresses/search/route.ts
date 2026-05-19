@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { normalizeFullAddress } from "@/lib/address-normalize";
+import { narSearch, narAvailable } from "@/lib/nar";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,22 @@ export interface MapboxSuggestion {
   displayAddress: string;
 }
 
+export interface NarSuggestion {
+  streetNumber: string;
+  streetName: string;
+  streetType: string;
+  streetDir: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  latitude: number;
+  longitude: number;
+  displayAddress: string;
+}
+
 export interface AddressSearchResponse {
   campaign: CampaignAddress[];
+  nar: NarSuggestion[];
   mapbox: MapboxSuggestion[];
 }
 
@@ -91,18 +106,19 @@ function parseFeature(feature: MapboxFeature): MapboxSuggestion | null {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ campaign: [], mapbox: [] }, { status: 401 });
+  if (!session) return NextResponse.json({ campaign: [], nar: [], mapbox: [] }, { status: 401 });
 
   const { activeCampaignId } = session.user;
-  if (!activeCampaignId) return NextResponse.json({ campaign: [], mapbox: [] });
+  if (!activeCampaignId) return NextResponse.json({ campaign: [], nar: [], mapbox: [] });
 
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
-  if (q.length < 2) return NextResponse.json({ campaign: [], mapbox: [] });
+  if (q.length < 2) return NextResponse.json({ campaign: [], nar: [], mapbox: [] });
 
   const token = process.env.MAPBOX_SERVER_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const hasNar = await narAvailable();
 
-  // DB query + Mapbox call run in parallel
-  const [campaignRows, mapboxRaw] = await Promise.all([
+  // DB query + NAR search + Mapbox call run in parallel
+  const [campaignRows, narRows, mapboxRaw] = await Promise.all([
     db.address.findMany({
       where: {
         campaignId: activeCampaignId,
@@ -125,7 +141,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ streetName: "asc" }, { streetNumber: "asc" }],
       take: 10,
     }),
-    token
+    hasNar ? narSearch(q, 5) : Promise.resolve([]),
+    // Only call Mapbox if NAR is unavailable (saves API costs)
+    !hasNar && token
       ? fetch(
           `${MAPBOX_BASE}/${encodeURIComponent(q)}.json` +
             `?access_token=${token}&country=ca&types=address&autocomplete=true&limit=5`,
@@ -174,9 +192,25 @@ export async function GET(req: NextRequest) {
     residentCount: countByAddr.get(a.id) ?? 0,
   }));
 
-  // ── Server-side dedup: suppress Mapbox rows that match a campaign address ─────
+  // ── Server-side dedup: suppress NAR/Mapbox rows that match a campaign address ──
   const campaignKeys = new Set(
     campaign.map(
+      (a) =>
+        `${a.streetNumber.toLowerCase().trim()}|${normalizeFullAddress(a.streetName, a.city)}`,
+    ),
+  );
+
+  // Dedup NAR results against campaign addresses
+  const nar: NarSuggestion[] = [];
+  for (const row of narRows) {
+    const key = `${row.streetNumber.toLowerCase().trim()}|${normalizeFullAddress(row.streetName, row.city)}`;
+    if (campaignKeys.has(key)) continue;
+    nar.push(row);
+  }
+
+  // Add NAR keys to dedup set so Mapbox doesn't duplicate them
+  const narKeys = new Set(
+    nar.map(
       (a) =>
         `${a.streetNumber.toLowerCase().trim()}|${normalizeFullAddress(a.streetName, a.city)}`,
     ),
@@ -187,10 +221,10 @@ export async function GET(req: NextRequest) {
     const suggestion = parseFeature(feature);
     if (!suggestion) continue;
     const key = `${suggestion.streetNumber.toLowerCase().trim()}|${normalizeFullAddress(suggestion.streetName, suggestion.city)}`;
-    if (campaignKeys.has(key)) continue;
+    if (campaignKeys.has(key) || narKeys.has(key)) continue;
     mapbox.push(suggestion);
   }
 
-  const response: AddressSearchResponse = { campaign, mapbox };
+  const response: AddressSearchResponse = { campaign, nar, mapbox };
   return NextResponse.json(response);
 }

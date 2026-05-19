@@ -56,6 +56,15 @@ export function AddResidentForm({ tags }: { tags: Tag[] }) {
       setPickedAddressId(result.id);
       setStreetNumber(""); setStreetName(""); setCity(""); setProvince("ON"); setPostalCode("");
       setLat(null); setLng(null);
+    } else if (result.type === "nar") {
+      setPickedAddressId(undefined);
+      setStreetNumber(result.streetNumber);
+      setStreetName(result.streetName);
+      setCity(result.city);
+      setProvince(result.province);
+      setPostalCode(result.postalCode);
+      setLat(result.latitude);
+      setLng(result.longitude);
     } else if (result.type === "mapbox") {
       setPickedAddressId(undefined);
       setStreetNumber(result.streetNumber);

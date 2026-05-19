@@ -7,6 +7,13 @@ import { AddressPicker, addressValueComplete, type AddressValue, type AddressPic
 function toAddressValue(result: AddressPickerResult | null): AddressValue | null {
   if (!result) return null;
   if (result.type === "campaign") return { addressId: result.id };
+  if (result.type === "nar") return {
+    streetNumber: result.streetNumber,
+    streetName: result.streetName,
+    city: result.city,
+    province: result.province,
+    postalCode: result.postalCode,
+  };
   if (result.type === "mapbox") return {
     streetNumber: result.streetNumber,
     streetName: result.streetName,

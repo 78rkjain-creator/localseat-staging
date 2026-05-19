@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { narGeocode, narAvailable } from "@/lib/nar";
 
 const MAPBOX_BASE = "https://api.mapbox.com/geocoding/v5/mapbox.places";
 const BATCH_SIZE = 10;
@@ -13,6 +14,7 @@ function getMapboxToken(): string | undefined {
 // ── geocodeAddress ─────────────────────────────────────────────────────────
 // Resolves coordinates for a single Address record.
 // Returns cached lat/lng immediately if already set.
+// Tries NAR lookup first (free, local), then Mapbox fallback (paid API).
 // Returns null on any failure — never throws.
 
 export async function geocodeAddress(
@@ -26,6 +28,26 @@ export async function geocodeAddress(
       return { lat: address.lat, lng: address.lng };
     }
 
+    // ── Try NAR first (free, local database) ──────────────────────────────
+    if (await narAvailable()) {
+      const narResult = await narGeocode({
+        streetNumber: address.streetNumber,
+        streetName: address.streetName,
+        city: address.city,
+        province: address.province,
+        postalCode: address.postalCode,
+      });
+
+      if (narResult) {
+        await db.address.update({
+          where: { id: addressId },
+          data: { lat: narResult.lat, lng: narResult.lng },
+        });
+        return narResult;
+      }
+    }
+
+    // ── Fallback to Mapbox (paid API) ─────────────────────────────────────
     const query = [
       address.streetNumber,
       address.streetName,
@@ -145,8 +167,8 @@ export async function geocodeAddressesForCanvassList(
 
 // ── geocodeInBatches ───────────────────────────────────────────────────────
 // Splits addressIds into chunks of BATCH_SIZE.
-// Per chunk: one findMany to load all rows, concurrent Mapbox API calls for
-// the ungeocoded subset, then one $transaction to write all coordinates.
+// Per chunk: one findMany to load all rows, try NAR first (free, local),
+// then Mapbox API for NAR misses, then one $transaction to write coordinates.
 
 async function geocodeInBatches(
   addressIds: string[],
@@ -158,14 +180,16 @@ async function geocodeInBatches(
   if (addressIds.length === 0) return { geocoded, failed };
 
   const token = getMapboxToken();
-  if (!token) {
-    console.warn("[geocoding] No Mapbox token configured (MAPBOX_SERVER_TOKEN or NEXT_PUBLIC_MAPBOX_TOKEN)");
+  const hasNar = await narAvailable();
+
+  if (!hasNar && !token) {
+    console.warn("[geocoding] No NAR data and no Mapbox token — cannot geocode");
     return { geocoded: 0, failed: addressIds.length };
   }
 
   const totalBatches = Math.ceil(addressIds.length / BATCH_SIZE);
   console.log(
-    `[geocoding] Starting batch geocoding — ${addressIds.length} addresses, ${totalBatches} batches of ${BATCH_SIZE} (${label})`
+    `[geocoding] Starting batch geocoding — ${addressIds.length} addresses, ${totalBatches} batches of ${BATCH_SIZE} (${label}, NAR=${hasNar})`
   );
 
   try {
@@ -192,49 +216,84 @@ async function geocodeInBatches(
 
       const toGeocode = addresses.filter((a) => a.lat === null || a.lng === null);
 
-      // Concurrent Mapbox calls for ungeocoded addresses
-      const apiResults = await Promise.all(
-        toGeocode.map(async (address) => {
-          try {
-            const query = [
-              address.streetNumber,
-              address.streetName,
-              address.city,
-              address.province,
-              address.postalCode,
-              "Canada",
-            ].join(", ");
+      // ── NAR lookup (free, local) ──────────────────────────────────────
+      const narResults: { id: string; coords: { lat: number; lng: number } }[] = [];
+      const narMisses: typeof toGeocode = [];
 
-            const url =
-              `${MAPBOX_BASE}/${encodeURIComponent(query)}.json` +
-              `?access_token=${token}&country=ca&limit=1`;
+      if (hasNar) {
+        for (const address of toGeocode) {
+          const result = await narGeocode({
+            streetNumber: address.streetNumber,
+            streetName: address.streetName,
+            city: address.city,
+            province: address.province,
+            postalCode: address.postalCode,
+          });
+          if (result) {
+            narResults.push({ id: address.id, coords: result });
+          } else {
+            narMisses.push(address);
+          }
+        }
+      } else {
+        narMisses.push(...toGeocode);
+      }
 
-            const res = await fetch(url);
-            if (!res.ok) {
-              console.warn(`[geocoding] Mapbox returned ${res.status} for address ${address.id}`);
+      // ── Mapbox fallback for NAR misses (paid API) ─────────────────────
+      const mapboxResults: { id: string; coords: { lat: number; lng: number } | null }[] = [];
+
+      if (narMisses.length > 0 && token) {
+        const apiResults = await Promise.all(
+          narMisses.map(async (address) => {
+            try {
+              const query = [
+                address.streetNumber,
+                address.streetName,
+                address.city,
+                address.province,
+                address.postalCode,
+                "Canada",
+              ].join(", ");
+
+              const url =
+                `${MAPBOX_BASE}/${encodeURIComponent(query)}.json` +
+                `?access_token=${token}&country=ca&limit=1`;
+
+              const res = await fetch(url);
+              if (!res.ok) {
+                console.warn(`[geocoding] Mapbox returned ${res.status} for address ${address.id}`);
+                return { id: address.id, coords: null as null };
+              }
+
+              const data = (await res.json()) as {
+                features?: { center: [number, number] }[];
+              };
+
+              const center = data.features?.[0]?.center;
+              if (!center) return { id: address.id, coords: null as null };
+
+              const [lng, lat] = center;
+              return { id: address.id, coords: { lat, lng } };
+            } catch (err) {
+              console.error(`[geocoding] Error geocoding address ${address.id}:`, err);
               return { id: address.id, coords: null as null };
             }
+          })
+        );
+        mapboxResults.push(...apiResults);
+      } else if (narMisses.length > 0) {
+        // No Mapbox token — count NAR misses as failed
+        mapboxResults.push(...narMisses.map((a) => ({ id: a.id, coords: null as null })));
+      }
 
-            const data = (await res.json()) as {
-              features?: { center: [number, number] }[];
-            };
-
-            const center = data.features?.[0]?.center;
-            if (!center) return { id: address.id, coords: null as null };
-
-            const [lng, lat] = center;
-            return { id: address.id, coords: { lat, lng } };
-          } catch (err) {
-            console.error(`[geocoding] Error geocoding address ${address.id}:`, err);
-            return { id: address.id, coords: null as null };
-          }
-        })
-      );
-
-      const successful = apiResults.filter(
-        (r): r is { id: string; coords: { lat: number; lng: number } } => r.coords !== null
-      );
-      const batchFailed = apiResults.length - successful.length;
+      // Combine NAR + Mapbox successes
+      const successful = [
+        ...narResults,
+        ...mapboxResults.filter(
+          (r): r is { id: string; coords: { lat: number; lng: number } } => r.coords !== null
+        ),
+      ];
+      const batchFailed = toGeocode.length - successful.length;
 
       // One transaction for all coordinate writes in this chunk
       if (successful.length > 0) {
@@ -248,8 +307,11 @@ async function geocodeInBatches(
       geocoded += successful.length;
       failed += batchFailed;
 
+      const narHits = narResults.length;
+      const mapboxHits = successful.length - narHits;
+
       console.log(
-        `[geocoding] Batch ${b + 1}/${totalBatches} complete — ${successful.length} geocoded, ${alreadyCached} cached, ${batchFailed} failed`
+        `[geocoding] Batch ${b + 1}/${totalBatches} complete — ${narHits} NAR, ${mapboxHits} Mapbox, ${alreadyCached} cached, ${batchFailed} failed`
       );
 
       if (b < totalBatches - 1) {

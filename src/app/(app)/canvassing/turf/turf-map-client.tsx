@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createTurfCanvassList } from "../actions";
-import { getWardBoundary, getMunicipalityBoundary } from "../[listId]/map/actions";
+import { getWardBoundary, getMunicipalityBoundary, getNarAddressesInPolygon, isNarAvailable } from "../[listId]/map/actions";
+import type { NarBoundaryAddress } from "@/lib/nar";
 import type { Polygon } from "geojson";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
@@ -152,6 +153,9 @@ export function TurfMapClient({
   const drawRef = useRef<any>(null);
 
   const [selectedAddresses, setSelectedAddresses] = useState<AddressPoint[]>([]);
+  const [narAddresses, setNarAddresses]           = useState<NarBoundaryAddress[]>([]);
+  const [narLoading, setNarLoading]               = useState(false);
+  const [hasNar, setHasNar]                       = useState(false);
   const [currentPolygon, setCurrentPolygon]       = useState<object | null>(null);
   const [warningDismissed, setWarningDismissed]   = useState(false);
   const [name, setName]         = useState("");
@@ -159,6 +163,11 @@ export function TurfMapClient({
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTurf, setActiveTurf] = useState<ActiveTurf | null>(null);
+
+  // Check NAR availability once on mount
+  useEffect(() => {
+    isNarAvailable().then(setHasNar);
+  }, []);
 
   // Stable set of address IDs already on a walk list — used for dot color
   const assignedSet = useMemo(() => new Set(assignedAddressIds), [assignedAddressIds]);
@@ -186,6 +195,7 @@ export function TurfMapClient({
     (feature: any) => {
       if (!feature || feature.geometry?.type !== "Polygon") {
         setSelectedAddresses([]);
+        setNarAddresses([]);
         setCurrentPolygon(null);
         return;
       }
@@ -193,8 +203,32 @@ export function TurfMapClient({
       const hits = addresses.filter((a) => pointInPolygon([a.lng, a.lat], ring));
       setSelectedAddresses(hits);
       setCurrentPolygon(feature.geometry);
+
+      // Query NAR for addresses in the drawn polygon
+      if (hasNar) {
+        setNarLoading(true);
+        getNarAddressesInPolygon(feature.geometry)
+          .then((results) => {
+            // Deduplicate: exclude NAR addresses that match campaign addresses by street+number+city
+            const campaignKeys = new Set(
+              hits.map((a) =>
+                `${a.streetNumber.toLowerCase().trim()}|${a.streetName.toLowerCase().trim()}|${a.city.toLowerCase().trim()}`
+              )
+            );
+            const filtered = results.filter((r) => {
+              const key = `${r.streetNumber.toLowerCase().trim()}|${r.streetName.toLowerCase().trim()}|${r.city.toLowerCase().trim()}`;
+              return !campaignKeys.has(key);
+            });
+            setNarAddresses(filtered);
+          })
+          .catch((err) => {
+            console.error("[turf] NAR query failed:", err);
+            setNarAddresses([]);
+          })
+          .finally(() => setNarLoading(false));
+      }
     },
-    [addresses]
+    [addresses, hasNar]
   );
 
   useEffect(() => {
@@ -469,6 +503,7 @@ export function TurfMapClient({
       map.on("draw.update", onUpdate);
       map.on("draw.delete", () => {
         setSelectedAddresses([]);
+        setNarAddresses([]);
         setCurrentPolygon(null);
       });
     });
@@ -516,6 +551,7 @@ export function TurfMapClient({
 
   const hasPoly     = currentPolygon !== null;
   const hasSelected = selectedAddresses.length > 0;
+  const hasNarResults = narAddresses.length > 0;
   const canSave     = hasPoly && hasSelected && name.trim().length > 0 && !saving;
 
   const unmappedCount = totalCount - geocodedCount;
@@ -614,6 +650,12 @@ export function TurfMapClient({
               <span className="h-2.5 w-2.5 rounded-full bg-slate-300 flex-shrink-0" />
               Unassigned
             </span>
+            {hasNar && (
+              <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                NAR (not imported)
+              </span>
+            )}
             {officePin && (
               <span className="flex items-center gap-1.5 text-xs text-slate-500">
                 <span className="h-2.5 w-2.5 rounded flex-shrink-0" style={{ backgroundColor: "#8b5cf6" }} />
@@ -626,7 +668,7 @@ export function TurfMapClient({
           <div className="px-4 py-4 border-b border-slate-100 flex-shrink-0">
             {!hasPoly ? (
               <p className="text-sm text-slate-400">No polygon drawn yet.</p>
-            ) : !hasSelected ? (
+            ) : !hasSelected && !hasNarResults && !narLoading ? (
               <>
                 <p className="text-sm text-amber-600">
                   No addresses in this area — try a larger polygon.
@@ -663,6 +705,33 @@ export function TurfMapClient({
                     </li>
                   )}
                 </ul>
+
+                {/* NAR addresses info */}
+                {narLoading && (
+                  <p className="mt-3 text-xs text-slate-400">Checking for additional addresses…</p>
+                )}
+                {hasNarResults && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <p className="text-xs font-semibold text-emerald-700">
+                      +{narAddresses.length.toLocaleString()} additional address{narAddresses.length !== 1 ? "es" : ""} from NAR
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Addresses in this area not yet in your campaign
+                    </p>
+                    <ul className="flex flex-col gap-1 mt-2">
+                      {narAddresses.slice(0, 3).map((a, i) => (
+                        <li key={`nar-${i}`} className="text-xs text-emerald-600 truncate">
+                          {a.streetNumber} {a.streetName} {a.streetType}, {a.city}
+                        </li>
+                      ))}
+                      {narAddresses.length > 3 && (
+                        <li className="text-xs text-slate-400">
+                          +{narAddresses.length - 3} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
